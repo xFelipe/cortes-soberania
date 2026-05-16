@@ -39,7 +39,7 @@ Status global do projeto: 🟡 Setup
 - [x] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
 - [x] Inserir vídeos novos em `videos` com `status='discovered'`
 - [x] Teste: roda 1x, verifica banco (14 testes com YouTube API mockada)
-- [ ] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
+- [x] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
 
 ### Stage 2 — triage_metadata
 - [ ] `stages/triage_metadata.py` — pega `status='discovered'`, monta payload (título + descrição + tags + top 20 comentários)
