@@ -214,7 +214,7 @@ def triage_video_caption(
         return None
 
     try:
-        resp = llm.complete(prompt, model=model, max_tokens=512)
+        resp = llm.complete(prompt, model=model, max_tokens=512, task="triage_caption")
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
@@ -280,7 +280,7 @@ def run(
         return
 
     if llm is None:
-        llm = LLMClient(api_key=settings.anthropic_api_key)
+        llm = LLMClient(api_key=settings.anthropic_api_key, training_conn=conn)
 
     model = settings.anthropic_model_triage
     canais_cfg = load_canais(paths["canais_path"])

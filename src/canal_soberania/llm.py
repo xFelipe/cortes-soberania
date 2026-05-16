@@ -1,9 +1,10 @@
-"""Wrapper Anthropic API com retry e tracking de custo."""
+"""Wrapper Anthropic API com retry, tracking de custo e coleta de dados de treino."""
 
 from __future__ import annotations
 
 import json
 import re
+import sqlite3
 
 import anthropic
 from pydantic import BaseModel
@@ -34,8 +35,13 @@ class LLMResponse(BaseModel):
 
 
 class LLMClient:
-    def __init__(self, api_key: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        training_conn: sqlite3.Connection | None = None,
+    ) -> None:
         self._client = anthropic.Anthropic(api_key=api_key)
+        self._training_conn = training_conn
 
     @retry(  # type: ignore[untyped-decorator]
         retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.APITimeoutError)),
@@ -49,11 +55,12 @@ class LLMClient:
         model: str,
         max_tokens: int = 1024,
         system: str | None = None,
+        task: str = "",
     ) -> LLMResponse:
         messages: list[anthropic.types.MessageParam] = [
             {"role": "user", "content": prompt}
         ]
-        logger.debug("LLM call | model={} | prompt_len={}", model, len(prompt))
+        logger.debug("LLM call | model={} | task={} | prompt_len={}", model, task, len(prompt))
         if system:
             msg = self._client.messages.create(
                 model=model,
@@ -77,6 +84,19 @@ class LLMClient:
         logger.debug(
             "LLM done | model={} | in={} out={} cost=${:.5f}", model, tokens_in, tokens_out, cost
         )
+
+        if self._training_conn is not None and task:
+            self._log_training(
+                task=task,
+                prompt=prompt,
+                completion=text,
+                model=model,
+                system_prompt=system,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_usd=cost,
+            )
+
         return LLMResponse(
             text=text,
             model=model,
@@ -84,6 +104,35 @@ class LLMClient:
             tokens_out=tokens_out,
             cost_usd=cost,
         )
+
+    def _log_training(
+        self,
+        task: str,
+        prompt: str,
+        completion: str,
+        model: str,
+        system_prompt: str | None,
+        tokens_in: int,
+        tokens_out: int,
+        cost_usd: float,
+    ) -> None:
+        from canal_soberania.db import log_training_example
+
+        try:
+            with self._training_conn:  # type: ignore[union-attr]
+                log_training_example(
+                    conn=self._training_conn,  # type: ignore[arg-type]
+                    task=task,
+                    prompt=prompt,
+                    completion=completion,
+                    model=model,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                    cost_usd=cost_usd,
+                    system_prompt=system_prompt,
+                )
+        except Exception as exc:
+            logger.warning("training log falhou (não crítico): {}", exc)
 
 
 def extract_json(text: str) -> dict[str, object]:

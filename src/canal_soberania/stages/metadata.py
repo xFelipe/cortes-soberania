@@ -120,7 +120,7 @@ def generate_metadata_for_clip(
         clip_transcript=clip_transcript,
     )
 
-    resp = llm.complete(prompt=prompt, model=model)
+    resp = llm.complete(prompt=prompt, model=model, task="metadata")
     record_api_cost(
         conn,
         provider="anthropic",
@@ -171,7 +171,7 @@ def run(
         conn = connect(paths["db_path"])
 
     canais_cfg = load_canais(paths["canais_path"])
-    llm = LLMClient(api_key=settings.anthropic_api_key)
+    llm = LLMClient(api_key=settings.anthropic_api_key, training_conn=conn)
     model = settings.anthropic_model_deep
 
     prompt_path = paths["prompts_dir"] / "gerar_metadata_clip.txt"

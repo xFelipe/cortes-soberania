@@ -289,6 +289,64 @@ def upload(
 
 
 # ---------------------------------------------------------------------------
+# training
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="training-stats")  # type: ignore[untyped-decorator]
+def training_stats(ctx: typer.Context) -> None:
+    """Mostra contagem de exemplos de treino por task e status de curadoria."""
+    from canal_soberania.db import training_stats as _training_stats
+
+    stats = _training_stats(ctx.obj["conn"])
+    if not stats:
+        typer.echo("Nenhum exemplo registrado ainda. Rode o pipeline com ANTHROPIC_API_KEY.")
+        return
+
+    typer.echo(f"\n{'Task':<25} {'Total':>7} {'Aprovado':>9} {'Rejeitado':>10} {'Não curado':>11}")
+    typer.echo("-" * 65)
+    for task, counts in sorted(stats.items()):
+        typer.echo(
+            f"{task:<25} {counts['total']:>7} {counts['approved']:>9} "
+            f"{counts['rejected']:>10} {counts['uncurated']:>11}"
+        )
+
+
+@app.command(name="export-training")  # type: ignore[untyped-decorator]
+def export_training(
+    ctx: typer.Context,
+    task: Annotated[str | None, typer.Option("--task", help="Filtrar por task específica")] = None,
+    all_examples: Annotated[bool, typer.Option("--all", help="Exportar todos (sem curar)")] = False,
+    output: Annotated[str, typer.Option("--output", help="Arquivo de saída (.jsonl)")] = "",
+) -> None:
+    """Exporta exemplos de treino em formato ChatML (JSONL) para fine-tuning."""
+    from canal_soberania.db import export_training_jsonl
+    from canal_soberania.config import get_paths
+
+    paths = get_paths(ctx.obj["settings"])
+    approved_only = not all_examples
+
+    if not output:
+        suffix = f"_{task}" if task else "_all"
+        output = str(paths["data_dir"] / "training" / f"export{suffix}.jsonl")
+
+    out_path = Path(output)
+    n = export_training_jsonl(
+        conn=ctx.obj["conn"],
+        output_path=out_path,
+        task=task,
+        approved_only=approved_only,
+    )
+
+    if n == 0:
+        flag = "aprovados" if approved_only else "totais"
+        typer.echo(f"Nenhum exemplo {flag} encontrado{f' para task={task}' if task else ''}.")
+        typer.echo("Use --all para exportar sem curadoria, ou aprove exemplos via SQLite.")
+    else:
+        typer.echo(f"Exportados {n} exemplos → {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # alert
 # ---------------------------------------------------------------------------
 

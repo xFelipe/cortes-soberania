@@ -200,6 +200,81 @@ def record_api_cost(
 
 
 # ---------------------------------------------------------------------------
+# Training examples (fine-tuning local)
+# ---------------------------------------------------------------------------
+
+
+def log_training_example(
+    conn: sqlite3.Connection,
+    task: str,
+    prompt: str,
+    completion: str,
+    model: str,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
+    cost_usd: float = 0.0,
+    system_prompt: str | None = None,
+) -> None:
+    """Registra um par prompt/completion para uso futuro em fine-tuning."""
+    conn.execute(
+        """
+        INSERT INTO training_examples
+            (task, model, system_prompt, prompt, completion, tokens_in, tokens_out, cost_usd)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (task, model, system_prompt, prompt, completion, tokens_in, tokens_out, cost_usd),
+    )
+
+
+def get_training_examples(
+    conn: sqlite3.Connection,
+    task: str | None = None,
+    approved_only: bool = False,
+) -> list[dict[str, object]]:
+    """Retorna exemplos de treino, opcionalmente filtrados por task e aprovação."""
+    where_clauses: list[str] = []
+    params: list[object] = []
+
+    if task:
+        where_clauses.append("task = ?")
+        params.append(task)
+    if approved_only:
+        where_clauses.append("approved = 1")
+
+    where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    rows = conn.execute(
+        f"SELECT * FROM training_examples {where} ORDER BY created_at ASC",
+        params,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def training_stats(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:
+    """Retorna contagem de exemplos por task e status de aprovação."""
+    rows = conn.execute(
+        """
+        SELECT task,
+               COUNT(*) AS total,
+               SUM(CASE WHEN approved = 1 THEN 1 ELSE 0 END) AS approved,
+               SUM(CASE WHEN approved = 0 THEN 1 ELSE 0 END) AS rejected,
+               SUM(CASE WHEN approved IS NULL THEN 1 ELSE 0 END) AS uncurated
+        FROM training_examples
+        GROUP BY task
+        ORDER BY task
+        """
+    ).fetchall()
+    return {
+        row["task"]: {
+            "total": row["total"],
+            "approved": row["approved"],
+            "rejected": row["rejected"],
+            "uncurated": row["uncurated"],
+        }
+        for row in rows
+    }
+
+
+# ---------------------------------------------------------------------------
 # Status summary (para cs status)
 # ---------------------------------------------------------------------------
 
@@ -214,3 +289,36 @@ def monthly_cost(conn: sqlite3.Connection) -> float:
         "SELECT COALESCE(SUM(cost_usd), 0) AS total FROM v_custo_mes_atual"
     ).fetchone()
     return float(row["total"]) if row else 0.0
+
+
+def export_training_jsonl(
+    conn: sqlite3.Connection,
+    output_path: Path,
+    task: str | None = None,
+    approved_only: bool = True,
+) -> int:
+    """
+    Exporta exemplos de treino para JSONL no formato ChatML (compatível com
+    a maioria das ferramentas de fine-tuning: Unsloth, Axolotl, LLaMA-Factory).
+    Retorna o número de exemplos exportados.
+    """
+    examples = get_training_examples(conn, task=task, approved_only=approved_only)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_path.open("w", encoding="utf-8") as f:
+        for ex in examples:
+            messages: list[dict[str, str]] = []
+            if ex.get("system_prompt"):
+                messages.append({"role": "system", "content": str(ex["system_prompt"])})
+            messages.append({"role": "user", "content": str(ex["prompt"])})
+            messages.append({"role": "assistant", "content": str(ex["completion"])})
+
+            record = {
+                "messages": messages,
+                "_task": ex["task"],
+                "_model": ex["model"],
+                "_id": ex["id"],
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    return len(examples)

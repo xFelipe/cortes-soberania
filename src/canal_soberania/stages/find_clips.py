@@ -147,7 +147,7 @@ def find_clips_for_video(
         update_video_status(conn, video.video_id, "finding_clips")
 
     try:
-        resp = llm.complete(prompt, model=model, max_tokens=2048)
+        resp = llm.complete(prompt, model=model, max_tokens=2048, task="find_clips")
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
@@ -224,7 +224,7 @@ def run(
         return
 
     if llm is None:
-        llm = LLMClient(api_key=settings.anthropic_api_key)
+        llm = LLMClient(api_key=settings.anthropic_api_key, training_conn=conn)
 
     model = settings.anthropic_model_deep
     canais_cfg = load_canais(paths["canais_path"])
