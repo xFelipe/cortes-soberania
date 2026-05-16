@@ -288,5 +288,33 @@ def upload(
         upload_tiktok_run(conn=conn, dry_run=effective_dry_run)
 
 
+# ---------------------------------------------------------------------------
+# alert
+# ---------------------------------------------------------------------------
+
+
+@app.command()  # type: ignore[untyped-decorator]
+def alert(
+    ctx: typer.Context,
+    threshold: Annotated[int, typer.Option("--threshold", help="Itens presos para disparar alerta")] = 50,
+) -> None:
+    """Verifica itens presos no pipeline e alerta via Telegram se configurado."""
+    from canal_soberania.alert import check_stuck
+
+    settings = ctx.obj["settings"]
+    stuck = check_stuck(
+        conn=ctx.obj["conn"],
+        threshold=threshold,
+        bot_token=settings.telegram_bot_token,
+        chat_id=settings.telegram_chat_id,
+    )
+    if stuck:
+        for status, count in stuck:
+            typer.echo(f"STUCK: {status} → {count} itens")
+        raise typer.Exit(1)
+    else:
+        typer.echo("OK: nenhum status crítico")
+
+
 if __name__ == "__main__":
     app()

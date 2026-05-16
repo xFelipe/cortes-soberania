@@ -138,7 +138,7 @@ Status global do projeto: 🟡 Setup
   */30 * * * *  /path/scripts/run_pipeline.sh
   0 3 * * *     /path/scripts/backup_db.sh
   ```
-- [ ] Configurar alertas: se `cs status` mostrar > 50 itens stuck em algum status, mandar email/Telegram
+- [x] Configurar alertas: `cs alert --threshold 50` + `scripts/check_stuck.sh` — Telegram se configurado
 
 ### Checkpoint Fase 3
 - [ ] 5 dias consecutivos de operação automática sem intervenção
