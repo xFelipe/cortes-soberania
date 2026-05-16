@@ -95,7 +95,7 @@ def fetch_video_details(youtube: Any, video_ids: list[str]) -> list[dict[str, An
         try:
             resp = (
                 youtube.videos()
-                .list(part="snippet,contentDetails,statistics", id=",".join(batch))
+                .list(part="snippet,contentDetails,statistics,liveStreamingDetails", id=",".join(batch))
                 .execute()
             )
         except HttpError as exc:
@@ -142,6 +142,13 @@ def discover_canal(
         snippet: dict[str, Any] = item.get("snippet", {})
         stats: dict[str, Any] = item.get("statistics", {})
         content: dict[str, Any] = item.get("contentDetails", {})
+
+        # Pula livestreams agendadas ou em andamento
+        live_status = snippet.get("liveBroadcastContent", "none")
+        if live_status in ("live", "upcoming"):
+            logger.debug("Pulando livestream {} ({})", vid_id, live_status)
+            skipped += 1
+            continue
 
         video = Video(
             video_id=vid_id,

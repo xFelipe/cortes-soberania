@@ -60,6 +60,8 @@ def download_captions(
         "outtmpl": str(captions_dir / "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "sleep_interval": 3,
+        "max_sleep_interval": 6,
     }
 
     try:
