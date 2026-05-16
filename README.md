@@ -6,7 +6,7 @@ Pipeline automatizado de cortes de vídeo focado em soberania nacional do Brasil
 
 # Comando manual do loop de desenvolvimento
 
-`/loop Siga proximas_tarefas.md. Pegue uma tarefa pendente por vez, implemente, teste, commite e marque como concluída. Pare e pergunte quando houver decisão de design não óbvia ou quando uma tarefa exigir credenciais que você não tem.`
+`/loop Siga proximas_tarefas.md. Pegue uma tarefa pendente por vez, implemente, teste, commite e marque como concluída. Se durante a implementação descobrir que uma nova tarefa é necessária (dependência faltando, refactor bloqueante, decisão que virou subtarefa), adicione ao proximas_tarefas.md antes de continuar. Pare e pergunte apenas quando houver decisão de design não óbvia ou quando precisar de credenciais/acesso externo.`
 
 
 
