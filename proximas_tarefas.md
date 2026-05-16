@@ -48,9 +48,9 @@ Status global do projeto: 🟡 Setup
 - [x] Avança para `status='triage_metadata_passed'` se score >= 5, senão `triage_metadata_rejected`
 
 ### Stage 3 — triage_caption
-- [ ] `stages/triage_caption.py` — baixa auto-captions via yt-dlp (`--write-auto-sub`)
-- [ ] Se houver caption, analisa com Claude Haiku usando `prompts/triagem_caption.txt`
-- [ ] Avança para `status='triage_caption_passed'` ou `rejected`
+- [x] `stages/triage_caption.py` — baixa auto-captions via yt-dlp (`--write-auto-sub`)
+- [x] Se houver caption, analisa com Claude Haiku usando `prompts/triagem_caption.txt`
+- [x] Avança para `status='triage_caption_passed'` ou `rejected` (sem caption → `skipped`)
 
 ### MVP manual (sem automação completa ainda)
 - [ ] Rodar discover + triage_metadata + triage_caption nos 6 canais

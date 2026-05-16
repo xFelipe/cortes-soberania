@@ -136,6 +136,10 @@ def triage(
         from canal_soberania.stages.triage_metadata import run as triage_metadata_run
 
         triage_metadata_run(conn=conn, dry_run=effective_dry_run)
+    elif stage == TriageStage.caption:
+        from canal_soberania.stages.triage_caption import run as triage_caption_run
+
+        triage_caption_run(conn=conn, dry_run=effective_dry_run)
     else:
         logger.info("TODO: triage stage={}", stage.value)
         typer.echo(f"triage --stage {stage.value}: não implementado")
