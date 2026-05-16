@@ -272,10 +272,20 @@ def upload(
     ctx: typer.Context,
     platform: Annotated[Platform, typer.Option("--platform", help="youtube|tiktok")],
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Sobe clipes para a plataforma especificada."""
-    logger.info("TODO: stages/upload_{}.py não implementado ainda", platform.value)
-    typer.echo(f"upload --platform {platform.value}: não implementado")
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    conn = ctx.obj["conn"]
+
+    if platform == Platform.youtube:
+        from canal_soberania.stages.upload_youtube import run as upload_youtube_run
+
+        upload_youtube_run(conn=conn, dry_run=effective_dry_run)
+    elif platform == Platform.tiktok:
+        from canal_soberania.stages.upload_tiktok import run as upload_tiktok_run
+
+        upload_tiktok_run(conn=conn, dry_run=effective_dry_run)
 
 
 if __name__ == "__main__":

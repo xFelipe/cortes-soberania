@@ -23,15 +23,15 @@ fi
 {
     echo "==== $(date -Iseconds) run_pipeline.sh start ===="
 
-    uv run cs download --pending --limit 5
-    uv run cs transcribe --pending --limit 3
-    uv run cs triage --stage transcript --limit 5
-    uv run cs find-clips --pending --limit 5
-    uv run cs edit --pending --limit 5
-    uv run cs thumbnail --pending --limit 10
-    uv run cs metadata --pending --limit 10
-    uv run cs upload --platform youtube --pending --limit 3
-    uv run cs upload --platform tiktok --pending --limit 10
+    uv run cs download --pending
+    uv run cs transcribe --pending
+    uv run cs triage --stage transcript
+    uv run cs find-clips --pending
+    uv run cs edit --pending
+    uv run cs thumbnail --pending
+    uv run cs metadata --pending
+    uv run cs upload --platform youtube --pending
+    uv run cs upload --platform tiktok --pending
 
     echo "==== $(date -Iseconds) run_pipeline.sh end ===="
 } >> "$LOG" 2>&1

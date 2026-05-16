@@ -109,7 +109,7 @@ Status global do projeto: 🟡 Setup
 - [x] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
 
 ### Checkpoint Fase 2
-- [ ] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta
+- [x] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta (código completo, 159 testes)
 - [ ] 10 clipes gerados automaticamente e revisados manualmente para qualidade
 - [ ] Tempo total por vídeo de 1h: < 15 min de wall-clock (Whisper é o gargalo)
 
@@ -118,20 +118,20 @@ Status global do projeto: 🟡 Setup
 ## Fase 3 — Upload e cron (semana 5–6)
 
 ### Stage 11 — upload_youtube
-- [ ] `stages/upload_youtube.py` — OAuth flow no primeiro uso, depois token salvo
-- [ ] Upload com `privacyStatus='private'` e `publishAt` agendado
-- [ ] Política de agendamento: máx 3 uploads/dia, espaçados em horários 9h / 14h / 19h
-- [ ] Atualiza `clips.youtube_id` e `clips.status='scheduled_youtube'`
+- [x] `stages/upload_youtube.py` — OAuth flow no primeiro uso, depois token salvo
+- [x] Upload com `privacyStatus='private'` e `publishAt` agendado
+- [x] Política de agendamento: máx 3 uploads/dia, espaçados em horários 9h / 14h / 19h
+- [x] Atualiza `clips.youtube_id` e `clips.status='scheduled_youtube'`
 
 ### Stage 12 — upload_tiktok (fila manual primeiro)
-- [ ] `stages/upload_tiktok.py` — copia `.mp4` para `data/clips/pending_tiktok/` com nome legível + arquivo `.txt` ao lado contendo título/descrição
-- [ ] Notifica via log: "X vídeos prontos para TikTok"
-- [ ] Status → `pending_tiktok_manual`
+- [x] `stages/upload_tiktok.py` — copia `.mp4` para `data/clips/pending_tiktok/` com nome legível + arquivo `.txt` ao lado contendo título/descrição
+- [x] Notifica via log: "X vídeos prontos para TikTok"
+- [x] Status → `pending_tiktok_manual`
 
 ### Cron e operação
-- [ ] `scripts/run_discover.sh` — chama `cs discover && cs triage --stage metadata && cs triage --stage caption`
-- [ ] `scripts/run_pipeline.sh` — `cs download --pending && cs transcribe --pending && cs triage --stage transcript && cs find-clips --pending && cs edit --pending && cs thumbnail --pending && cs metadata --pending && cs upload --platform youtube --pending`
-- [ ] `scripts/backup_db.sh` — `cp data/canal.db data/backups/canal_$(date +%F).db`
+- [x] `scripts/run_discover.sh` — chama `cs discover && cs triage --stage metadata && cs triage --stage caption`
+- [x] `scripts/run_pipeline.sh` — full pipeline discover → upload; usa flock para evitar paralelas
+- [x] `scripts/backup_db.sh` — sqlite3 .backup + purge > 30 dias
 - [ ] Crontab:
   ```
   0 8,20 * * *  /path/scripts/run_discover.sh

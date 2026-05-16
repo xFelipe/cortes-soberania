@@ -1,0 +1,275 @@
+"""Stage 11: faz upload de clipes para o YouTube (privado, agendado)."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from canal_soberania.config import get_paths, load_settings
+from canal_soberania.db import connect, get_clips_by_status, init_db
+from canal_soberania.logger import logger
+from canal_soberania.models import Clip
+
+_INPUT_STATUS = "metadata_ready"
+
+# Horários de publicação (UTC-3 = horário de Brasília)
+_PUBLISH_HOURS_BRT = [9, 14, 19]
+_MAX_UPLOADS_PER_DAY = 3
+
+
+def _get_youtube_service(client_secrets_path: Path, token_path: Path) -> object:
+    """
+    Retorna um serviço autenticado da YouTube Data API v3.
+    No primeiro uso abre o browser para autorização e salva o token.
+    """
+    from google.auth.transport.requests import Request  # type: ignore[import-untyped]
+    from google.oauth2.credentials import Credentials  # type: ignore[import-untyped]
+    from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-untyped]
+    from googleapiclient.discovery import build  # type: ignore[import-untyped]
+
+    scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+    creds: Credentials | None = None
+
+    if token_path.exists():
+        creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets_path), scopes)
+            creds = flow.run_local_server(port=0)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(creds.to_json(), encoding="utf-8")
+
+    return build("youtube", "v3", credentials=creds)
+
+
+def _next_publish_slot(
+    conn: sqlite3.Connection,
+    max_per_day: int = _MAX_UPLOADS_PER_DAY,
+    publish_hours_brt: list[int] = _PUBLISH_HOURS_BRT,
+) -> datetime:
+    """
+    Calcula o próximo horário de publicação disponível.
+    Respeita o limite max_per_day e os horários de pico.
+    Retorna datetime UTC.
+    """
+    brt_offset = timezone(timedelta(hours=-3))
+    now_brt = datetime.now(brt_offset)
+    today_brt = now_brt.date()
+
+    # Conta uploads já agendados por dia
+    rows = conn.execute(
+        "SELECT youtube_publish_at FROM clips WHERE youtube_publish_at IS NOT NULL"
+    ).fetchall()
+
+    scheduled_by_day: dict[str, int] = {}
+    for row in rows:
+        if row["youtube_publish_at"]:
+            try:
+                dt = datetime.fromisoformat(row["youtube_publish_at"])
+                day = dt.astimezone(brt_offset).date().isoformat()
+                scheduled_by_day[day] = scheduled_by_day.get(day, 0) + 1
+            except ValueError:
+                pass
+
+    # Procura o primeiro slot disponível a partir de hoje
+    candidate_day = today_brt
+    for _ in range(30):  # tenta até 30 dias à frente
+        day_str = candidate_day.isoformat()
+        slots_used = scheduled_by_day.get(day_str, 0)
+        if slots_used < max_per_day:
+            # Pega o próximo horário disponível no dia
+            for hour in sorted(publish_hours_brt):
+                slot_brt = datetime(
+                    candidate_day.year,
+                    candidate_day.month,
+                    candidate_day.day,
+                    hour,
+                    0,
+                    0,
+                    tzinfo=brt_offset,
+                )
+                if slot_brt > now_brt:
+                    # Conta se este slot específico já está tomado
+                    slots_at_hour = sum(
+                        1
+                        for row in rows
+                        if row["youtube_publish_at"]
+                        and _slot_matches(row["youtube_publish_at"], candidate_day, hour, brt_offset)
+                    )
+                    if slots_at_hour == 0:
+                        return slot_brt.astimezone(timezone.utc)
+        candidate_day = candidate_day + timedelta(days=1)
+
+    # Fallback improvável: amanhã às 9h BRT
+    tomorrow = today_brt + timedelta(days=1)
+    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, 9, tzinfo=brt_offset).astimezone(
+        timezone.utc
+    )
+
+
+def _slot_matches(
+    iso_str: str,
+    target_day: object,
+    target_hour: int,
+    brt_offset: timezone,
+) -> bool:
+    try:
+        dt = datetime.fromisoformat(iso_str).astimezone(brt_offset)
+        from datetime import date as _date
+
+        return dt.date() == target_day and dt.hour == target_hour
+    except ValueError:
+        return False
+
+
+def upload_clip(
+    clip: Clip,
+    conn: sqlite3.Connection,
+    client_secrets_path: Path,
+    token_path: Path,
+    dry_run: bool = False,
+) -> str | None:
+    """
+    Faz upload de um clipe para o YouTube como vídeo privado agendado.
+    Retorna o youtube_id ou None em caso de falha.
+    """
+    if not clip.clip_path_vertical:
+        logger.warning("upload_youtube: sem clip_path_vertical para {}", clip.clip_id)
+        return None
+
+    video_path = Path(clip.clip_path_vertical)
+    if not video_path.exists():
+        logger.warning("upload_youtube: arquivo não encontrado: {}", video_path)
+        return None
+
+    title = clip.title or clip.hook or clip.clip_id
+    description = clip.description or ""
+    tags_raw = clip.tags or "[]"
+    try:
+        tags: list[str] = json.loads(tags_raw) if isinstance(tags_raw, str) else list(tags_raw)
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+
+    publish_at = _next_publish_slot(conn)
+    publish_at_iso = publish_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    if dry_run:
+        logger.info(
+            "[dry-run] upload_youtube clip={} title={!r} publish_at={}",
+            clip.clip_id,
+            title[:40],
+            publish_at_iso,
+        )
+        return None
+
+    try:
+        youtube = _get_youtube_service(client_secrets_path, token_path)
+    except Exception as exc:
+        logger.error("upload_youtube: falha na autenticação: {}", exc)
+        return None
+
+    try:
+        from googleapiclient.http import MediaFileUpload  # type: ignore[import-untyped]
+
+        body = {
+            "snippet": {
+                "title": title[:100],
+                "description": description,
+                "tags": tags,
+                "categoryId": "22",  # People & Blogs
+            },
+            "status": {
+                "privacyStatus": "private",
+                "publishAt": publish_at_iso,
+                "selfDeclaredMadeForKids": False,
+            },
+        }
+
+        media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True)
+        request = youtube.videos().insert(  # type: ignore[attr-defined]
+            part="snippet,status",
+            body=body,
+            media_body=media,
+        )
+
+        response = None
+        while response is None:
+            _, response = request.next_chunk()
+
+        youtube_id: str = response["id"]
+        logger.info(
+            "upload_youtube: clip={} → youtube_id={} agendado={}",
+            clip.clip_id,
+            youtube_id,
+            publish_at_iso,
+        )
+
+        with conn:
+            conn.execute(
+                "UPDATE clips SET youtube_id=?, youtube_publish_at=?, status='scheduled_youtube' WHERE clip_id=?",
+                (youtube_id, publish_at_iso, clip.clip_id),
+            )
+            conn.execute(
+                "INSERT INTO uploads_log (clip_id, platform, status, platform_id) VALUES (?, 'youtube', 'success', ?)",
+                (clip.clip_id, youtube_id),
+            )
+
+        return youtube_id
+
+    except Exception as exc:
+        logger.error("upload_youtube: erro no upload de {}: {}", clip.clip_id, exc)
+        with conn:
+            conn.execute(
+                "INSERT INTO uploads_log (clip_id, platform, status, error_message) VALUES (?, 'youtube', 'error', ?)",
+                (clip.clip_id, str(exc)),
+            )
+        return None
+
+
+def run(
+    conn: sqlite3.Connection | None = None,
+    dry_run: bool = False,
+) -> None:
+    """Entry point chamado pelo CLI."""
+    settings = load_settings()
+    paths = get_paths(settings)
+
+    if conn is None:
+        if not paths["db_path"].exists():
+            init_db(paths["db_path"], paths["schema_path"])
+        conn = connect(paths["db_path"])
+
+    client_secrets_path = Path(settings.youtube_oauth_client_secrets_path)
+    token_path = Path(settings.youtube_oauth_token_path)
+
+    if not dry_run and not client_secrets_path.exists():
+        logger.error(
+            "upload_youtube: client_secrets não encontrado em {}. "
+            "Crie via Google Cloud Console (OAuth 2.0) e configure YOUTUBE_OAUTH_CLIENT_SECRETS_PATH.",
+            client_secrets_path,
+        )
+        return
+
+    clips = get_clips_by_status(conn, _INPUT_STATUS)
+    logger.info("upload_youtube: {} clipes para processar", len(clips))
+
+    success = failed = 0
+    for clip in clips:
+        result = upload_clip(
+            clip=clip,
+            conn=conn,
+            client_secrets_path=client_secrets_path,
+            token_path=token_path,
+            dry_run=dry_run or settings.dry_run,
+        )
+        if result is not None or (dry_run or settings.dry_run):
+            success += 1
+        else:
+            failed += 1
+
+    logger.info("upload_youtube concluído | ok={} falhas={}", success, failed)
