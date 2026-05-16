@@ -248,10 +248,13 @@ def thumbnail(
 def metadata(
     ctx: typer.Context,
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Gera título/descrição/tags com Claude Sonnet."""
-    logger.info("TODO: stages/metadata.py não implementado ainda")
-    typer.echo("metadata: não implementado")
+    from canal_soberania.stages.metadata import run as metadata_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    metadata_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------

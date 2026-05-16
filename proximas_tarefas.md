@@ -105,8 +105,8 @@ Status global do projeto: 🟡 Setup
 - [x] Salva `data/thumbs/{clip_id}.jpg` (1280x720)
 
 ### Stage 10 — metadata
-- [ ] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
-- [ ] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
+- [x] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
+- [x] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
 
 ### Checkpoint Fase 2
 - [ ] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta
