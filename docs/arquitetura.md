@@ -41,30 +41,30 @@ Operação single-tenant em VPS (ou máquina local). Cron dispara scripts que av
 │   baixa auto-caption do YouTube                                    │       │
 │   └─► REJEITA se conteúdo desviar do tema  ────────────────────────┤       │
 │                                                                    │       │
-│   STAGE 3: download                 █░░░░  ~10s + storage         │       │
-│   yt-dlp baixa áudio (sempre); vídeo só se vai cortar             │       │
+│   STAGE 3: download                 █░░░░  ~10s + storage          │       │
+│   yt-dlp baixa áudio (sempre); vídeo só se vai cortar              │       │
 │                                                                    │       │
-│   STAGE 4: transcribe               ██░░░░  ~3min CPU (Whisper)   │       │
+│   STAGE 4: transcribe               ██░░░░  ~3min CPU (Whisper)    │       │
 │   faster-whisper large-v3                                          │       │
 │                                                                    │       │
-│   STAGE 5: triage_transcript        ███░░  ~$0.03 (Sonnet)        │       │
-│   análise final do conteúdo completo                              │       │
+│   STAGE 5: triage_transcript        ███░░  ~$0.03 (Sonnet)         │       │
+│   análise final do conteúdo completo                               │       │
 │   └─► REJEITA se análise profunda discordar  ──────────────────────┤       │
 │                                                                    │       │
-│   STAGE 6: find_clips               ███░░  ~$0.05 (Sonnet)        │       │
+│   STAGE 6: find_clips               ███░░  ~$0.05 (Sonnet)         │       │
 │   identifica 3-8 momentos virais relevantes ao tema                │       │
 │                                                                    │       │
-│   STAGE 7: edit                     ████░  ~5min CPU (ffmpeg)     │       │
-│   corte, reframe 9:16, legenda dinâmica, intro/outro              │       │
+│   STAGE 7: edit                     ████░  ~5min CPU (ffmpeg)      │       │
+│   corte, reframe 9:16, legenda dinâmica, intro/outro               │       │
 │                                                                    │       │
-│   STAGE 8: thumbnail                █░░░░  ~5s (Pillow)           │       │
+│   STAGE 8: thumbnail                █░░░░  ~5s (Pillow)            │       │
 │                                                                    │       │
-│   STAGE 9: metadata                 ██░░░  ~$0.01 (Sonnet)        │       │
+│   STAGE 9: metadata                 ██░░░  ~$0.01 (Sonnet)         │       │
 │   título, descrição, tags                                          │       │
 │                                                                    │       │
-│   STAGE 10: upload_youtube          ██░░░  ~30s (API)             │       │
+│   STAGE 10: upload_youtube          ██░░░  ~30s (API)              │       │
 │                                                                    │       │
-│   STAGE 11: upload_tiktok           ░░░░░  fila manual (MVP)      │       │
+│   STAGE 11: upload_tiktok           ░░░░░  fila manual (MVP)       │       │
 │                                                                    │       │
 └────────────────────────────────────────────────────────────────────┴───────┘
                                                                      │
