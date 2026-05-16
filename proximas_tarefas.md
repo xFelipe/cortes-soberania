@@ -9,9 +9,9 @@ Status global do projeto: 🟡 Setup
 
 ## Fase 0 — Setup do ambiente (1 dia)
 
-- [ ] Instalar `uv` (https://docs.astral.sh/uv/) e Python 3.11+
+- [x] Instalar `uv` (https://docs.astral.sh/uv/) e Python 3.11+
 - [ ] Instalar `ffmpeg` no sistema (`apt install ffmpeg` ou `brew install ffmpeg`)
-- [ ] Clonar/inicializar repo e rodar `uv sync`
+- [x] Clonar/inicializar repo e rodar `uv sync`
 - [ ] Criar `.env` a partir de `.env.example` e preencher:
   - [ ] `ANTHROPIC_API_KEY` (https://console.anthropic.com)
   - [ ] `YOUTUBE_API_KEY` (Google Cloud Console → YouTube Data API v3, criar key)
@@ -28,12 +28,12 @@ Status global do projeto: 🟡 Setup
 > Objetivo: validar nicho e qualidade dos cortes antes de automatizar. Sobe 20 vídeos manualmente para o YouTube.
 
 ### Backend (essencial)
-- [ ] `src/canal_soberania/db.py` — connect, init_db, helpers básicos
-- [ ] `src/canal_soberania/models.py` — `Video`, `Clip`, `TriageResult`
-- [ ] `src/canal_soberania/logger.py` — setup loguru com rotação em `data/logs/`
-- [ ] `src/canal_soberania/config.py` — load `.env` e `config/canais.yaml`
-- [ ] `src/canal_soberania/llm.py` — wrapper Anthropic, suporte Haiku e Sonnet
-- [ ] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
+- [x] `src/canal_soberania/db.py` — connect, init_db, helpers básicos
+- [x] `src/canal_soberania/models.py` — `Video`, `Clip`, `TriageResult`
+- [x] `src/canal_soberania/logger.py` — setup loguru com rotação em `data/logs/`
+- [x] `src/canal_soberania/config.py` — load `.env` e `config/canais.yaml`
+- [x] `src/canal_soberania/llm.py` — wrapper Anthropic, suporte Haiku e Sonnet
+- [x] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
 
 ### Stage 1 — discover
 - [ ] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
