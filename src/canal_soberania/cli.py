@@ -126,10 +126,19 @@ class TriageStage(StrEnum):
 def triage(
     ctx: typer.Context,
     stage: Annotated[TriageStage, typer.Option("--stage", help="metadata|caption|transcript")],
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Roda uma etapa de triagem sobre vídeos pendentes."""
-    logger.info("TODO: triage stage={}", stage.value)
-    typer.echo(f"triage --stage {stage.value}: não implementado")
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    conn = ctx.obj["conn"]
+
+    if stage == TriageStage.metadata:
+        from canal_soberania.stages.triage_metadata import run as triage_metadata_run
+
+        triage_metadata_run(conn=conn, dry_run=effective_dry_run)
+    else:
+        logger.info("TODO: triage stage={}", stage.value)
+        typer.echo(f"triage --stage {stage.value}: não implementado")
 
 
 # ---------------------------------------------------------------------------

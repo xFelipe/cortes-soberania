@@ -42,10 +42,10 @@ Status global do projeto: 🟡 Setup
 - [x] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
 
 ### Stage 2 — triage_metadata
-- [ ] `stages/triage_metadata.py` — pega `status='discovered'`, monta payload (título + descrição + tags + top 20 comentários)
-- [ ] Chama Claude Haiku com `prompts/triagem_metadata.txt`
-- [ ] Salva resultado em `triage_results` (score 0-10 + justificativa)
-- [ ] Avança para `status='triage_metadata_passed'` se score >= 5, senão `triage_metadata_rejected`
+- [x] `stages/triage_metadata.py` — pega `status='discovered'`, monta payload (título + descrição + tags + top 20 comentários)
+- [x] Chama Claude Haiku com `prompts/triagem_metadata.txt`
+- [x] Salva resultado em `triage_results` (score 0-10 + justificativa)
+- [x] Avança para `status='triage_metadata_passed'` se score >= 5, senão `triage_metadata_rejected`
 
 ### Stage 3 — triage_caption
 - [ ] `stages/triage_caption.py` — baixa auto-captions via yt-dlp (`--write-auto-sub`)
