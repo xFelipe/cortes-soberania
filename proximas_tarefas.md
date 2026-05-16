@@ -101,8 +101,8 @@ Status global do projeto: 🟡 Setup
 - [ ] Nota: legendas usam timestamps de segmento (distribuição uniforme). Para precisão palavra-por-palavra real, adicionar `word_timestamps=True` ao Whisper (subtarefa futura)
 
 ### Stage 9 — thumbnail
-- [ ] `stages/thumbnail.py` — Pillow: pega frame do `start_s + 2`, aplica template (gradiente + texto grande + logo)
-- [ ] Salva `data/thumbs/{clip_id}.jpg` (1280x720)
+- [x] `stages/thumbnail.py` — Pillow: pega frame do `start_s + 2`, aplica template (gradiente + texto grande + logo)
+- [x] Salva `data/thumbs/{clip_id}.jpg` (1280x720)
 
 ### Stage 10 — metadata
 - [ ] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
