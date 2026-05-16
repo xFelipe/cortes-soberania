@@ -194,10 +194,13 @@ def transcribe(
 def find_clips(
     ctx: typer.Context,
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Identifica trechos para clipe via Claude Sonnet."""
-    logger.info("TODO: stages/find_clips.py não implementado ainda")
-    typer.echo("find-clips: não implementado")
+    from canal_soberania.stages.find_clips import run as find_clips_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    find_clips_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------

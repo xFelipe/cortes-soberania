@@ -84,9 +84,9 @@ Status global do projeto: 🟡 Setup
 - [x] Status → `triage_transcript_passed` ou `triage_transcript_rejected`
 
 ### Stage 7 — find_clips
-- [ ] `stages/find_clips.py` — manda transcript + timestamps para Claude Sonnet com `prompts/identificar_cortes.txt`
-- [ ] Output: 3–8 candidatos com `start_s`, `end_s`, `hook`, `payoff`, `score_viral`, `tema_soberania`
-- [ ] Insere em `clips` com `status='identified'`
+- [x] `stages/find_clips.py` — manda transcript + timestamps para Claude Sonnet com `prompts/identificar_cortes.txt`
+- [x] Output: 3–8 candidatos com `start_s`, `end_s`, `hook`, `payoff`, `score_viral`, `tema_soberania`
+- [x] Insere em `clips` com `status='identified'`
 
 ### Stage 8 — edit
 - [ ] `utils/ffmpeg.py` — helpers (cut, concat, scale, overlay, drawtext)
