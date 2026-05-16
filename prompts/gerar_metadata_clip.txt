@@ -1,0 +1,63 @@
+Você é o redator de metadados do canal "Canal Soberania" no YouTube e TikTok. Sua tarefa é gerar título, descrição e tags otimizados para um clipe pronto para publicação.
+
+=== CONTEXTO DO CLIPE ===
+
+Vídeo original:
+- Canal-fonte: {canal_fonte_nome}
+- URL: {video_url}
+- Título original: {video_title}
+
+Clipe:
+- Duração: {duracao_s} segundos
+- Hook: "{hook}"
+- Payoff: "{payoff}"
+- Tema: {tema_soberania}
+- Transcrição do clipe:
+
+{clip_transcript}
+
+=== REGRAS ===
+
+**Título** (campo `title`):
+- Português brasileiro
+- Máximo 60 caracteres
+- Hook claro: pergunta forte, afirmação chocante, número, ou contradição
+- Sem clickbait enganoso (entregue o que prometer)
+- Sem caps lock excessivo
+- Pode usar emojis com parcimônia (no máximo 1)
+- NÃO comece com "ELE FALOU", "VOCÊ NÃO VAI ACREDITAR"
+- Sim para começar com substantivo concreto
+
+**Descrição** (campo `description`):
+Estrutura obrigatória:
+
+```
+[Hook em 1 linha — pode repetir e expandir o título]
+
+[2-4 linhas de contexto: do que se trata, por que importa]
+
+[1 linha CTA: "Inscreva-se para mais cortes sobre soberania nacional"]
+
+📺 Episódio completo: {video_url}
+🎙️ Canal original: {canal_fonte_handle}
+
+#soberanianacional #brasil #[tema]
+```
+
+**Tags** (campo `tags`, array de 15 itens):
+- Mix de: tema (`soberania nacional`, `brasil`, eixo específico)
+- Nomes próprios mencionados (orador, instituições)
+- Termos largos (`política brasileira`, `geopolítica`)
+- Sem repetição de palavras-chave (`soberania nacional` E `soberania` E `nacional` é redundante)
+- Sem hashtag (sem `#`)
+- Cada tag <= 30 chars
+
+=== FORMATO DE SAÍDA ===
+
+Responda APENAS com um JSON válido:
+
+{{
+  "title": "<string, max 60 chars>",
+  "description": "<string multilinha>",
+  "tags": [<15 strings>]
+}}

@@ -1,0 +1,106 @@
+# Canais monitorados pelo pipeline
+# Atualize aqui para adicionar/remover fontes. Não precisa mexer no código.
+#
+# Campos:
+#   id:                 slug interno único (snake_case)
+#   nome:               nome de exibição
+#   handle:             handle do YouTube (@xxx)
+#   channel_url:        URL do canal
+#   tema_primario:      foco principal (orienta a triagem)
+#   peso:               1.0 = padrão; >1 prioriza este canal; <1 reduz prioridade
+#   auto_publish:       true = publica direto; false = revisão manual antes
+#   nota:               observações livres
+#   tolerancia_cortes:  "alta" | "media" | "baixa" | "desconhecida"
+#                       Indica se o canal-fonte tolera/incentiva cortes.
+
+canais:
+  - id: ricardo_marcilio
+    nome: Prof. Ricardo Marcílio
+    handle: "@profricardomarcilio"
+    channel_url: https://www.youtube.com/@profricardomarcilio
+    tema_primario: geopolitica_soberania
+    peso: 1.2
+    auto_publish: false
+    tolerancia_cortes: desconhecida
+    nota: >
+      Conteúdo denso, didático, frequentemente sobre geopolítica e soberania.
+      Iniciar com revisão manual até verificar postura do canal sobre cortes.
+
+  - id: arte_da_guerra
+    nome: Arte da Guerra
+    handle: "@ARTEDAGUERRA"
+    channel_url: https://www.youtube.com/@ARTEDAGUERRA
+    tema_primario: geopolitica_defesa
+    peso: 1.2
+    auto_publish: false
+    tolerancia_cortes: desconhecida
+    nota: >
+      Análises geopolíticas e militares. Verificar postura antes de auto_publish.
+
+  - id: jose_kobori
+    nome: José Kobori
+    handle: "@josekoborioficial"
+    channel_url: https://www.youtube.com/@josekoborioficial
+    tema_primario: economia_soberania
+    peso: 1.1
+    auto_publish: false
+    tolerancia_cortes: desconhecida
+    nota: >
+      Economia e geopolítica do ponto de vista da soberania econômica.
+
+  - id: podcast_3_irmaos
+    nome: Podcast 3 Irmãos
+    handle: "@podcast3irmaos"
+    channel_url: https://www.youtube.com/@podcast3irmaos
+    tema_primario: variado_com_geopolitica
+    peso: 0.9
+    auto_publish: false
+    tolerancia_cortes: media
+    nota: >
+      Tema variado; só pequena fração dos episódios será relevante.
+      Triagem por metadado é especialmente importante aqui.
+
+  - id: flow_podcast
+    nome: Flow Podcast
+    handle: "@FlowPodcast"
+    channel_url: https://www.youtube.com/@FlowPodcast
+    tema_primario: variado
+    peso: 0.7
+    auto_publish: true
+    tolerancia_cortes: alta
+    nota: >
+      Canal de cortes é prática estabelecida e tolerada. Tema varia muito;
+      a maioria dos episódios não será relevante. Filtro pesado por título.
+
+  - id: podpah
+    nome: PodPah
+    handle: "@Podpah"
+    channel_url: https://www.youtube.com/@Podpah
+    tema_primario: variado
+    peso: 0.7
+    auto_publish: true
+    tolerancia_cortes: alta
+    nota: >
+      Mesma observação do Flow. Canal de cortes amplamente tolerado.
+      Maioria dos episódios não será relevante; filtro forte.
+
+# Parâmetros globais
+parametros:
+  # Quantos dias para trás procurar vídeos novos em cada execução de discover
+  janela_dias_discover: 7
+
+  # Limite de vídeos por canal por execução de discover
+  max_videos_por_canal_por_run: 20
+
+  # Thresholds de score (0-10) das triagens
+  threshold_triage_metadata: 5
+  threshold_triage_caption: 6
+  threshold_triage_transcript: 7
+
+  # Máximo de clipes a extrair por vídeo
+  max_clipes_por_video: 5
+
+  # Duração alvo dos clipes (segundos)
+  clip_duracao_min: 30
+  clip_duracao_max: 90
+  clip_duracao_ideal: 60

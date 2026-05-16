@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv / venvs
+.venv/
+venv/
+.python-version
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Segredos
+.env
+.env.local
+*.pem
+*_secrets.json
+youtube_token.json
+
+# Dados (artefatos não versionados)
+data/
+!data/.gitkeep
+
+# Logs
+*.log
+
+# Claude Code (escolha sua política)
+.claude/cache/
+.claude/sessions/

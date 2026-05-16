@@ -1,0 +1,174 @@
+# Próximas Tarefas
+
+> Regra TDAH: **uma caixinha por vez.** Não pule fases. Tarefa "doing" no máximo 1.
+> Sempre que terminar, marque `[x]` e commite. Dopamina visível é dopamina conquistada.
+
+Status global do projeto: 🟡 Setup
+
+---
+
+## Fase 0 — Setup do ambiente (1 dia)
+
+- [ ] Instalar `uv` (https://docs.astral.sh/uv/) e Python 3.11+
+- [ ] Instalar `ffmpeg` no sistema (`apt install ffmpeg` ou `brew install ffmpeg`)
+- [ ] Clonar/inicializar repo e rodar `uv sync`
+- [ ] Criar `.env` a partir de `.env.example` e preencher:
+  - [ ] `ANTHROPIC_API_KEY` (https://console.anthropic.com)
+  - [ ] `YOUTUBE_API_KEY` (Google Cloud Console → YouTube Data API v3, criar key)
+  - [ ] `YOUTUBE_OAUTH_CLIENT_SECRETS_PATH` (para upload, OAuth 2.0, baixar JSON)
+- [ ] Rodar `sqlite3 data/canal.db < schema.sql`
+- [ ] Validar setup: `cs discover --dry-run` deve listar vídeos sem erro
+- [ ] Criar conta no canal do YouTube (definir nome, foto, banner, descrição)
+- [ ] Criar conta no TikTok com mesmo nome/visual
+
+---
+
+## Fase 1 — MVP manual (semana 1–2)
+
+> Objetivo: validar nicho e qualidade dos cortes antes de automatizar. Sobe 20 vídeos manualmente para o YouTube.
+
+### Backend (essencial)
+- [ ] `src/canal_soberania/db.py` — connect, init_db, helpers básicos
+- [ ] `src/canal_soberania/models.py` — `Video`, `Clip`, `TriageResult`
+- [ ] `src/canal_soberania/logger.py` — setup loguru com rotação em `data/logs/`
+- [ ] `src/canal_soberania/config.py` — load `.env` e `config/canais.yaml`
+- [ ] `src/canal_soberania/llm.py` — wrapper Anthropic, suporte Haiku e Sonnet
+- [ ] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
+
+### Stage 1 — discover
+- [ ] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
+- [ ] Inserir vídeos novos em `videos` com `status='discovered'`
+- [ ] Teste: roda 1x, verifica banco
+- [ ] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
+
+### Stage 2 — triage_metadata
+- [ ] `stages/triage_metadata.py` — pega `status='discovered'`, monta payload (título + descrição + tags + top 20 comentários)
+- [ ] Chama Claude Haiku com `prompts/triagem_metadata.txt`
+- [ ] Salva resultado em `triage_results` (score 0-10 + justificativa)
+- [ ] Avança para `status='triage_metadata_passed'` se score >= 5, senão `triage_metadata_rejected`
+
+### Stage 3 — triage_caption
+- [ ] `stages/triage_caption.py` — baixa auto-captions via yt-dlp (`--write-auto-sub`)
+- [ ] Se houver caption, analisa com Claude Haiku usando `prompts/triagem_caption.txt`
+- [ ] Avança para `status='triage_caption_passed'` ou `rejected`
+
+### MVP manual (sem automação completa ainda)
+- [ ] Rodar discover + triage_metadata + triage_caption nos 6 canais
+- [ ] Inspecionar os aprovados manualmente — ajustar `criterios_relevancia.md` e o prompt até o filtro acertar 80%+
+- [ ] Para 20 vídeos aprovados: baixar, abrir no CapCut, cortar 3 momentos cada, subir manualmente
+- [ ] Medir: tempo médio por vídeo, taxa de aprovação no YouTube (sem strike?), CTR primeiras 48h
+
+### Checkpoint Fase 1
+- [ ] 20 vídeos no ar
+- [ ] Zero strikes
+- [ ] Critério de relevância está afinado (anotar falsos positivos/negativos)
+- [ ] Pelo menos 3 cortes com >1k views (sinal de nicho funcionando)
+
+---
+
+## Fase 2 — Automação de edição (semana 3–4)
+
+### Stage 4 — download
+- [ ] `stages/download.py` — yt-dlp baixa áudio (mp3) sempre, vídeo (mp4 1080p) só se aprovado em todas triagens
+- [ ] Salva em `data/audio/{video_id}.mp3` e `data/video/{video_id}.mp4`
+- [ ] Atualiza `videos.audio_path` e `videos.video_path`
+
+### Stage 5 — transcribe
+- [ ] `stages/transcribe.py` — faster-whisper large-v3, PT-BR
+- [ ] Salva JSON com segments+timestamps em `data/transcripts/{video_id}.json`
+- [ ] Status → `transcribed`
+
+### Stage 6 — triage_transcript
+- [ ] `stages/triage_transcript.py` — análise final do transcript completo com Claude Sonnet usando `prompts/triagem_transcript.txt`
+- [ ] Output: score final + lista de temas detectados
+- [ ] Status → `relevant` ou `rejected_final`
+
+### Stage 7 — find_clips
+- [ ] `stages/find_clips.py` — manda transcript + timestamps para Claude Sonnet com `prompts/identificar_cortes.txt`
+- [ ] Output: 3–8 candidatos com `start_s`, `end_s`, `hook`, `payoff`, `score_viral`, `tema_soberania`
+- [ ] Insere em `clips` com `status='identified'`
+
+### Stage 8 — edit
+- [ ] `utils/ffmpeg.py` — helpers (cut, concat, scale, overlay, drawtext)
+- [ ] `stages/edit.py` — para cada clip:
+  - [ ] Cortar vídeo bruto entre `start_s` e `end_s`
+  - [ ] Detectar rosto principal com mediapipe, gerar crop dinâmico 9:16
+  - [ ] Gerar `.ass` com legendas palavra-por-palavra (estilo CapCut)
+  - [ ] Adicionar intro 3s (logo do canal) e outro 3s (CTA inscrever)
+  - [ ] Render final 1080x1920 30fps H.264 + AAC
+  - [ ] Versão 16:9 1920x1080 (para Shorts horizontais opcionais)
+- [ ] Salva em `data/clips/{clip_id}_vertical.mp4` e `data/clips/{clip_id}_horizontal.mp4`
+
+### Stage 9 — thumbnail
+- [ ] `stages/thumbnail.py` — Pillow: pega frame do `start_s + 2`, aplica template (gradiente + texto grande + logo)
+- [ ] Salva `data/thumbs/{clip_id}.jpg` (1280x720)
+
+### Stage 10 — metadata
+- [ ] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
+- [ ] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
+
+### Checkpoint Fase 2
+- [ ] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta
+- [ ] 10 clipes gerados automaticamente e revisados manualmente para qualidade
+- [ ] Tempo total por vídeo de 1h: < 15 min de wall-clock (Whisper é o gargalo)
+
+---
+
+## Fase 3 — Upload e cron (semana 5–6)
+
+### Stage 11 — upload_youtube
+- [ ] `stages/upload_youtube.py` — OAuth flow no primeiro uso, depois token salvo
+- [ ] Upload com `privacyStatus='private'` e `publishAt` agendado
+- [ ] Política de agendamento: máx 3 uploads/dia, espaçados em horários 9h / 14h / 19h
+- [ ] Atualiza `clips.youtube_id` e `clips.status='scheduled_youtube'`
+
+### Stage 12 — upload_tiktok (fila manual primeiro)
+- [ ] `stages/upload_tiktok.py` — copia `.mp4` para `data/clips/pending_tiktok/` com nome legível + arquivo `.txt` ao lado contendo título/descrição
+- [ ] Notifica via log: "X vídeos prontos para TikTok"
+- [ ] Status → `pending_tiktok_manual`
+
+### Cron e operação
+- [ ] `scripts/run_discover.sh` — chama `cs discover && cs triage --stage metadata && cs triage --stage caption`
+- [ ] `scripts/run_pipeline.sh` — `cs download --pending && cs transcribe --pending && cs triage --stage transcript && cs find-clips --pending && cs edit --pending && cs thumbnail --pending && cs metadata --pending && cs upload --platform youtube --pending`
+- [ ] `scripts/backup_db.sh` — `cp data/canal.db data/backups/canal_$(date +%F).db`
+- [ ] Crontab:
+  ```
+  0 8,20 * * *  /path/scripts/run_discover.sh
+  */30 * * * *  /path/scripts/run_pipeline.sh
+  0 3 * * *     /path/scripts/backup_db.sh
+  ```
+- [ ] Configurar alertas: se `cs status` mostrar > 50 itens stuck em algum status, mandar email/Telegram
+
+### Checkpoint Fase 3
+- [ ] 5 dias consecutivos de operação automática sem intervenção
+- [ ] 3 vídeos/dia subindo no YouTube
+- [ ] Backlog TikTok < 10 vídeos (você consegue subir manualmente em < 10 min/dia)
+
+---
+
+## Fase 4 — Escala e segundo canal (mês 2+)
+
+- [ ] Aplicar para YouTube Partner Program quando atingir tier inicial (500 inscritos + 3M views/90d *ou* 3.000h watch time/ano)
+- [ ] Iterar prompts baseado em performance (clipes com >10k views: o que eles têm em comum?)
+- [ ] Considerar segundo canal (mesmo tema, ângulo diferente; ex: focado em geopolítica vs. focado em economia)
+- [ ] Avaliar TikTok Content Posting API quando tiver tração
+- [ ] Considerar diversificação: monetização via afiliados (livros sobre os temas), curso, comunidade paga
+
+---
+
+## Backlog (sem prazo)
+
+- [ ] Dashboard simples (Streamlit) para métricas por canal/clip
+- [ ] A/B test de thumbnails (2 variantes, pick winner pelo CTR)
+- [ ] Detecção automática de "trecho viral" via análise de prosódia (energia da voz, picos)
+- [ ] Remix automático: pegar 3 clipes curtos do mesmo tema e juntar em um Short de 60s
+- [ ] Tradução automática para outras línguas (mercado lusófono em Portugal, depois ES)
+
+---
+
+## Decisões pendentes (decidir antes de começar fase correspondente)
+
+- [ ] **Nome do canal** (sugestões: "Brasil Soberano", "Quinto Império Cortes", "Visão Soberana", "Pátria em Cortes") — _decidir antes da Fase 1 publicar_
+- [ ] **Identidade visual** (cor primária, fonte, logo simples 1024x1024) — _antes da Fase 2_
+- [ ] **Intro/outro** (3s cada, com logo + sting de áudio livre) — _antes da Fase 2_
+- [ ] **Comprar domínio?** (Ex: `brasilsoberano.com.br` para link na bio) — _antes da Fase 3_

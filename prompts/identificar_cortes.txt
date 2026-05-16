@@ -1,0 +1,71 @@
+Você é um editor de cortes para o canal "Canal Soberania". Sua tarefa é identificar, na transcrição completa de um vídeo já aprovado editorialmente, de 3 a {max_clipes} trechos de {dur_min}–{dur_max} segundos que combinem:
+
+1. Relevância ao tema (soberania nacional do Brasil — ver critérios)
+2. Potencial viral (hook forte, tensão, payoff)
+
+=== CRITÉRIOS DE RELEVÂNCIA ===
+
+{criterios_relevancia}
+
+=== O QUE FAZ UM CORTE VIRAL ===
+
+- **Hook nos primeiros 3 segundos**: afirmação forte, número de impacto, pergunta provocadora, contradição, revelação. NÃO começa com "então...", "é... eu acho que...". COMEÇA direto com a substância.
+- **Tensão no meio**: o trecho precisa criar uma expectativa que ainda não foi resolvida ("e o que aconteceu foi...").
+- **Payoff claro no final**: uma frase memorável, uma conclusão que "fecha" o argumento. Quem assiste deve querer compartilhar.
+- **Cita dados, nomes, leis, casos concretos**: o que diferencia de papo abstrato.
+- **Linguagem clara**: trechos com muito jargão sem explicação não viralizam.
+
+=== O QUE EVITAR ===
+
+- Trechos onde o orador titubeia muito ("é... então... né?")
+- Trechos onde a conversa é interrompida por publicidade ou tema lateral
+- Trechos com xingamentos pesados ou ataques pessoais (problema de monetização)
+- Trechos onde a frase importante é cortada no meio
+- Início ou final do vídeo se for só "olá, sejam bem-vindos" / "se inscreve no canal"
+
+=== TRANSCRIÇÃO ===
+
+Canal: {canal_nome}
+Título original: {title}
+
+Segmentos (formato: [start_s - end_s] texto):
+
+{transcript_segmentos}
+
+=== TAREFA ===
+
+Identifique {min_clipes} a {max_clipes} clipes. Cada clipe deve:
+- Durar entre {dur_min} e {dur_max} segundos (ideal: {dur_ideal}s)
+- Começar e terminar em fronteiras naturais de frase (não no meio de palavra)
+- Ter `start_s` e `end_s` precisos baseados nos timestamps da transcrição
+- Ter hook claro (cite as palavras iniciais)
+- Ter payoff claro (cite as palavras finais)
+- Estar alinhado a pelo menos UM eixo dos critérios de soberania
+
+Atribua scores:
+- `score_viral` (0-10): potencial de engajamento
+- `score_relevancia` (0-10): aderência ao tema
+
+Inclua apenas clipes com **ambos** os scores >= 6.
+
+=== FORMATO DE SAÍDA ===
+
+Responda APENAS com um JSON válido:
+
+{{
+  "clips": [
+    {{
+      "start_s": <float, com 1 casa decimal>,
+      "end_s": <float>,
+      "duracao_s": <float>,
+      "hook": "<primeiras ~10 palavras do trecho>",
+      "payoff": "<últimas ~10 palavras do trecho>",
+      "tema_soberania": "<eixo principal, ex: 'industria_defesa'>",
+      "score_viral": <int 0-10>,
+      "score_relevancia": <int 0-10>,
+      "justificativa": "<1-2 frases por que este corte vai funcionar>"
+    }}
+  ]
+}}
+
+Ordene `clips` por score combinado (`score_viral + score_relevancia`) decrescente.
