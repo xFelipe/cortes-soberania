@@ -212,10 +212,13 @@ def find_clips(
 def edit(
     ctx: typer.Context,
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Edita clipes: corte, reframe 9:16, legendas, intro/outro."""
-    logger.info("TODO: stages/edit.py não implementado ainda")
-    typer.echo("edit: não implementado")
+    from canal_soberania.stages.edit import run as edit_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    edit_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------

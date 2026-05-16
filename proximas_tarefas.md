@@ -89,15 +89,16 @@ Status global do projeto: 🟡 Setup
 - [x] Insere em `clips` com `status='identified'`
 
 ### Stage 8 — edit
-- [ ] `utils/ffmpeg.py` — helpers (cut, concat, scale, overlay, drawtext)
-- [ ] `stages/edit.py` — para cada clip:
-  - [ ] Cortar vídeo bruto entre `start_s` e `end_s`
-  - [ ] Detectar rosto principal com mediapipe, gerar crop dinâmico 9:16
-  - [ ] Gerar `.ass` com legendas palavra-por-palavra (estilo CapCut)
-  - [ ] Adicionar intro 3s (logo do canal) e outro 3s (CTA inscrever)
-  - [ ] Render final 1080x1920 30fps H.264 + AAC
-  - [ ] Versão 16:9 1920x1080 (para Shorts horizontais opcionais)
-- [ ] Salva em `data/clips/{clip_id}_vertical.mp4` e `data/clips/{clip_id}_horizontal.mp4`
+- [x] `utils/ffmpeg.py` — helpers (cut, concat, crop_and_scale, add_subtitles, encode_final)
+- [x] `stages/edit.py` — para cada clip:
+  - [x] Cortar vídeo bruto entre `start_s` e `end_s`
+  - [x] Detectar rosto principal com mediapipe, gerar crop dinâmico 9:16 (fallback: crop central)
+  - [x] Gerar `.ass` com legendas palavra-por-palavra (estilo CapCut, distribuição uniforme)
+  - [x] Adicionar intro 3s (logo do canal) e outro 3s (CTA inscrever) se arquivos existirem
+  - [x] Render final 1080x1920 30fps H.264 + AAC
+  - [x] Versão 16:9 1920x1080 (para Shorts horizontais opcionais)
+- [x] Salva em `data/clips/{clip_id}_vertical.mp4` e `data/clips/{clip_id}_horizontal.mp4`
+- [ ] Nota: legendas usam timestamps de segmento (distribuição uniforme). Para precisão palavra-por-palavra real, adicionar `word_timestamps=True` ao Whisper (subtarefa futura)
 
 ### Stage 9 — thumbnail
 - [ ] `stages/thumbnail.py` — Pillow: pega frame do `start_s + 2`, aplica template (gradiente + texto grande + logo)
