@@ -4,6 +4,12 @@ Pipeline automatizado de cortes de vídeo focado em soberania nacional do Brasil
 
 ## Quick start
 
+# Comando manual do loop de desenvolvimento
+
+`/loop Siga proximas_tarefas.md. Pegue uma tarefa pendente por vez, implemente, teste, commite e marque como concluída. Pare e pergunte quando houver decisão de design não óbvia ou quando uma tarefa exigir credenciais que você não tem.`
+
+
+
 ```bash
 git clone <repo> canal-soberania && cd canal-soberania
 uv sync
