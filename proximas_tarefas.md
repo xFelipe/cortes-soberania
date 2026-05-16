@@ -3,22 +3,23 @@
 > Regra TDAH: **uma caixinha por vez.** Não pule fases. Tarefa "doing" no máximo 1.
 > Sempre que terminar, marque `[x]` e commite. Dopamina visível é dopamina conquistada.
 
-Status global do projeto: 🟡 Setup
+Status global do projeto: 🟢 Código completo — aguardando setup operacional
 
 ---
 
 ## Fase 0 — Setup do ambiente (1 dia)
 
 - [x] Instalar `uv` (https://docs.astral.sh/uv/) e Python 3.11+
-- [ ] Instalar `ffmpeg` no sistema (`apt install ffmpeg` ou `brew install ffmpeg`)
+- [ ] **PRÓXIMO** Instalar `ffmpeg` no sistema (`apt install ffmpeg` ou `brew install ffmpeg`)
 - [x] Clonar/inicializar repo e rodar `uv sync`
-- [ ] Criar `.env` a partir de `.env.example` e preencher:
-  - [ ] `ANTHROPIC_API_KEY` (https://console.anthropic.com)
-  - [ ] `YOUTUBE_API_KEY` (Google Cloud Console → YouTube Data API v3, criar key)
-  - [ ] `YOUTUBE_OAUTH_CLIENT_SECRETS_PATH` (para upload, OAuth 2.0, baixar JSON)
-- [ ] Rodar `sqlite3 data/canal.db < schema.sql`
-- [ ] Validar setup: `cs discover --dry-run` deve listar vídeos sem erro
-- [ ] Criar conta no canal do YouTube (definir nome, foto, banner, descrição)
+- [ ] **PRÓXIMO** Criar `.env` a partir de `.env.example` e preencher:
+  - [x] `ANTHROPIC_API_KEY` — testada e funcionando
+  - [x] `YOUTUBE_API_KEY` — testada e funcionando
+  - [x] `OPENROUTER_API_KEY` — testada e funcionando
+  - [ ] `YOUTUBE_OAUTH_CLIENT_SECRETS_PATH` (para upload, OAuth 2.0 — baixar JSON no Google Cloud Console)
+- [ ] **PRÓXIMO** Rodar `sqlite3 data/canal.db < schema.sql` (ou `uv run python -c "from canal_soberania.db import *; init_db(...)"`)
+- [ ] **PRÓXIMO** Validar setup: `cs discover --dry-run` deve listar vídeos sem erro
+- [ ] Criar conta no canal do YouTube (definir nome, foto, banner, descrição) — *ver Decisões pendentes*
 - [ ] Criar conta no TikTok com mesmo nome/visual
 
 ---
@@ -32,7 +33,7 @@ Status global do projeto: 🟡 Setup
 - [x] `src/canal_soberania/models.py` — `Video`, `Clip`, `TriageResult`
 - [x] `src/canal_soberania/logger.py` — setup loguru com rotação em `data/logs/`
 - [x] `src/canal_soberania/config.py` — load `.env` e `config/canais.yaml`
-- [x] `src/canal_soberania/llm.py` — wrapper Anthropic, suporte Haiku e Sonnet
+- [x] `src/canal_soberania/llm.py` — wrapper Anthropic (direto) + OpenRouter (demais modelos); factory `get_llm_client()` roteia por prefixo
 - [x] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
 
 ### Stage 1 — discover
@@ -132,7 +133,7 @@ Status global do projeto: 🟡 Setup
 - [x] `scripts/run_discover.sh` — chama `cs discover && cs triage --stage metadata && cs triage --stage caption`
 - [x] `scripts/run_pipeline.sh` — full pipeline discover → upload; usa flock para evitar paralelas
 - [x] `scripts/backup_db.sh` — sqlite3 .backup + purge > 30 dias
-- [ ] Crontab:
+- [ ] **PRÓXIMO (após Fase 1)** Configurar crontab na VPS:
   ```
   0 8,20 * * *  /path/scripts/run_discover.sh
   */30 * * * *  /path/scripts/run_pipeline.sh
