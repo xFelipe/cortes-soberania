@@ -74,9 +74,9 @@ Status global do projeto: 🟡 Setup
 - [x] Atualiza `videos.audio_path` e `videos.video_path`
 
 ### Stage 5 — transcribe
-- [ ] `stages/transcribe.py` — faster-whisper large-v3, PT-BR
-- [ ] Salva JSON com segments+timestamps em `data/transcripts/{video_id}.json`
-- [ ] Status → `transcribed`
+- [x] `stages/transcribe.py` — faster-whisper large-v3, PT-BR
+- [x] Salva JSON com segments+timestamps em `data/transcripts/{video_id}.json`
+- [x] Status → `transcribed`
 
 ### Stage 6 — triage_transcript
 - [ ] `stages/triage_transcript.py` — análise final do transcript completo com Claude Sonnet usando `prompts/triagem_transcript.txt`

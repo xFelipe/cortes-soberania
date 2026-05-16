@@ -172,10 +172,13 @@ def download(
 def transcribe(
     ctx: typer.Context,
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Transcreve áudio com faster-whisper."""
-    logger.info("TODO: stages/transcribe.py não implementado ainda")
-    typer.echo("transcribe: não implementado")
+    from canal_soberania.stages.transcribe import run as transcribe_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    transcribe_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
