@@ -79,9 +79,9 @@ Status global do projeto: 🟡 Setup
 - [x] Status → `transcribed`
 
 ### Stage 6 — triage_transcript
-- [ ] `stages/triage_transcript.py` — análise final do transcript completo com Claude Sonnet usando `prompts/triagem_transcript.txt`
-- [ ] Output: score final + lista de temas detectados
-- [ ] Status → `relevant` ou `rejected_final`
+- [x] `stages/triage_transcript.py` — análise final do transcript completo com Claude Sonnet usando `prompts/triagem_transcript.txt`
+- [x] Output: score final + lista de temas detectados
+- [x] Status → `triage_transcript_passed` ou `triage_transcript_rejected`
 
 ### Stage 7 — find_clips
 - [ ] `stages/find_clips.py` — manda transcript + timestamps para Claude Sonnet com `prompts/identificar_cortes.txt`
