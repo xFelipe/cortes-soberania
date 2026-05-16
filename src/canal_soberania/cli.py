@@ -154,10 +154,13 @@ def triage(
 def download(
     ctx: typer.Context,
     pending: Annotated[bool, typer.Option("--pending")] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Baixa áudio/vídeo dos itens aprovados na triagem."""
-    logger.info("TODO: stages/download.py não implementado ainda")
-    typer.echo("download: não implementado")
+    from canal_soberania.stages.download import run as download_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    download_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------

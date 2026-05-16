@@ -69,9 +69,9 @@ Status global do projeto: 🟡 Setup
 ## Fase 2 — Automação de edição (semana 3–4)
 
 ### Stage 4 — download
-- [ ] `stages/download.py` — yt-dlp baixa áudio (mp3) sempre, vídeo (mp4 1080p) só se aprovado em todas triagens
-- [ ] Salva em `data/audio/{video_id}.mp3` e `data/video/{video_id}.mp4`
-- [ ] Atualiza `videos.audio_path` e `videos.video_path`
+- [x] `stages/download.py` — yt-dlp baixa áudio (mp3) sempre, vídeo (mp4 1080p) só se aprovado em todas triagens
+- [x] Salva em `data/audio/{video_id}.mp3` e `data/video/{video_id}.mp4`
+- [x] Atualiza `videos.audio_path` e `videos.video_path`
 
 ### Stage 5 — transcribe
 - [ ] `stages/transcribe.py` — faster-whisper large-v3, PT-BR
