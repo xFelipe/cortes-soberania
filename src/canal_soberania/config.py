@@ -30,6 +30,8 @@ class Settings(BaseModel):
     anthropic_model_triage: str = Field(default="claude-haiku-4-5-20251001")
     anthropic_model_deep: str = Field(default="claude-sonnet-4-6")
 
+    openrouter_api_key: str = Field(default="")
+
     youtube_api_key: str = Field(default="")
     youtube_oauth_client_secrets_path: str = Field(default="config/client_secrets.json")
     youtube_oauth_token_path: str = Field(default="config/youtube_token.json")
@@ -51,6 +53,7 @@ def load_settings() -> Settings:
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         anthropic_model_triage=os.getenv("ANTHROPIC_MODEL_TRIAGE", "claude-haiku-4-5-20251001"),
         anthropic_model_deep=os.getenv("ANTHROPIC_MODEL_DEEP", "claude-sonnet-4-6"),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         youtube_api_key=os.getenv("YOUTUBE_API_KEY", ""),
         youtube_oauth_client_secrets_path=os.getenv(
             "YOUTUBE_OAUTH_CLIENT_SECRETS_PATH", "config/client_secrets.json"

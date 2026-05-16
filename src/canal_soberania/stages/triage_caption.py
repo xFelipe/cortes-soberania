@@ -19,7 +19,7 @@ from canal_soberania.db import (
     update_video_paths,
     update_video_status,
 )
-from canal_soberania.llm import LLMClient, extract_json
+from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, Video
 
@@ -159,7 +159,7 @@ def _parse_caption_response(
 def triage_video_caption(
     video: Video,
     conn: sqlite3.Connection,
-    llm: LLMClient,
+    llm: LLMClient | OpenRouterClient,
     model: str,
     prompt_template: str,
     criterios: str,
@@ -244,7 +244,7 @@ def triage_video_caption(
         update_video_status(conn, video.video_id, new_status)
         record_api_cost(
             conn,
-            provider="anthropic",
+            provider="anthropic" if model.startswith("claude-") else "openrouter",
             model=model,
             tokens_in=resp.tokens_in,
             tokens_out=resp.tokens_out,
@@ -262,7 +262,7 @@ def triage_video_caption(
 
 
 def run(
-    llm: LLMClient | None = None,
+    llm: LLMClient | OpenRouterClient | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> None:
@@ -275,14 +275,15 @@ def run(
             init_db(paths["db_path"], paths["schema_path"])
         conn = connect(paths["db_path"])
 
-    if not settings.anthropic_api_key and llm is None:
-        logger.error("ANTHROPIC_API_KEY não configurada — abortando triage_caption")
-        return
+    model = settings.anthropic_model_triage
 
     if llm is None:
-        llm = LLMClient(api_key=settings.anthropic_api_key, training_conn=conn)
-
-    model = settings.anthropic_model_triage
+        required_key = settings.anthropic_api_key if model.startswith("claude-") else settings.openrouter_api_key
+        if not required_key:
+            key_name = "ANTHROPIC_API_KEY" if model.startswith("claude-") else "OPENROUTER_API_KEY"
+            logger.error("{} não configurada — abortando triage_caption", key_name)
+            return
+        llm = get_llm_client(model, settings, training_conn=conn)
     canais_cfg = load_canais(paths["canais_path"])
     threshold = canais_cfg.parametros.threshold_triage_caption
 

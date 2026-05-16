@@ -9,7 +9,7 @@ from typing import Any
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db, record_api_cost
-from canal_soberania.llm import LLMClient, extract_json
+from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip
 
@@ -73,7 +73,7 @@ def _build_metadata_prompt(
 def generate_metadata_for_clip(
     clip: Clip,
     conn: sqlite3.Connection,
-    llm: LLMClient,
+    llm: LLMClient | OpenRouterClient,
     model: str,
     prompt_template: str,
     canais_cfg: CanaisConfig,
@@ -123,7 +123,7 @@ def generate_metadata_for_clip(
     resp = llm.complete(prompt=prompt, model=model, task="metadata")
     record_api_cost(
         conn,
-        provider="anthropic",
+        provider="anthropic" if model.startswith("claude-") else "openrouter",
         model=model,
         tokens_in=resp.tokens_in,
         tokens_out=resp.tokens_out,
@@ -171,8 +171,13 @@ def run(
         conn = connect(paths["db_path"])
 
     canais_cfg = load_canais(paths["canais_path"])
-    llm = LLMClient(api_key=settings.anthropic_api_key, training_conn=conn)
     model = settings.anthropic_model_deep
+    required_key = settings.anthropic_api_key if model.startswith("claude-") else settings.openrouter_api_key
+    if not required_key:
+        key_name = "ANTHROPIC_API_KEY" if model.startswith("claude-") else "OPENROUTER_API_KEY"
+        logger.error("{} não configurada — abortando metadata", key_name)
+        return
+    llm = get_llm_client(model, settings, training_conn=conn)
 
     prompt_path = paths["prompts_dir"] / "gerar_metadata_clip.txt"
     if not prompt_path.exists():
