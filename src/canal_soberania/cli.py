@@ -105,8 +105,10 @@ def discover(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Busca vídeos novos nos canais monitorados."""
-    logger.info("TODO: stages/discover.py não implementado ainda")
-    typer.echo("discover: não implementado — veja stages/discover.py")
+    from canal_soberania.stages.discover import run as discover_run
+
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    discover_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------

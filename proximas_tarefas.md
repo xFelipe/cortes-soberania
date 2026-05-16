@@ -36,9 +36,9 @@ Status global do projeto: 🟡 Setup
 - [x] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
 
 ### Stage 1 — discover
-- [ ] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
-- [ ] Inserir vídeos novos em `videos` com `status='discovered'`
-- [ ] Teste: roda 1x, verifica banco
+- [x] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
+- [x] Inserir vídeos novos em `videos` com `status='discovered'`
+- [x] Teste: roda 1x, verifica banco (14 testes com YouTube API mockada)
 - [ ] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
 
 ### Stage 2 — triage_metadata
