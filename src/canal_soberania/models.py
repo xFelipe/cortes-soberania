@@ -10,6 +10,7 @@ VideoStatus = Literal[
     "discovered",
     "triage_metadata_passed",
     "triage_metadata_rejected",
+    "on_hold_metadata_passed",
     "triage_caption_passed",
     "triage_caption_rejected",
     "triage_caption_skipped",

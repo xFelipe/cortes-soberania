@@ -6,6 +6,8 @@ import json
 import sqlite3
 from typing import Any
 
+from pydantic import ValidationError
+
 from canal_soberania import db as _db
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
@@ -32,7 +34,12 @@ class SqliteVideoRepository:
         for row in rows:
             d: dict[str, Any] = dict(row)
             d["tags"] = json.loads(d["tags"] or "[]")
-            result.append(Video.model_validate(d))
+            try:
+                result.append(Video.model_validate(d))
+            except ValidationError:
+                # Status desconhecido no banco — carrega como 'processing_error'
+                d["status"] = "processing_error"
+                result.append(Video.model_validate(d))
         return result
 
     def get_by_status(self, status: VideoStatus) -> list[Video]:

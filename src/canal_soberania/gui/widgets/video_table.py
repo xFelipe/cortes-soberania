@@ -22,6 +22,7 @@ _STATUS_COLOR: dict[str, str] = {
     "discovered": "#555555",
     "triage_metadata_passed": "#2e7d32",
     "triage_metadata_rejected": "#b71c1c",
+    "on_hold_metadata_passed": "#6a1e8a",
     "triage_caption_passed": "#1b5e20",
     "triage_caption_rejected": "#c62828",
     "triage_caption_skipped": "#4e342e",
