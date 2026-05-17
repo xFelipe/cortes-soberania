@@ -47,6 +47,7 @@ class ClipReviewDialog(QDialog):
         self._clip = clip
         self._service = service
         self._boost_cancelled = False
+        self.published = False  # True se o clipe foi liberado para publicação
         self.setWindowTitle(f"Review — {clip.clip_id}")
         self.resize(960, 700)
         self._setup_ui()
@@ -335,7 +336,7 @@ class ClipReviewDialog(QDialog):
         if msg.exec() == QMessageBox.StandardButton.Ok:
             try:
                 self._service.approve_clip(self._clip.clip_id)
-                QMessageBox.information(self, "Liberado", "Clipe na fila de publicação (scheduled_youtube).")
+                self.published = True
                 self.accept()
             except Exception as exc:
                 QMessageBox.critical(self, "Erro ao liberar", str(exc))

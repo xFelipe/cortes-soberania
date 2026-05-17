@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -235,8 +235,20 @@ class MainWindow(QMainWindow):
 
     def _open_review(self, clip: Clip) -> None:
         from canal_soberania.gui.windows.clip_review import ClipReviewDialog
-        ClipReviewDialog(clip, self._service, self).exec()
+        dlg = ClipReviewDialog(clip, self._service, self)
+        dlg.exec()
         self._refresh_clips()
+        if dlg.published:
+            self._flash_status("✓ Clipe liberado para publicação.", 4000)
+
+    def _flash_status(self, message: str, duration_ms: int = 3000) -> None:
+        self._status_label.setText(message)
+        self._status_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
+        QTimer.singleShot(duration_ms, self._clear_flash_status)
+
+    def _clear_flash_status(self) -> None:
+        self._status_label.setStyleSheet("")
+        self._update_status_bar()
 
     def _update_status_bar(self) -> None:
         summary = self._service.get_status_summary()
