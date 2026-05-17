@@ -7,6 +7,7 @@ from pathlib import Path
 
 from canal_soberania.config import Settings
 from canal_soberania.core.repositories import ClipRepository, VideoRepository
+from canal_soberania.core.state import ClipStateMachine, VideoStateMachine
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 
@@ -62,6 +63,18 @@ class PipelineService:
         if status is None:
             return self._clip_repo.get_all()
         return self._clip_repo.get_by_status(status)
+
+    # ------------------------------------------------------------------
+    # State machine helpers (para a UI acionar transições manuais)
+    # ------------------------------------------------------------------
+
+    def transition_video(self, video_id: str, current: VideoStatus, new: VideoStatus) -> None:
+        """Valida e loga transição de estado de um vídeo. Não persiste — usa db direto."""
+        VideoStateMachine.transition(video_id, current, new)
+
+    def transition_clip(self, clip_id: str, current: ClipStatus, new: ClipStatus) -> None:
+        """Valida e loga transição de estado de um clipe. Não persiste — usa db direto."""
+        ClipStateMachine.transition(clip_id, current, new)
 
     # ------------------------------------------------------------------
     # Pipeline stages
