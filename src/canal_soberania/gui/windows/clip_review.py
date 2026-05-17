@@ -7,11 +7,13 @@ import tempfile
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QDateTime, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QDateTimeEdit,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -111,6 +113,27 @@ class ClipReviewDialog(QDialog):
         self._payoff_te.setMaximumHeight(72)
         self._payoff_te.setPlaceholderText("Payoff do clipe…")
         edit_layout.addRow("Payoff:", self._payoff_te)
+
+        # Agendamento de publicação
+        sched_row = QWidget()
+        sched_row_layout = QHBoxLayout(sched_row)
+        sched_row_layout.setContentsMargins(0, 0, 0, 0)
+        self._schedule_chk = QCheckBox("Agendar publicação")
+        self._schedule_dt = QDateTimeEdit()
+        self._schedule_dt.setDisplayFormat("dd/MM/yyyy HH:mm")
+        self._schedule_dt.setCalendarPopup(True)
+        has_schedule = bool(self._clip.youtube_publish_at)
+        self._schedule_chk.setChecked(has_schedule)
+        if has_schedule:
+            dt = QDateTime.fromString(self._clip.youtube_publish_at[:16], "yyyy-MM-ddTHH:mm")
+            self._schedule_dt.setDateTime(dt if dt.isValid() else QDateTime.currentDateTime().addDays(1))
+        else:
+            self._schedule_dt.setDateTime(QDateTime.currentDateTime().addDays(1))
+        self._schedule_dt.setEnabled(has_schedule)
+        self._schedule_chk.toggled.connect(self._schedule_dt.setEnabled)
+        sched_row_layout.addWidget(self._schedule_chk)
+        sched_row_layout.addWidget(self._schedule_dt, 1)
+        edit_layout.addRow(sched_row)
 
         self._save_btn = QPushButton("Salvar alterações")
         self._save_btn.clicked.connect(lambda: self._save_changes(silent=False))
@@ -268,10 +291,16 @@ class ClipReviewDialog(QDialog):
         hook = self._hook_te.toPlainText().strip() or None
         payoff = self._payoff_te.toPlainText().strip() or None
         title = self._title_edit.text().strip() or None
+        schedule: str | None = (
+            self._schedule_dt.dateTime().toString("yyyy-MM-ddTHH:mm:00")
+            if self._schedule_chk.isChecked()
+            else None
+        )
         try:
-            self._service.update_clip_text(self._clip.clip_id, hook, payoff, title)
-            # Mantém o objeto em memória sincronizado com o banco
-            self._clip = self._clip.model_copy(update={"hook": hook, "payoff": payoff, "title": title})
+            self._service.update_clip_text(self._clip.clip_id, hook, payoff, title, schedule)
+            self._clip = self._clip.model_copy(update={
+                "hook": hook, "payoff": payoff, "title": title, "youtube_publish_at": schedule,
+            })
             if not silent:
                 self._save_btn.setText("✓ Salvo")
                 self._save_btn.setStyleSheet("color: #2e7d32; font-weight: bold;")

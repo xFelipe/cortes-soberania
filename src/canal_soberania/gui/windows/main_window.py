@@ -129,6 +129,8 @@ class MainWindow(QMainWindow):
         canal_urls = self._load_canal_urls()
         self._video_table = VideoTable(canal_urls=canal_urls)
         self._video_table.video_selected.connect(self._on_video_selected)
+        self._video_table.video_approve_requested.connect(self._on_video_approve)
+        self._video_table.video_reject_requested.connect(self._on_video_reject)
         layout.addWidget(self._video_table)
         return w
 
@@ -313,6 +315,24 @@ class MainWindow(QMainWindow):
             self._refresh()
         elif index == 1:
             self._refresh_clips()
+
+    @Slot(str)
+    def _on_video_approve(self, video_id: str) -> None:
+        try:
+            self._service.approve_video(video_id)
+            self._refresh()
+            self._flash_status(f"✓ Vídeo {video_id} aprovado.", 3000)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível aprovar", str(exc))
+
+    @Slot(str)
+    def _on_video_reject(self, video_id: str) -> None:
+        try:
+            self._service.reject_video(video_id)
+            self._refresh()
+            self._flash_status(f"✗ Vídeo {video_id} recusado.", 3000)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível recusar", str(exc))
 
     def _on_video_selected(self, video_id: str) -> None:
         video = self._service.get_video(video_id)

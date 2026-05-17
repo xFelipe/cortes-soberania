@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QPoint, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -74,7 +75,9 @@ _URL_ROLE = Qt.ItemDataRole.UserRole + 1  # armazena URL clicável
 class VideoTable(QWidget):
     """Tabela de vídeos com filtro por status e seleção para ações."""
 
-    video_selected = Signal(str)  # video_id
+    video_selected = Signal(str)          # video_id (duplo clique)
+    video_approve_requested = Signal(str)  # video_id
+    video_reject_requested = Signal(str)   # video_id
 
     def __init__(
         self,
@@ -111,6 +114,8 @@ class VideoTable(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.cellDoubleClicked.connect(self._on_double_click)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_context_menu)
         layout.addWidget(self._table)
 
     def load(self, videos: list[Video]) -> None:
@@ -124,7 +129,6 @@ class VideoTable(QWidget):
             if selected_status is None
             else [v for v in self._videos if v.status == selected_status]
         )
-        # triage_metadata_rejected por último; outros rejeitados antes; normais primeiro
         rows = sorted(rows, key=lambda v: _sort_priority(v.status))
 
         self._table.setRowCount(0)
@@ -180,3 +184,21 @@ class VideoTable(QWidget):
         item = self._table.item(row, 0)
         if item:
             self.video_selected.emit(item.data(Qt.ItemDataRole.UserRole))
+
+    def _on_context_menu(self, pos: QPoint) -> None:
+        item = self._table.itemAt(pos)
+        if item is None:
+            return
+        video_id: str = item.data(Qt.ItemDataRole.UserRole) or ""
+        if not video_id:
+            return
+
+        menu = QMenu(self)
+        approve_action = menu.addAction("✓ Aprovar — seguir para próxima etapa")
+        reject_action = menu.addAction("✗ Recusar — marcar como rejeitado")
+
+        chosen = menu.exec(self._table.viewport().mapToGlobal(pos))
+        if chosen == approve_action:
+            self.video_approve_requested.emit(video_id)
+        elif chosen == reject_action:
+            self.video_reject_requested.emit(video_id)

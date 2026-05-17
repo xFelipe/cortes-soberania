@@ -189,17 +189,58 @@ class PipelineService:
     def get_clip(self, clip_id: str) -> Clip | None:
         return self._clip_repo.get(clip_id)
 
+    def approve_video(self, video_id: str) -> None:
+        """Avança vídeo manualmente para a próxima etapa do pipeline."""
+        video = self._video_repo.get(video_id)
+        if video is None:
+            raise ValueError(f"Vídeo não encontrado: {video_id}")
+        _APPROVE_MAP: dict[str, str] = {
+            "discovered": "triage_metadata_passed",
+            "triage_metadata_rejected": "triage_metadata_passed",
+            "on_hold_metadata_passed": "triage_caption_passed",
+            "triage_metadata_passed": "triage_caption_passed",
+            "triage_caption_rejected": "triage_caption_passed",
+            "triage_caption_skipped": "downloading",
+            "triage_caption_passed": "downloading",
+            "transcribe_error": "transcribed",
+            "triage_transcript_rejected": "triage_transcript_passed",
+            "transcribed": "triage_transcript_passed",
+            "triage_transcript_passed": "finding_clips",
+        }
+        new_status = _APPROVE_MAP.get(video.status)
+        if new_status is None:
+            raise ValueError(f"Vídeo '{video_id}' em status não aprovável manualmente: {video.status}")
+        self._conn.execute(
+            "UPDATE videos SET status = ?, updated_at = datetime('now') WHERE video_id = ?",
+            (new_status, video_id),
+        )
+        self._conn.commit()
+        self._bus.publish(PipelineEvent("video_approved", {"video_id": video_id, "new_status": new_status}))
+
+    def reject_video(self, video_id: str) -> None:
+        """Rejeita manualmente um vídeo, marcando como triage_metadata_rejected."""
+        self._conn.execute(
+            "UPDATE videos SET status = 'triage_metadata_rejected', "
+            "error_message = 'Rejeitado manualmente', updated_at = datetime('now') "
+            "WHERE video_id = ?",
+            (video_id,),
+        )
+        self._conn.commit()
+        self._bus.publish(PipelineEvent("video_rejected", {"video_id": video_id}))
+
     def update_clip_text(
         self,
         clip_id: str,
         hook: str | None,
         payoff: str | None,
         title: str | None,
+        youtube_publish_at: str | None,
     ) -> None:
-        """Persiste edições manuais de hook, payoff e título do clipe."""
+        """Persiste edições manuais de hook, payoff, título e agendamento do clipe."""
         cur = self._conn.execute(
-            "UPDATE clips SET hook = ?, payoff = ?, title = ?, updated_at = datetime('now') WHERE clip_id = ?",
-            (hook, payoff, title, clip_id),
+            "UPDATE clips SET hook = ?, payoff = ?, title = ?, youtube_publish_at = ?, "
+            "updated_at = datetime('now') WHERE clip_id = ?",
+            (hook, payoff, title, youtube_publish_at, clip_id),
         )
         if cur.rowcount == 0:
             raise ValueError(f"Clip não encontrado no banco: {clip_id}")
