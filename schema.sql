@@ -138,6 +138,22 @@ CREATE TABLE IF NOT EXISTS uploads_log (
 
 CREATE INDEX IF NOT EXISTS idx_uploads_clip ON uploads_log(clip_id);
 
+CREATE TABLE IF NOT EXISTS training_examples (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    task            TEXT NOT NULL,                  -- 'triage' | 'find_clips' | 'metadata'
+    model           TEXT NOT NULL,
+    system_prompt   TEXT,
+    prompt          TEXT NOT NULL,
+    completion      TEXT NOT NULL,
+    tokens_in       INTEGER NOT NULL DEFAULT 0,
+    tokens_out      INTEGER NOT NULL DEFAULT 0,
+    cost_usd        REAL NOT NULL DEFAULT 0.0,
+    approved        INTEGER,                        -- NULL=uncurated, 1=approved, 0=rejected
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_task ON training_examples(task);
+
 -- =========================================================================
 -- Triggers para updated_at automático
 -- =========================================================================
