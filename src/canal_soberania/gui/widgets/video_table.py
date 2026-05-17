@@ -38,7 +38,6 @@ _STATUS_COLOR: dict[str, str] = {
     "processing_error": "#d50000",
 }
 
-# Prioridade de ordenação: 0 = normal, 1 = outros rejeitados, 2 = triage_metadata_rejected (último)
 def _sort_priority(status: str) -> int:
     if status == "triage_metadata_rejected":
         return 2
@@ -46,7 +45,27 @@ def _sort_priority(status: str) -> int:
         return 1
     return 0
 
-_COLUMNS = ["ID", "Canal", "Título", "Status", "Duração (s)", "Publicado"]
+
+def _fmt_duration(seconds: int | None) -> str:
+    if seconds is None:
+        return "—"
+    total = int(seconds)
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _fmt_date(iso: str | None) -> str:
+    if not iso:
+        return ""
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(iso[:10]).strftime("%d/%m/%Y")
+    except ValueError:
+        return iso[:10]
+
+
+_COLUMNS = ["Título", "Canal", "Status", "Duração", "Publicado"]
 
 _LINK_COLOR = "#1565c0"
 _URL_ROLE = Qt.ItemDataRole.UserRole + 1  # armazena URL clicável
@@ -88,7 +107,7 @@ class VideoTable(QWidget):
         self._table.setHorizontalHeaderLabels(_COLUMNS)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._table.verticalHeader().setVisible(False)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.cellDoubleClicked.connect(self._on_double_click)
@@ -113,14 +132,15 @@ class VideoTable(QWidget):
             row = self._table.rowCount()
             self._table.insertRow(row)
 
-            # col 0: ID — link para o vídeo no YouTube
             video_url = f"https://www.youtube.com/watch?v={video.video_id}"
-            item_id = QTableWidgetItem(video.video_id)
-            item_id.setData(Qt.ItemDataRole.UserRole, video.video_id)
-            item_id.setData(_URL_ROLE, video_url)
-            item_id.setForeground(QColor(_LINK_COLOR))
-            item_id.setToolTip(video_url)
-            self._table.setItem(row, 0, item_id)
+
+            # col 0: Título — link para o vídeo no YouTube; tooltip mostra o video_id
+            item_title = QTableWidgetItem(video.title)
+            item_title.setData(Qt.ItemDataRole.UserRole, video.video_id)
+            item_title.setData(_URL_ROLE, video_url)
+            item_title.setForeground(QColor(_LINK_COLOR))
+            item_title.setToolTip(f"{video.video_id}  |  {video_url}")
+            self._table.setItem(row, 0, item_title)
 
             # col 1: Canal — link para a página do canal
             channel_url = self._canal_urls.get(video.canal_id, "")
@@ -132,17 +152,16 @@ class VideoTable(QWidget):
                 item_canal.setToolTip(channel_url)
             self._table.setItem(row, 1, item_canal)
 
-            # cols 2-5: título, status, duração, publicado
+            # cols 2-4: status, duração, publicado
             remaining: list[tuple[int, str]] = [
-                (2, video.title),
-                (3, video.status),
-                (4, str(video.duration_s or "")),
-                (5, video.published_at[:10] if video.published_at else ""),
+                (2, video.status),
+                (3, _fmt_duration(video.duration_s)),
+                (4, _fmt_date(video.published_at)),
             ]
             for col, val in remaining:
                 item = QTableWidgetItem(val)
                 item.setData(Qt.ItemDataRole.UserRole, video.video_id)
-                if col == 3:
+                if col == 2:
                     item.setForeground(QColor(_STATUS_COLOR.get(video.status, "#555555")))
                 self._table.setItem(row, col, item)
 

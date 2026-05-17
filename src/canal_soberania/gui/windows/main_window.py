@@ -60,6 +60,15 @@ def _clip_sort_priority(status: str) -> int:
     except ValueError:
         return len(_CLIP_STATUS_LABELS)
 
+
+def _fmt_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    total = int(seconds)
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
 _STAGE_FN_MAP = {
     "run_discover": "run_discover",
     "run_triage_metadata": "run_triage_metadata",
@@ -202,9 +211,13 @@ class MainWindow(QMainWindow):
         card.setFixedWidth(360)
         layout = QVBoxLayout(card)
 
-        clip_id_lbl = QLabel(f"<b>{clip.clip_id}</b>")
-        clip_id_lbl.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(clip_id_lbl)
+        hook_text = clip.hook or clip.clip_id
+        display = hook_text[:90] + ("…" if len(hook_text) > 90 else "")
+        header_lbl = QLabel(f"<b>{display}</b>")
+        header_lbl.setTextFormat(Qt.TextFormat.RichText)
+        header_lbl.setWordWrap(True)
+        header_lbl.setToolTip(clip.clip_id)
+        layout.addWidget(header_lbl)
 
         status_lbl = QLabel(f"  {clip.status}  ")
         status_color = _CLIP_STATUS_COLOR.get(clip.status, "#555555")
@@ -213,12 +226,8 @@ class MainWindow(QMainWindow):
         )
         status_lbl.setMaximumWidth(240)
         layout.addWidget(status_lbl)
-        layout.addWidget(QLabel(f"Duração: {clip.duracao_s:.1f}s"))
+        layout.addWidget(QLabel(f"Duração: {_fmt_duration(clip.duracao_s)}"))
         layout.addWidget(QLabel(f"Score viral: {clip.score_viral or '—'}"))
-        if clip.hook:
-            hook_lbl = QLabel(clip.hook[:80] + ("…" if len(clip.hook) > 80 else ""))
-            hook_lbl.setWordWrap(True)
-            layout.addWidget(hook_lbl)
 
         review_btn = QPushButton("Review")
         review_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
