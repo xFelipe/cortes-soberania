@@ -253,16 +253,13 @@ class ClipReviewDialog(QDialog):
     # ── Persistência ─────────────────────────────────────────────────
 
     def _save_changes(self, *, silent: bool = False) -> None:
-        hook = self._hook_te.toPlainText().strip()
-        payoff = self._payoff_te.toPlainText().strip()
-        title = self._title_edit.text().strip()
+        hook = self._hook_te.toPlainText().strip() or None
+        payoff = self._payoff_te.toPlainText().strip() or None
+        title = self._title_edit.text().strip() or None
         try:
-            self._service.update_clip_text(
-                self._clip.clip_id,
-                hook or None,
-                payoff or None,
-                title or None,
-            )
+            self._service.update_clip_text(self._clip.clip_id, hook, payoff, title)
+            # Mantém o objeto em memória sincronizado com o banco
+            self._clip = self._clip.model_copy(update={"hook": hook, "payoff": payoff, "title": title})
             if not silent:
                 self._save_btn.setText("✓ Salvo")
                 self._save_btn.setStyleSheet("color: #2e7d32; font-weight: bold;")

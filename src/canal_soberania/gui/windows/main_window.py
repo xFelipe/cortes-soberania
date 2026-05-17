@@ -204,8 +204,6 @@ class MainWindow(QMainWindow):
             self._clips_grid.addWidget(card, idx // cols, idx % cols)
 
     def _make_clip_card(self, clip: Clip) -> QFrame:
-        from canal_soberania.gui.windows.clip_review import ClipReviewDialog
-
         card = QFrame()
         card.setFrameShape(QFrame.Shape.StyledPanel)
         card.setFixedWidth(360)
@@ -231,9 +229,14 @@ class MainWindow(QMainWindow):
 
         review_btn = QPushButton("Review")
         review_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        review_btn.clicked.connect(lambda _checked=False, c=clip: ClipReviewDialog(c, self._service, self).exec())
+        review_btn.clicked.connect(lambda _checked=False, c=clip: self._open_review(c))
         layout.addWidget(review_btn)
         return card
+
+    def _open_review(self, clip: Clip) -> None:
+        from canal_soberania.gui.windows.clip_review import ClipReviewDialog
+        ClipReviewDialog(clip, self._service, self).exec()
+        self._refresh_clips()
 
     def _update_status_bar(self) -> None:
         summary = self._service.get_status_summary()
