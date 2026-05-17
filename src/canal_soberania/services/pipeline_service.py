@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
 
-from canal_soberania import db as _db
 from canal_soberania.config import Settings
+from canal_soberania.core.repositories import ClipRepository, VideoRepository
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 
@@ -15,7 +14,8 @@ class PipelineService:
     """Orquestra os stages do pipeline e expõe queries para a camada de apresentação.
 
     Recebe dependências por injeção no construtor — nenhum import de GUI ou HTTP
-    dentro desta classe.
+    dentro desta classe. Os repositórios têm padrão Sqlite; em testes, injete
+    InMemoryVideoRepository / InMemoryClipRepository.
     """
 
     def __init__(
@@ -23,60 +23,45 @@ class PipelineService:
         conn: sqlite3.Connection,
         settings: Settings,
         paths: dict[str, Path],
+        video_repo: VideoRepository | None = None,
+        clip_repo: ClipRepository | None = None,
     ) -> None:
         self._conn = conn
         self._settings = settings
         self._paths = paths
+
+        if video_repo is None:
+            from canal_soberania.repositories.sqlite import SqliteVideoRepository
+            video_repo = SqliteVideoRepository(conn)
+        if clip_repo is None:
+            from canal_soberania.repositories.sqlite import SqliteClipRepository
+            clip_repo = SqliteClipRepository(conn)
+
+        self._video_repo = video_repo
+        self._clip_repo = clip_repo
 
     # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
 
     def get_status_summary(self) -> dict[str, int]:
-        return _db.status_summary(self._conn)
+        return self._video_repo.status_summary()
 
     def get_monthly_cost(self) -> float:
-        return _db.monthly_cost(self._conn)
+        return self._video_repo.monthly_cost()
 
     def get_video(self, video_id: str) -> Video | None:
-        row = self._conn.execute(
-            "SELECT * FROM videos WHERE video_id = ?", (video_id,)
-        ).fetchone()
-        if row is None:
-            return None
-        d: dict[str, Any] = dict(row)
-        import json
-        d["tags"] = json.loads(d["tags"] or "[]")
-        return Video.model_validate(d)
+        return self._video_repo.get(video_id)
 
     def get_videos(self, status: VideoStatus | None = None) -> list[Video]:
         if status is None:
-            rows = self._conn.execute(
-                "SELECT * FROM videos ORDER BY published_at DESC"
-            ).fetchall()
-            import json
-            result = []
-            for row in rows:
-                d: dict[str, Any] = dict(row)
-                d["tags"] = json.loads(d["tags"] or "[]")
-                result.append(Video.model_validate(d))
-            return result
-        return _db.get_videos_by_status(self._conn, status)
+            return self._video_repo.get_all()
+        return self._video_repo.get_by_status(status)
 
     def get_clips(self, status: ClipStatus | None = None) -> list[Clip]:
         if status is None:
-            rows = self._conn.execute(
-                "SELECT * FROM clips ORDER BY created_at ASC"
-            ).fetchall()
-            import json
-            result = []
-            for row in rows:
-                d: dict[str, Any] = dict(row)
-                d["tags"] = json.loads(d["tags"] or "[]")
-                d.pop("duracao_s", None)
-                result.append(Clip.model_validate(d))
-            return result
-        return _db.get_clips_by_status(self._conn, status)
+            return self._clip_repo.get_all()
+        return self._clip_repo.get_by_status(status)
 
     # ------------------------------------------------------------------
     # Pipeline stages

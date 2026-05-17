@@ -12,6 +12,7 @@ from canal_soberania.config import Settings
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
 from canal_soberania.models import Clip, Video
 from canal_soberania.services.pipeline_service import PipelineService
+from tests.fakes import InMemoryClipRepository, InMemoryVideoRepository
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 
@@ -33,6 +34,39 @@ def service(db: sqlite3.Connection, tmp_path: Path) -> PipelineService:
         "log_dir": tmp_path / "logs",
     }
     return PipelineService(conn=db, settings=settings, paths=paths)
+
+
+@pytest.fixture
+def video_repo() -> InMemoryVideoRepository:
+    return InMemoryVideoRepository()
+
+
+@pytest.fixture
+def clip_repo() -> InMemoryClipRepository:
+    return InMemoryClipRepository()
+
+
+@pytest.fixture
+def service_mem(
+    db: sqlite3.Connection,
+    tmp_path: Path,
+    video_repo: InMemoryVideoRepository,
+    clip_repo: InMemoryClipRepository,
+) -> PipelineService:
+    settings = Settings(data_dir=tmp_path)
+    paths: dict[str, Path] = {
+        "data_dir": tmp_path,
+        "db_path": tmp_path / "test.db",
+        "schema_path": SCHEMA,
+        "log_dir": tmp_path / "logs",
+    }
+    return PipelineService(
+        conn=db,
+        settings=settings,
+        paths=paths,
+        video_repo=video_repo,
+        clip_repo=clip_repo,
+    )
 
 
 def _make_video(**kwargs: object) -> Video:
@@ -203,3 +237,73 @@ def test_run_upload_tiktok_delegates(service: PipelineService) -> None:
     with patch("canal_soberania.stages.upload_tiktok.run") as mock_run:
         service.run_upload_tiktok(dry_run=True)
         mock_run.assert_called_once_with(conn=service._conn, dry_run=True)
+
+
+# ---------------------------------------------------------------------------
+# Testes com InMemory repos (sem SQLite)
+# ---------------------------------------------------------------------------
+
+
+def test_inmemory_get_video_not_found(
+    service_mem: PipelineService,
+) -> None:
+    assert service_mem.get_video("xxxxxxxxxxx") is None
+
+
+def test_inmemory_get_video_found(
+    service_mem: PipelineService,
+    video_repo: InMemoryVideoRepository,
+) -> None:
+    video = _make_video()
+    video_repo.add(video)
+    result = service_mem.get_video("dQw4w9WgXcQ")
+    assert result is not None
+    assert result.title == "Título de teste"
+
+
+def test_inmemory_get_videos_all(
+    service_mem: PipelineService,
+    video_repo: InMemoryVideoRepository,
+) -> None:
+    video_repo.add(_make_video(video_id="aaaaaaaaa11"))
+    video_repo.add(_make_video(video_id="bbbbbbbbb22"))
+    assert len(service_mem.get_videos()) == 2
+
+
+def test_inmemory_get_videos_by_status(
+    service_mem: PipelineService,
+    video_repo: InMemoryVideoRepository,
+) -> None:
+    video_repo.add(_make_video(video_id="aaaaaaaaa11", status="discovered"))
+    video_repo.add(_make_video(video_id="bbbbbbbbb22", status="triage_metadata_passed"))
+    assert len(service_mem.get_videos(status="discovered")) == 1
+
+
+def test_inmemory_status_summary(
+    service_mem: PipelineService,
+    video_repo: InMemoryVideoRepository,
+) -> None:
+    video_repo.add(_make_video(video_id="aaaaaaaaa11", status="discovered"))
+    video_repo.add(_make_video(video_id="bbbbbbbbb22", status="discovered"))
+    video_repo.add(_make_video(video_id="ccccccccc33", status="triage_metadata_passed"))
+    summary = service_mem.get_status_summary()
+    assert summary["discovered"] == 2
+    assert summary["triage_metadata_passed"] == 1
+
+
+def test_inmemory_get_clips_all(
+    service_mem: PipelineService,
+    clip_repo: InMemoryClipRepository,
+) -> None:
+    clip_repo.add(_make_clip())
+    assert len(service_mem.get_clips()) == 1
+
+
+def test_inmemory_get_clips_by_status(
+    service_mem: PipelineService,
+    clip_repo: InMemoryClipRepository,
+) -> None:
+    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_10_40", status="identified"))
+    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"))
+    assert len(service_mem.get_clips(status="identified")) == 1
+    assert len(service_mem.get_clips(status="edited")) == 1
