@@ -186,6 +186,24 @@ class PipelineService:
     # GUI helpers — operações manuais de review
     # ------------------------------------------------------------------
 
+    def get_clip(self, clip_id: str) -> Clip | None:
+        return self._clip_repo.get(clip_id)
+
+    def update_clip_text(
+        self,
+        clip_id: str,
+        hook: str | None,
+        payoff: str | None,
+        title: str | None,
+    ) -> None:
+        """Persiste edições manuais de hook, payoff e título do clipe."""
+        self._conn.execute(
+            "UPDATE clips SET hook = ?, payoff = ?, title = ?, updated_at = datetime('now') WHERE clip_id = ?",
+            (hook or None, payoff or None, title or None, clip_id),
+        )
+        self._conn.commit()
+        self._bus.publish(PipelineEvent("clip_text_updated", {"clip_id": clip_id}))
+
     def approve_clip(self, clip_id: str) -> None:
         """Avança clip para o próximo status (identified → editing ou editing → edited)."""
         from canal_soberania.core.state import ClipStateMachine

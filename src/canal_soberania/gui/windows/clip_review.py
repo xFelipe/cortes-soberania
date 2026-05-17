@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QCursor, QDesktopServices
+from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -31,7 +32,10 @@ from canal_soberania.services.pipeline_service import PipelineService
 
 
 class ClipReviewDialog(QDialog):
-    """Abre um clipe para review: player, info, trim e ações Aprovar/Rejeitar."""
+    """Abre um clipe para review: player, edição de textos, trim e aprovação.
+
+    Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar
+    """
 
     def __init__(
         self, clip: Clip, service: PipelineService, parent: QWidget | None = None
@@ -40,7 +44,7 @@ class ClipReviewDialog(QDialog):
         self._clip = clip
         self._service = service
         self.setWindowTitle(f"Review — {clip.clip_id}")
-        self.resize(900, 640)
+        self.resize(960, 700)
         self._setup_ui()
         self._load_video()
 
@@ -55,7 +59,6 @@ class ClipReviewDialog(QDialog):
         self._video_widget.setMinimumSize(480, 360)
         left.addWidget(self._video_widget)
 
-        # Controles de reprodução
         ctrl = QHBoxLayout()
         self._play_btn = QPushButton("▶ Play")
         self._play_btn.clicked.connect(self._toggle_play)
@@ -72,10 +75,10 @@ class ClipReviewDialog(QDialog):
 
         root.addLayout(left, 3)
 
-        # ── Direita: info + trim + ações ─────────────────────────────
+        # ── Direita: info + textos editáveis + trim + ações ──────────
         right = QVBoxLayout()
 
-        # Info
+        # Info (somente leitura)
         info_group = QGroupBox("Informações do clipe")
         info_layout = QFormLayout(info_group)
         info_layout.addRow("ID:", QLabel(self._clip.clip_id))
@@ -86,20 +89,29 @@ class ClipReviewDialog(QDialog):
         info_layout.addRow("Tema:", QLabel(self._clip.tema_soberania or "—"))
         right.addWidget(info_group)
 
-        # Hook / Payoff
-        hook_group = QGroupBox("Hook / Payoff")
-        hook_layout = QVBoxLayout(hook_group)
-        hook_te = QTextEdit(self._clip.hook or "")
-        hook_te.setReadOnly(True)
-        hook_te.setMaximumHeight(60)
-        hook_layout.addWidget(QLabel("Hook:"))
-        hook_layout.addWidget(hook_te)
-        payoff_te = QTextEdit(self._clip.payoff or "")
-        payoff_te.setReadOnly(True)
-        payoff_te.setMaximumHeight(60)
-        hook_layout.addWidget(QLabel("Payoff:"))
-        hook_layout.addWidget(payoff_te)
-        right.addWidget(hook_group)
+        # Textos editáveis: título, hook, payoff
+        edit_group = QGroupBox("Textos (editável)")
+        edit_layout = QFormLayout(edit_group)
+
+        self._title_edit = QLineEdit(self._clip.title or "")
+        self._title_edit.setPlaceholderText("Título para YouTube…")
+        edit_layout.addRow("Título:", self._title_edit)
+
+        self._hook_te = QTextEdit(self._clip.hook or "")
+        self._hook_te.setMaximumHeight(72)
+        self._hook_te.setPlaceholderText("Hook do clipe…")
+        edit_layout.addRow("Hook:", self._hook_te)
+
+        self._payoff_te = QTextEdit(self._clip.payoff or "")
+        self._payoff_te.setMaximumHeight(72)
+        self._payoff_te.setPlaceholderText("Payoff do clipe…")
+        edit_layout.addRow("Payoff:", self._payoff_te)
+
+        save_btn = QPushButton("Salvar alterações")
+        save_btn.clicked.connect(lambda: self._save_changes(silent=False))
+        edit_layout.addRow(save_btn)
+
+        right.addWidget(edit_group)
 
         # Trim
         trim_group = QGroupBox("Editar trim")
@@ -123,9 +135,12 @@ class ClipReviewDialog(QDialog):
 
         right.addStretch()
 
-        # Botões principais
+        # Botões — label do Aprovar muda quando clip está pronto para publicar
+        approve_label = (
+            "Liberar para publicação" if self._clip.status == "metadata_ready" else "Aprovar etapa"
+        )
         btn_box = QDialogButtonBox()
-        self._approve_btn = btn_box.addButton("Aprovar", QDialogButtonBox.ButtonRole.AcceptRole)
+        self._approve_btn = btn_box.addButton(approve_label, QDialogButtonBox.ButtonRole.AcceptRole)
         self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
         self._reject_btn = btn_box.addButton("Rejeitar", QDialogButtonBox.ButtonRole.RejectRole)
         self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
@@ -135,11 +150,16 @@ class ClipReviewDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         right.addWidget(btn_box)
 
+        hint = QLabel("Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar")
+        hint.setStyleSheet("color: #888; font-size: 10px;")
+        hint.setWordWrap(True)
+        right.addWidget(hint)
+
         root.addLayout(right, 2)
 
         # Media player
         self._audio_output = QAudioOutput(self)
-        self._audio_output.setVolume(1.0)  # 100 % — padrão Qt pode ser 0 dependendo do sistema
+        self._audio_output.setVolume(1.0)
         self._player = QMediaPlayer(self)
         self._player.setAudioOutput(self._audio_output)
         self._player.setVideoOutput(self._video_widget)
@@ -157,6 +177,8 @@ class ClipReviewDialog(QDialog):
         label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         label.linkActivated.connect(lambda _: QDesktopServices.openUrl(QUrl(url)))
         return label
+
+    # ── Reprodução ────────────────────────────────────────────────────
 
     def _load_video(self) -> None:
         self._temp_preview: Path | None = None
@@ -210,6 +232,42 @@ class ClipReviewDialog(QDialog):
     def _update_pos(self, ms: int) -> None:
         self._pos_label.setText(f"{ms / 1000:.1f}s")
 
+    # ── Atalhos de teclado ────────────────────────────────────────────
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # type: ignore[override]
+        focused = self.focusWidget()
+        typing = isinstance(focused, (QTextEdit, QLineEdit, QDoubleSpinBox))
+        if not typing:
+            key = event.key()
+            if key == Qt.Key.Key_Space:
+                self._toggle_play()
+                return
+            elif key == Qt.Key.Key_A:
+                self._approve()
+                return
+            elif key == Qt.Key.Key_R:
+                self._reject()
+                return
+        super().keyPressEvent(event)
+
+    # ── Persistência ─────────────────────────────────────────────────
+
+    def _save_changes(self, *, silent: bool = False) -> None:
+        hook = self._hook_te.toPlainText().strip()
+        payoff = self._payoff_te.toPlainText().strip()
+        title = self._title_edit.text().strip()
+        try:
+            self._service.update_clip_text(
+                self._clip.clip_id,
+                hook or None,
+                payoff or None,
+                title or None,
+            )
+            if not silent:
+                QMessageBox.information(self, "Salvo", "Alterações salvas com sucesso.")
+        except Exception as exc:
+            QMessageBox.critical(self, "Erro ao salvar", str(exc))
+
     def _apply_trim(self) -> None:
         start = self._start_spin.value()
         end = self._end_spin.value()
@@ -218,17 +276,55 @@ class ClipReviewDialog(QDialog):
             return
         try:
             self._service.update_clip_trim(self._clip.clip_id, start, end)
-            QMessageBox.information(self, "Trim salvo", f"Trim atualizado: {start:.1f}s → {end:.1f}s\nRode o stage Edit para re-renderizar.")
+            QMessageBox.information(
+                self,
+                "Trim salvo",
+                f"Trim atualizado: {start:.1f}s → {end:.1f}s\nRode o stage Edit para re-renderizar.",
+            )
         except Exception as exc:
             QMessageBox.critical(self, "Erro", str(exc))
 
+    # ── Aprovação / rejeição ──────────────────────────────────────────
+
     def _approve(self) -> None:
-        try:
-            self._service.approve_clip(self._clip.clip_id)
-            QMessageBox.information(self, "Aprovado", f"Clipe avançado para o próximo status.")
-            self.accept()
-        except Exception as exc:
-            QMessageBox.critical(self, "Erro ao aprovar", str(exc))
+        self._save_changes(silent=True)
+        if self._clip.status == "metadata_ready":
+            self._confirm_and_publish()
+        else:
+            try:
+                self._service.approve_clip(self._clip.clip_id)
+                self.accept()
+            except Exception as exc:
+                QMessageBox.critical(self, "Erro ao aprovar", str(exc))
+
+    def _confirm_and_publish(self) -> None:
+        clip = self._service.get_clip(self._clip.clip_id) or self._clip
+        title_str = clip.title or "(sem título)"
+        tags_str = ", ".join(clip.tags[:10]) if clip.tags else "(sem tags)"
+        desc = clip.description or ""
+        desc_preview = desc[:300] + ("…" if len(desc) > 300 else "")
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Confirmar publicação no YouTube")
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setText("<b>Liberar este clipe para publicação?</b>")
+        msg.setInformativeText(
+            f"<b>Título:</b> {title_str}<br><br>"
+            f"<b>Tags:</b> {tags_str}<br><br>"
+            f"<b>Descrição (início):</b><br>{desc_preview}"
+        )
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Ok).setText("Liberar para publicação")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancelar")
+
+        if msg.exec() == QMessageBox.StandardButton.Ok:
+            try:
+                self._service.approve_clip(self._clip.clip_id)
+                QMessageBox.information(self, "Liberado", "Clipe na fila de publicação (scheduled_youtube).")
+                self.accept()
+            except Exception as exc:
+                QMessageBox.critical(self, "Erro ao liberar", str(exc))
 
     def _reject(self) -> None:
         try:

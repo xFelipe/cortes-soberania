@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -14,8 +18,6 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QGridLayout,
-    QFrame,
 )
 
 from canal_soberania.gui.bridge import EventBridge
@@ -24,6 +26,39 @@ from canal_soberania.gui.widgets.video_table import VideoTable
 from canal_soberania.gui.workers import StageWorker
 from canal_soberania.models import Clip
 from canal_soberania.services.pipeline_service import PipelineService
+
+_CLIP_STATUS_COLOR: dict[str, str] = {
+    "identified": "#555555",
+    "editing": "#f57f17",
+    "edited": "#33691e",
+    "thumbnail_ready": "#1565c0",
+    "metadata_ready": "#6a1e8a",
+    "scheduled_youtube": "#004d40",
+    "uploaded_youtube": "#1b5e20",
+    "pending_tiktok_manual": "#e65100",
+    "uploaded_tiktok": "#880e4f",
+    "processing_error": "#d50000",
+}
+
+_CLIP_STATUS_LABELS: list[str] = [
+    "metadata_ready",
+    "edited",
+    "thumbnail_ready",
+    "identified",
+    "editing",
+    "pending_tiktok_manual",
+    "scheduled_youtube",
+    "uploaded_youtube",
+    "uploaded_tiktok",
+    "processing_error",
+]
+
+
+def _clip_sort_priority(status: str) -> int:
+    try:
+        return _CLIP_STATUS_LABELS.index(status)
+    except ValueError:
+        return len(_CLIP_STATUS_LABELS)
 
 _STAGE_FN_MAP = {
     "run_discover": "run_discover",
@@ -100,9 +135,19 @@ class MainWindow(QMainWindow):
         w = QWidget()
         layout = QVBoxLayout(w)
 
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Filtrar por status:"))
+        self._clips_status_filter = QComboBox()
+        self._clips_status_filter.addItem("Todos", None)
+        for s in _CLIP_STATUS_LABELS:
+            self._clips_status_filter.addItem(s, s)
+        self._clips_status_filter.currentIndexChanged.connect(self._refresh_clips)
+        toolbar.addWidget(self._clips_status_filter)
+        toolbar.addStretch()
         refresh_btn = QPushButton("Atualizar clipes")
         refresh_btn.clicked.connect(self._refresh_clips)
-        layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        toolbar.addWidget(refresh_btn)
+        layout.addLayout(toolbar)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -129,7 +174,12 @@ class MainWindow(QMainWindow):
         self._update_status_bar()
 
     def _refresh_clips(self) -> None:
-        clips = self._service.get_clips()
+        all_clips = self._service.get_clips()
+        selected: str | None = self._clips_status_filter.currentData()
+        clips = (
+            all_clips if selected is None else [c for c in all_clips if c.status == selected]
+        )
+        clips = sorted(clips, key=lambda c: _clip_sort_priority(c.status))
         self._populate_clips_grid(clips)
 
     def _populate_clips_grid(self, clips: list[Clip]) -> None:
@@ -156,7 +206,13 @@ class MainWindow(QMainWindow):
         clip_id_lbl.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(clip_id_lbl)
 
-        layout.addWidget(QLabel(f"Status: {clip.status}"))
+        status_lbl = QLabel(f"  {clip.status}  ")
+        status_color = _CLIP_STATUS_COLOR.get(clip.status, "#555555")
+        status_lbl.setStyleSheet(
+            f"background-color: {status_color}; color: white; border-radius: 4px; padding: 1px 4px;"
+        )
+        status_lbl.setMaximumWidth(240)
+        layout.addWidget(status_lbl)
         layout.addWidget(QLabel(f"Duração: {clip.duracao_s:.1f}s"))
         layout.addWidget(QLabel(f"Score viral: {clip.score_viral or '—'}"))
         if clip.hook:
