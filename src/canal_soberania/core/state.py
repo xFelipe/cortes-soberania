@@ -10,8 +10,9 @@ from canal_soberania.models import ClipStatus, VideoStatus
 # ---------------------------------------------------------------------------
 
 VIDEO_TRANSITIONS: dict[VideoStatus, list[VideoStatus]] = {
-    "discovered": ["triage_metadata_passed", "triage_metadata_rejected", "processing_error"],
-    "triage_metadata_passed": ["triage_caption_passed", "triage_caption_rejected", "triage_caption_skipped", "processing_error"],
+    "discovered": ["triage_metadata_passed", "triage_metadata_rejected", "on_hold_metadata_passed", "processing_error"],
+    "triage_metadata_passed": ["triage_caption_passed", "triage_caption_rejected", "triage_caption_skipped", "on_hold_metadata_passed", "processing_error"],
+    "on_hold_metadata_passed": ["triage_caption_passed", "processing_error"],
     "triage_metadata_rejected": [],
     "triage_caption_passed": ["downloading", "processing_error"],
     "triage_caption_rejected": [],

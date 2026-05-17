@@ -11,6 +11,7 @@ from PySide6.QtCore import QDateTime, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateTimeEdit,
@@ -25,6 +26,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QSlider,
+    QStyle,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -32,6 +35,19 @@ from PySide6.QtWidgets import (
 
 from canal_soberania.models import Clip
 from canal_soberania.services.pipeline_service import PipelineService
+
+
+class _SeekSlider(QSlider):
+    """QSlider que pula direto para o ponto clicado em vez de avançar um page step."""
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            val = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(), int(event.position().x()), self.width()
+            )
+            self.setValue(val)
+            self.sliderMoved.emit(val)
+        super().mousePressEvent(event)
 
 
 class ClipReviewDialog(QDialog):
@@ -66,11 +82,17 @@ class ClipReviewDialog(QDialog):
         self._video_widget.setMinimumSize(480, 360)
         left.addWidget(self._video_widget)
 
+        self._seek_bar = _SeekSlider(Qt.Orientation.Horizontal)
+        self._seek_bar.setRange(0, 0)
+        self._seek_bar.setEnabled(False)
+        self._seek_bar.sliderMoved.connect(self._on_seek)
+        left.addWidget(self._seek_bar)
+
         ctrl = QHBoxLayout()
         self._play_btn = QPushButton("▶ Play")
         self._play_btn.clicked.connect(self._toggle_play)
         ctrl.addWidget(self._play_btn)
-        self._pos_label = QLabel("0s")
+        self._pos_label = QLabel("0:00 / 0:00")
         ctrl.addWidget(self._pos_label)
         ctrl.addStretch()
         left.addLayout(ctrl)
@@ -192,6 +214,7 @@ class ClipReviewDialog(QDialog):
         self._player.setAudioOutput(self._audio_output)
         self._player.setVideoOutput(self._video_widget)
         self._player.positionChanged.connect(self._update_pos)
+        self._player.durationChanged.connect(self._on_duration_changed)
         self._player.playbackStateChanged.connect(self._on_playback_state)
 
     def _make_video_link(self) -> QLabel:
@@ -264,8 +287,24 @@ class ClipReviewDialog(QDialog):
         else:
             self._play_btn.setText("▶ Play")
 
+    def _on_duration_changed(self, ms: int) -> None:
+        self._seek_bar.setRange(0, ms)
+        self._seek_bar.setEnabled(ms > 0)
+        self._update_pos(self._player.position())
+
+    def _on_seek(self, ms: int) -> None:
+        self._player.setPosition(ms)
+
     def _update_pos(self, ms: int) -> None:
-        self._pos_label.setText(f"{ms / 1000:.1f}s")
+        if not self._seek_bar.isSliderDown():
+            self._seek_bar.setValue(ms)
+        dur = self._player.duration()
+        self._pos_label.setText(f"{self._fmt(ms)} / {self._fmt(dur)}")
+
+    @staticmethod
+    def _fmt(ms: int) -> str:
+        s = ms // 1000
+        return f"{s // 60}:{s % 60:02d}"
 
     # ── Atalhos de teclado ────────────────────────────────────────────
 

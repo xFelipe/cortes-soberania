@@ -92,9 +92,11 @@ CREATE TABLE IF NOT EXISTS clips (
     tags                TEXT,                            -- JSON array
 
     -- IDs dos uploads
-    youtube_id          TEXT,                            -- video ID no YouTube após upload
-    tiktok_id           TEXT,                            -- ID no TikTok
-    youtube_publish_at  TEXT,                            -- ISO 8601, agendado
+    youtube_id                  TEXT,                    -- video ID no YouTube após upload (Short 9:16)
+    youtube_id_horizontal       TEXT,                    -- video ID no YouTube (horizontal 16:9)
+    tiktok_id                   TEXT,                    -- ID no TikTok
+    youtube_publish_at          TEXT,                    -- ISO 8601, agendado
+    youtube_publish_at_horizontal TEXT,                  -- agendamento do vídeo horizontal
 
     -- estado
     status              TEXT NOT NULL DEFAULT 'identified',

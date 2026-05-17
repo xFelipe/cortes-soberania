@@ -182,6 +182,56 @@ class PipelineService:
         from canal_soberania.stages.upload_tiktok import run
         self._run_stage("upload_tiktok", run, dry_run)
 
+    def reset_stuck_videos(self) -> int:
+        """Reseta vídeos presos em estados transitórios para o estado processável anterior.
+
+        Retorna o número de vídeos resetados.
+        """
+        _STUCK: list[tuple[str, int, str]] = [
+            ("downloading",   90,  "triage_caption_passed"),
+            ("transcribing",  180, "downloaded"),
+            ("finding_clips", 45,  "triage_transcript_passed"),
+        ]
+        return self._video_repo.reset_stuck(_STUCK)
+
+    def reset_stuck_clips(self) -> int:
+        """Reseta clipes presos em estados transitórios para o estado processável anterior."""
+        _STUCK_CLIPS: list[tuple[str, int, str]] = [
+            ("editing", 60, "identified"),
+        ]
+        return self._clip_repo.reset_stuck(_STUCK_CLIPS)
+
+    def run_pipeline_auto(self, dry_run: bool = False) -> None:
+        """Roda todos os stages automáticos em sequência: triagem → download → transcrição
+        → identificação de cortes → edição → thumbnail → metadados.
+
+        Cada stage processa todos os vídeos/clipes pendentes naquela etapa.
+        Stages sem trabalho concluem rapidamente.
+        Erros em um stage são logados mas não interrompem os stages seguintes.
+        """
+        from canal_soberania.logger import logger
+
+        stages = [
+            ("triage_metadata",   self.run_triage_metadata),
+            ("triage_caption",    self.run_triage_caption),
+            ("download",          self.run_download),
+            ("transcribe",        self.run_transcribe),
+            ("triage_transcript", self.run_triage_transcript),
+            ("find_clips",        self.run_find_clips),
+            ("edit",              self.run_edit),
+            ("thumbnail",         self.run_thumbnail),
+            ("generate_metadata", self.run_generate_metadata),
+        ]
+        for stage_name, fn in stages:
+            if self._cancel_event.is_set():
+                break
+            try:
+                fn(dry_run=dry_run)
+            except Exception as exc:
+                logger.warning(
+                    "run_pipeline_auto: stage '{}' falhou (continuando): {}", stage_name, exc
+                )
+
     # ------------------------------------------------------------------
     # GUI helpers — operações manuais de review
     # ------------------------------------------------------------------
@@ -210,22 +260,12 @@ class PipelineService:
         new_status = _APPROVE_MAP.get(video.status)
         if new_status is None:
             raise ValueError(f"Vídeo '{video_id}' em status não aprovável manualmente: {video.status}")
-        self._conn.execute(
-            "UPDATE videos SET status = ?, updated_at = datetime('now') WHERE video_id = ?",
-            (new_status, video_id),
-        )
-        self._conn.commit()
+        self._video_repo.update_status(video_id, new_status)
         self._bus.publish(PipelineEvent("video_approved", {"video_id": video_id, "new_status": new_status}))
 
     def reject_video(self, video_id: str) -> None:
         """Rejeita manualmente um vídeo, marcando como triage_metadata_rejected."""
-        self._conn.execute(
-            "UPDATE videos SET status = 'triage_metadata_rejected', "
-            "error_message = 'Rejeitado manualmente', updated_at = datetime('now') "
-            "WHERE video_id = ?",
-            (video_id,),
-        )
-        self._conn.commit()
+        self._video_repo.reject(video_id)
         self._bus.publish(PipelineEvent("video_rejected", {"video_id": video_id}))
 
     def update_clip_text(
@@ -237,18 +277,11 @@ class PipelineService:
         youtube_publish_at: str | None,
     ) -> None:
         """Persiste edições manuais de hook, payoff, título e agendamento do clipe."""
-        cur = self._conn.execute(
-            "UPDATE clips SET hook = ?, payoff = ?, title = ?, youtube_publish_at = ?, "
-            "updated_at = datetime('now') WHERE clip_id = ?",
-            (hook, payoff, title, youtube_publish_at, clip_id),
-        )
-        if cur.rowcount == 0:
-            raise ValueError(f"Clip não encontrado no banco: {clip_id}")
-        self._conn.commit()
+        self._clip_repo.update_text(clip_id, hook, payoff, title, youtube_publish_at)
         self._bus.publish(PipelineEvent("clip_text_updated", {"clip_id": clip_id}))
 
     def approve_clip(self, clip_id: str) -> None:
-        """Avança clip para o próximo status (identified → editing ou editing → edited)."""
+        """Avança clip para o próximo status."""
         from canal_soberania.core.state import ClipStateMachine
         from canal_soberania.models import ClipStatus
 
@@ -267,29 +300,17 @@ class PipelineService:
         if new_status is None:
             raise ValueError(f"Clip {clip_id} em status não aprovável: {clip.status}")
         ClipStateMachine.transition(clip_id, clip.status, new_status)
-        self._conn.execute(
-            "UPDATE clips SET status = ?, updated_at = datetime('now') WHERE clip_id = ?",
-            (new_status, clip_id),
-        )
-        self._conn.commit()
+        self._clip_repo.update_status(clip_id, new_status)
         self._bus.publish(PipelineEvent("clip_approved", {"clip_id": clip_id, "new_status": new_status}))
 
     def reject_clip(self, clip_id: str, reason: str = "Rejeitado manualmente") -> None:
         """Marca clip como erro de processamento."""
-        self._conn.execute(
-            "UPDATE clips SET status = 'processing_error', error_message = ?, updated_at = datetime('now') WHERE clip_id = ?",
-            (reason, clip_id),
-        )
-        self._conn.commit()
+        self._clip_repo.reject(clip_id, reason)
         self._bus.publish(PipelineEvent("clip_rejected", {"clip_id": clip_id, "reason": reason}))
 
     def update_clip_trim(self, clip_id: str, start_s: float, end_s: float) -> None:
         """Atualiza os pontos de corte de um clipe (sem re-editar automaticamente)."""
         if end_s <= start_s:
             raise ValueError("end_s deve ser maior que start_s")
-        self._conn.execute(
-            "UPDATE clips SET start_s = ?, end_s = ?, updated_at = datetime('now') WHERE clip_id = ?",
-            (start_s, end_s, clip_id),
-        )
-        self._conn.commit()
+        self._clip_repo.update_trim(clip_id, start_s, end_s)
         self._bus.publish(PipelineEvent("clip_trim_updated", {"clip_id": clip_id, "start_s": start_s, "end_s": end_s}))
