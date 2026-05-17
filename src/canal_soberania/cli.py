@@ -345,5 +345,76 @@ def alert(
         typer.echo("OK: nenhum status crítico")
 
 
+# ---------------------------------------------------------------------------
+# pipeline-loop
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="pipeline-loop")  # type: ignore[untyped-decorator]
+def pipeline_loop(
+    ctx: typer.Context,
+    interval: Annotated[int, typer.Option("--interval", help="Segundos entre iterações")] = 60,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Roda o pipeline completo em loop, resetando itens travados antes de cada iteração.
+
+    Processa automaticamente: triagem → download → transcrição → cortes →
+    edição → thumbnail → metadados. Pressione Ctrl+C para encerrar.
+
+    Timeouts de reset (itens travados são devolvidos ao estado processável):
+      downloading   > 90 min  → triage_caption_passed
+      transcribing  > 180 min → downloaded
+      finding_clips > 45 min  → triage_transcript_passed
+      editing       > 60 min  → identified
+    """
+    import signal
+    import time
+    from datetime import datetime
+
+    service: PipelineService = ctx.obj["service"]
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+
+    typer.echo(f"Pipeline loop iniciado (intervalo={interval}s). Ctrl+C para parar.")
+    logger.info("pipeline-loop iniciado | interval={}s | dry_run={}", interval, effective_dry_run)
+
+    running = True
+
+    def _stop(sig: int, frame: object) -> None:
+        nonlocal running
+        running = False
+        service.cancel()
+        typer.echo("\nEncerrando após a iteração atual…")
+        logger.info("pipeline-loop: sinal {} recebido — encerrando", sig)
+
+    signal.signal(signal.SIGINT, _stop)
+    signal.signal(signal.SIGTERM, _stop)
+
+    iteration = 0
+    while running:
+        iteration += 1
+        ts = datetime.now().strftime("%H:%M:%S")
+        typer.echo(f"\n[{ts}] Iteração #{iteration}")
+        logger.info("pipeline-loop: iteração #{}", iteration)
+
+        stuck = service.reset_stuck_videos() + service.reset_stuck_clips()
+        if stuck:
+            typer.echo(f"  ↺ {stuck} item(s) resetados (stuck timeout)")
+
+        service.reset_cancel()
+        try:
+            service.run_pipeline_auto(dry_run=effective_dry_run)
+            typer.echo(f"  ✓ iteração #{iteration} concluída")
+        except Exception as exc:
+            logger.error("pipeline-loop: erro na iteração #{}: {}", iteration, exc)
+            typer.echo(f"  ✗ ERRO: {exc}")
+
+        if running:
+            typer.echo(f"  … aguardando {interval}s")
+            time.sleep(interval)
+
+    typer.echo("Pipeline loop encerrado.")
+    logger.info("pipeline-loop encerrado após {} iterações", iteration)
+
+
 if __name__ == "__main__":
     app()

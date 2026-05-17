@@ -46,15 +46,20 @@ def cut_video(
     end_s: float,
     overwrite: bool = True,
 ) -> None:
-    """Corta vídeo de start_s a end_s sem re-encode (stream copy)."""
+    """Corta vídeo de start_s a end_s sem re-encode (stream copy).
+
+    -ss vem DEPOIS de -i para garantir seek frame-accurate e evitar desync
+    áudio/vídeo causado por keyframe misalignment com stream copy.
+    """
     duration = end_s - start_s
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
-        "-ss", str(start_s),
         "-i", str(input_path),
+        "-ss", str(start_s),
         "-t", str(duration),
         "-c", "copy",
+        "-avoid_negative_ts", "make_zero",
         str(output_path),
     ]
     _run(args)

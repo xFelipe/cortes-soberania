@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtGui import QColor, QCursor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -170,14 +170,19 @@ class VideoTable(QWidget):
                 self._table.setItem(row, col, item)
 
     def _on_cell_clicked(self, row: int, col: int) -> None:
-        """Abre URL do vídeo (col 0) ou do canal (col 1) no browser."""
+        """Abre URL do vídeo (col 0) ou do canal (col 1) no browser, apenas se clicar sobre o texto."""
         if col not in (0, 1):
             return
         item = self._table.item(row, col)
         if item is None:
             return
         url: str = item.data(_URL_ROLE) or ""
-        if url:
+        if not url:
+            return
+        cursor_pos = self._table.viewport().mapFromGlobal(QCursor.pos())
+        item_rect = self._table.visualItemRect(item)
+        text_width = self._table.fontMetrics().horizontalAdvance(item.text())
+        if cursor_pos.x() <= item_rect.left() + 6 + text_width:
             QDesktopServices.openUrl(QUrl(url))
 
     def _on_double_click(self, row: int, _col: int) -> None:
@@ -194,8 +199,8 @@ class VideoTable(QWidget):
             return
 
         menu = QMenu(self)
-        approve_action = menu.addAction("✓ Aprovar — seguir para próxima etapa")
-        reject_action = menu.addAction("✗ Recusar — marcar como rejeitado")
+        approve_action = menu.addAction("✓ Aprovar")
+        reject_action = menu.addAction("✗ Recusar")
 
         chosen = menu.exec(self._table.viewport().mapToGlobal(pos))
         if chosen == approve_action:

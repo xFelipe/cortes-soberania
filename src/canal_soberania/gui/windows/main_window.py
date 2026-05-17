@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from canal_soberania.gui.bridge import EventBridge
 from canal_soberania.gui.widgets.pipeline_log import PipelineLog
 from canal_soberania.gui.widgets.video_table import VideoTable
-from canal_soberania.gui.workers import StageWorker
+from canal_soberania.gui.workers import PipelineLoopWorker, StageWorker
 from canal_soberania.models import Clip
 from canal_soberania.services.pipeline_service import PipelineService
 
@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._refresh()
+        self._start_pipeline_loop()
 
     # ------------------------------------------------------------------
     # UI setup
@@ -238,9 +239,14 @@ class MainWindow(QMainWindow):
     def _open_review(self, clip: Clip) -> None:
         from canal_soberania.gui.windows.clip_review import ClipReviewDialog
         dlg = ClipReviewDialog(clip, self._service, self)
-        dlg.exec()
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dlg.finished.connect(lambda _result, d=dlg: self._on_review_closed(d))
+        dlg.show()
+
+    def _on_review_closed(self, dlg: object) -> None:
         self._refresh_clips()
-        if dlg.published:
+        if getattr(dlg, "published", False):
             self._flash_status("✓ Clipe liberado para publicação.", 4000)
 
     def _flash_status(self, message: str, duration_ms: int = 3000) -> None:
@@ -259,6 +265,18 @@ class MainWindow(QMainWindow):
         self._status_label.setText(
             f"{total} vídeo(s) no banco | Custo do mês: US$ {cost:.2f}"
         )
+
+    # ------------------------------------------------------------------
+    # Pipeline control
+    # ------------------------------------------------------------------
+
+    def _start_pipeline_loop(self) -> None:
+        self._loop_worker = PipelineLoopWorker(self._service, interval_s=60, parent=self)
+        self._loop_worker.iteration_done.connect(self._on_loop_iteration)
+        self._loop_worker.stage_error.connect(
+            lambda msg: self._status_label.setText(f"Loop: erro em stage — {msg[:80]}")
+        )
+        self._loop_worker.start()
 
     # ------------------------------------------------------------------
     # Pipeline control
@@ -283,6 +301,14 @@ class MainWindow(QMainWindow):
     def _cancel_pipeline(self) -> None:
         self._service.cancel()
         self._status_label.setText("Cancelamento solicitado…")
+
+    @Slot(int, int)
+    def _on_loop_iteration(self, iteration: int, stuck: int) -> None:
+        self._refresh()
+        stuck_msg = f" ↺ {stuck} resetado(s)" if stuck else ""
+        self._update_status_bar()
+        if stuck_msg:
+            self._flash_status(f"Loop #{iteration} concluído{stuck_msg}", 4000)
 
     @Slot()
     def _on_stage_done(self) -> None:
@@ -321,9 +347,11 @@ class MainWindow(QMainWindow):
         try:
             self._service.approve_video(video_id)
             self._refresh()
-            self._flash_status(f"✓ Vídeo {video_id} aprovado.", 3000)
         except Exception as exc:
             QMessageBox.warning(self, "Não foi possível aprovar", str(exc))
+            return
+        self._run_stage("run_pipeline_auto")
+        self._status_label.setText("✓ Aprovado — pipeline em execução (download → cortes)…")
 
     @Slot(str)
     def _on_video_reject(self, video_id: str) -> None:
@@ -342,8 +370,10 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, f"Vídeo {video_id}", "<br>".join(lines))
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._loop_worker.stop()
         if self._worker and self._worker.isRunning():
             self._service.cancel()
             self._worker.wait(3000)
+        self._loop_worker.wait(3000)
         self._bridge.detach()
         super().closeEvent(event)
