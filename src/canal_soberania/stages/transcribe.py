@@ -2,15 +2,46 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
+
+
+def _preload_cuda_from_venv() -> None:
+    """Precarrega libs CUDA do site-packages antes do ctranslate2 chamar dlopen.
+
+    ctranslate2 faz dlopen("libcublas.so.12") sem caminho absoluto. Quando as
+    libs vêm do wheel nvidia-cublas-cu12, elas ficam em site-packages/nvidia/*/lib
+    e não estão no LD_LIBRARY_PATH padrão. Carregar via ctypes.CDLL com o caminho
+    completo coloca a lib no cache do dynamic linker; a chamada interna do
+    ctranslate2 as encontra sem precisar alterar variáveis de ambiente.
+    """
+    sp = (
+        Path(sys.executable).parent.parent
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
+    candidates = [
+        sp / "nvidia" / "cublas" / "lib" / "libcublas.so.12",
+        sp / "nvidia" / "cudnn" / "lib" / "libcudnn.so.9",
+        sp / "nvidia" / "cudnn" / "lib" / "libcudnn.so.8",
+        sp / "nvidia" / "cuda_runtime" / "lib" / "libcudart.so.12",
+    ]
+    for lib in candidates:
+        if lib.exists():
+            try:
+                ctypes.CDLL(str(lib))
+            except OSError:
+                pass
 
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import (
     connect,
-    get_videos_by_status,
+    get_videos_by_statuses,
     init_db,
     update_video_paths,
     update_video_status,
@@ -36,10 +67,13 @@ def transcribe_audio(
     Roda faster-whisper e retorna lista de segmentos
     [{start: float, end: float, text: str}].
     """
+    _preload_cuda_from_venv()
     from faster_whisper import WhisperModel  # type: ignore[import-untyped]
 
     logger.info("Carregando Whisper {} ({}/{})", model_size, device, compute_type)
-    model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    import os
+    cpu_threads = int(os.environ.get("WHISPER_CPU_THREADS", os.cpu_count() or 4))
+    model = WhisperModel(model_size, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
 
     logger.info("Transcrevendo {}...", audio_path.name)
     segments_iter, info = model.transcribe(
@@ -131,7 +165,7 @@ def transcribe_video(
         logger.error("Whisper error para {}: {}", video.video_id, exc)
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", f"whisper_error: {exc}"
+                conn, video.video_id, "transcribe_error", f"whisper_error: {exc}"
             )
         return None
 
@@ -160,7 +194,7 @@ def run(
             init_db(paths["db_path"], paths["schema_path"])
         conn = connect(paths["db_path"])
 
-    videos = get_videos_by_status(conn, "downloaded")
+    videos = get_videos_by_statuses(conn, ["downloaded", "transcribing", "transcribe_error"])
     logger.info("transcribe: {} vídeos para processar", len(videos))
     if not videos:
         return

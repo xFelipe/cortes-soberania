@@ -42,3 +42,4 @@ data/
 # Claude Code (escolha sua política)
 .claude/cache/
 .claude/sessions/
+.claude/scheduled_tasks.lock

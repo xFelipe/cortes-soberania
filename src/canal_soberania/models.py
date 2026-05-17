@@ -17,6 +17,7 @@ VideoStatus = Literal[
     "downloaded",
     "transcribing",
     "transcribed",
+    "transcribe_error",
     "triage_transcript_passed",
     "triage_transcript_rejected",
     "finding_clips",

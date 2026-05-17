@@ -88,6 +88,17 @@ def get_videos_by_status(conn: sqlite3.Connection, status: VideoStatus) -> list[
     return [_row_to_video(row) for row in rows]
 
 
+def get_videos_by_statuses(
+    conn: sqlite3.Connection, statuses: list[VideoStatus]
+) -> list[Video]:
+    placeholders = ",".join("?" * len(statuses))
+    rows = conn.execute(
+        f"SELECT * FROM videos WHERE status IN ({placeholders}) ORDER BY published_at DESC",
+        statuses,
+    ).fetchall()
+    return [_row_to_video(row) for row in rows]
+
+
 def _row_to_video(row: sqlite3.Row) -> Video:
     d: dict[str, Any] = dict(row)
     d["tags"] = json.loads(d["tags"] or "[]")
