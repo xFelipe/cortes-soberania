@@ -74,6 +74,39 @@ Operação single-tenant em VPS (ou máquina local). Cron dispara scripts que av
 
 **Insight central:** a triagem em 3 camadas (metadata → caption → transcript) reduz drasticamente o custo de Whisper e de análise profunda. Estimativa: dos vídeos descobertos, **~60% rejeitados na Stage 1**, **mais 20% na Stage 2**, e dos 20% restantes que rodam Whisper, ~25% caem na Stage 5. Sobra **~15% que viram clipes**. Isso mantém o custo médio mensal abaixo de R$ 200 nos 6 canais iniciais.
 
+## Camada de apresentação (PySide6 GUI)
+
+A GUI é **opcional e complementar ao cron** — serve para review manual e para disparar stages avulsos sem CLI. Ela se apoia nos mesmos `PipelineService`, repositórios e banco que o CLI usa.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PySide6 GUI (cs-gui)                        │
+│                                                                 │
+│  MainWindow                                                     │
+│  ├─ Aba Vídeos     → VideoTable (filtro por status, cores)      │
+│  ├─ Aba Clipes     → Cards + ClipReviewDialog                   │
+│  │                    ├─ QMediaPlayer (preview .mp4 vertical)   │
+│  │                    ├─ Trim editor (start_s / end_s)          │
+│  │                    └─ Aprovar / Rejeitar                     │
+│  └─ Aba Pipeline   → PipelineLog (botões de stage + log)        │
+│                                                                 │
+│  EventBridge (QObject)                                          │
+│  └─ subscreve EventBus "*"                                      │
+│     emite Signal(str, dict) thread-safe → PipelineLog           │
+│                                                                 │
+│  StageWorker (QThread)                                          │
+│  └─ executa service.run_*() em background                       │
+│     finished/error → refresh tabela / status bar                │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ DI (mesmo conn + settings)
+                               ▼
+                    PipelineService  (core, sem Qt)
+```
+
+**Thread safety:** `PipelineService` publica eventos a partir do `StageWorker` (thread secundária). `EventBridge._relay()` é chamada nessa thread e emite um Qt Signal — o Qt entrega os slots via event loop na thread principal sem `invokeMethod` manual.
+
+**Instalação:** `uv sync --extra gui` instala `PySide6>=6.7`. No Linux também requer `gstreamer1.0-plugins-good libgl1-mesa-glx` para o player de vídeo. Launcher: `bash run_gui.sh`.
+
 ## Modelo de dados (visão lógica)
 
 ```

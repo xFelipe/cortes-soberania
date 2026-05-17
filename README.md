@@ -14,10 +14,11 @@ Pipeline automatizado de cortes de vídeo focado em soberania nacional do Brasil
 6. [Identidade visual (logo, intro, outro)](#6-identidade-visual-logo-intro-outro)
 7. [Validação do setup](#7-validação-do-setup)
 8. [Rodar o pipeline manualmente](#8-rodar-o-pipeline-manualmente)
-9. [Automação com cron](#9-automação-com-cron)
-10. [Alertas via Telegram (opcional)](#10-alertas-via-telegram-opcional)
-11. [Estrutura de arquivos gerados](#11-estrutura-de-arquivos-gerados)
-12. [Documentação complementar](#12-documentação-complementar)
+9. [Interface gráfica (GUI)](#9-interface-gráfica-gui)
+10. [Automação com cron](#10-automação-com-cron)
+11. [Alertas via Telegram (opcional)](#11-alertas-via-telegram-opcional)
+12. [Estrutura de arquivos gerados](#12-estrutura-de-arquivos-gerados)
+13. [Documentação complementar](#13-documentação-complementar)
 
 ---
 
@@ -56,8 +57,8 @@ uv sync
 # Instala dependências de desenvolvimento (pytest, ruff, mypy)
 uv sync --extra dev
 
-# Cria os diretórios de dados (não versionados)
-mkdir -p data/{audio,video,captions,transcripts,clips,thumbs,logs,backups}
+# Instala dependências da interface gráfica (PySide6)
+uv sync --extra gui
 ```
 
 ---
@@ -217,7 +218,7 @@ ffmpeg -version
 
 # 4. Roda todos os testes unitários
 uv run pytest
-# Esperado: 159 passed
+# Esperado: 316 passed
 ```
 
 ---
@@ -253,7 +254,67 @@ cs triage --stage metadata --dry-run
 
 ---
 
-## 9. Automação com cron
+## 9. Interface gráfica (GUI)
+
+O pipeline tem uma interface desktop opcional construída em **PySide6** — útil para review de clipes, inspecionar o estado do banco e disparar stages sem precisar lembrar de comandos.
+
+### 9.1 Pré-requisitos adicionais (Linux)
+
+```bash
+# OpenGL, xcb e GStreamer para o player de vídeo
+# (libgl1 substitui libgl1-mesa-glx a partir do Ubuntu 22.04)
+sudo apt install libgl1 \
+                 libxcb-cursor0 \
+                 gstreamer1.0-plugins-good \
+                 gstreamer1.0-plugins-bad \
+                 gstreamer1.0-libav
+```
+
+No macOS e Windows o Qt usa backends nativos — não é necessário instalar GStreamer.
+
+### 9.2 Instalar dependências Qt
+
+```bash
+uv sync --extra gui
+```
+
+### 9.3 Iniciar a GUI
+
+```bash
+# Via launcher script (recomendado — verifica dependências antes)
+bash run_gui.sh
+
+# Ou diretamente via uv
+uv run cs-gui
+```
+
+A GUI lê o mesmo `.env` e `data/canal.db` do pipeline CLI — nenhuma configuração extra.
+
+### 9.4 O que a interface oferece
+
+| Aba | Funcionalidade |
+|---|---|
+| **Vídeos** | Lista todos os vídeos com código de cores por status; filtro por status; duplo-clique exibe todos os campos do vídeo |
+| **Clipes** | Grade de cards com score viral, hook e duração; botão **Review** abre o diálogo de revisão |
+| **Pipeline** | Botões para cada stage (Discover → Upload); log colorido em tempo real via `EventBus → Qt Signal`; botão **Cancelar** para interromper o stage em curso |
+
+### 9.5 Diálogo de review de clipe
+
+Aberto via o botão **Review** na aba Clipes:
+
+- **Player integrado** — reproduz o `.mp4` vertical do clipe (requer GStreamer no Linux)
+- **Informações** — score viral, relevância, tema, hook e payoff
+- **Editar trim** — ajusta `start_s` / `end_s` e salva no banco (rode o stage Edit depois para re-renderizar)
+- **Aprovar** — avança o clipe para o próximo status na máquina de estados
+- **Rejeitar** — marca o clipe como `processing_error` com nota "Rejeitado manualmente via GUI"
+
+### 9.6 Execução em background
+
+A GUI não substitui o cron — ela é complementar. O cron cuida do processamento noturno automático; a GUI serve para revisão manual diária e para disparar stages pontuais sem ter que digitar na CLI.
+
+---
+
+## 10. Automação com cron
 
 Primeiro autorize os scripts:
 
@@ -293,7 +354,7 @@ tail -f data/logs/pipeline_$(date +%F).log
 
 ---
 
-## 10. Alertas via Telegram (opcional)
+## 11. Alertas via Telegram (opcional)
 
 Com `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` configurados:
 
@@ -309,7 +370,7 @@ O comando retorna exit code 1 se algum status tiver mais de `threshold` itens �
 
 ---
 
-## 11. Estrutura de arquivos gerados
+## 12. Estrutura de arquivos gerados
 
 Tudo em `data/` (não versionado):
 
@@ -341,7 +402,7 @@ data/
 
 ---
 
-## 12. Documentação complementar
+## 13. Documentação complementar
 
 | Arquivo | Conteúdo |
 |---|---|

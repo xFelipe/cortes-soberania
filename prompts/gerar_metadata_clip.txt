@@ -22,6 +22,9 @@ Clipe:
 - Português brasileiro
 - Máximo 60 caracteres
 - Hook claro: pergunta forte, afirmação chocante, número, ou contradição
+- **OBRIGATÓRIO: nomeie o sujeito explicitamente.** O leitor precisa entender do que se trata SEM assistir o vídeo. Proibido: "um dos produtos mais polêmicos", "isso que o governo fez", "essa decisão histórica", "depois de X dias" sem dizer O QUÊ é. Use o `{video_title}` e a `{clip_transcript}` para identificar o sujeito concreto e nomeá-lo no título.
+  - ❌ "Depois de 12 dias, um dos produtos mais polêmicos"
+  - ✓ "A UE quer banir a carne bovina brasileira 🥩"
 - Sem clickbait enganoso (entregue o que prometer)
 - Sem caps lock excessivo
 - Pode usar emojis com parcimônia (no máximo 1)

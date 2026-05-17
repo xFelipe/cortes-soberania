@@ -95,7 +95,7 @@ parametros:
   # Thresholds de score (0-10) das triagens
   threshold_triage_metadata: 5
   threshold_triage_caption: 6
-  threshold_triage_transcript: 7
+  threshold_triage_transcript: 5
 
   # Máximo de clipes a extrair por vídeo
   max_clipes_por_video: 5

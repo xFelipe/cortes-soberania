@@ -226,16 +226,16 @@ Status global do projeto: 🟢 Código completo + resiliente a falhas de rede �
 - [x] `schema.sql` atualizado com tabela `training_examples` (era usada em `db.py` mas faltava no schema)
 
 ### 4.8 — Frontend PySide6
-- [ ] Criar `src/canal_soberania/gui/` com estrutura básica: `main.py`, `windows/`, `widgets/`, `bridge.py`
-- [ ] Tela principal: lista de vídeos com status + ações (rodar stage, ver detalhes)
-- [ ] Tela de review de clipes: player de preview + botões Aprovar / Rejeitar / Editar trim
-- [ ] Tela de status do pipeline em tempo real (via `EventBus → Qt Signal`)
-- [ ] Empacotamento: launcher script `run_gui.sh` + documentar dependências Qt no `pyproject.toml`
+- [x] Criar `src/canal_soberania/gui/` com estrutura básica: `main.py`, `windows/`, `widgets/`, `bridge.py`
+- [x] Tela principal: lista de vídeos com status + ações (rodar stage, ver detalhes)
+- [x] Tela de review de clipes: player de preview + botões Aprovar / Rejeitar / Editar trim
+- [x] Tela de status do pipeline em tempo real (via `EventBus → Qt Signal`)
+- [x] Empacotamento: launcher script `run_gui.sh` + documentar dependências Qt no `pyproject.toml`
 
 ### Checkpoint Fase 4
-- [ ] `PipelineService` existe e CLI + GUI o usam (zero lógica de negócio fora do core)
-- [ ] State machine valida toda transição de status
-- [ ] Cobertura ≥ 75% passando no CI
+- [x] `PipelineService` existe e CLI + GUI o usam (zero lógica de negócio fora do core)
+- [x] State machine valida toda transição de status
+- [x] Cobertura ≥ 75% passando no CI
 - [ ] GUI abre, lista vídeos, permite review de clipes e dispara pipeline com feedback em tempo real
 
 ---

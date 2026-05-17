@@ -33,6 +33,7 @@ dependencies = [
 
 [project.scripts]
 cs = "canal_soberania.cli:app"
+cs-gui = "canal_soberania.gui.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -41,6 +42,9 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.11.0",
     "ipython>=8.27.0",
+]
+gui = [
+    "PySide6>=6.7.0",
 ]
 
 [build-system]

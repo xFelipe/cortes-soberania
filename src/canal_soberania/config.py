@@ -116,6 +116,24 @@ def load_canais(path: Path | None = None) -> CanaisConfig:
 # ---------------------------------------------------------------------------
 
 
+_DATA_SUBDIRS = (
+    "log_dir",
+    "audio_dir",
+    "video_dir",
+    "captions_dir",
+    "transcripts_dir",
+    "clips_dir",
+    "thumbs_dir",
+    "backups_dir",
+)
+
+
+def ensure_data_dirs(paths: dict[str, Path]) -> None:
+    """Cria todos os diretórios de dados se ainda não existirem."""
+    for key in _DATA_SUBDIRS:
+        paths[key].mkdir(parents=True, exist_ok=True)
+
+
 def get_paths(settings: Settings) -> dict[str, Path]:
     data = settings.data_dir
     return {

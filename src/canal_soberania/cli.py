@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from canal_soberania.config import get_paths, load_settings
+from canal_soberania.config import ensure_data_dirs, get_paths, load_settings
 from canal_soberania.db import init_db
 from canal_soberania.logger import logger, setup_logger
 from canal_soberania.services.pipeline_service import PipelineService
@@ -33,6 +33,7 @@ def main(
         settings = settings.model_copy(update={"dry_run": True})
 
     paths = get_paths(settings)
+    ensure_data_dirs(paths)
     setup_logger(paths["log_dir"], settings.log_level)
 
     db_path = paths["db_path"]
