@@ -2,29 +2,22 @@
 
 from __future__ import annotations
 
-import sqlite3
 from enum import StrEnum
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from canal_soberania.config import get_paths, load_settings
-from canal_soberania.db import init_db, monthly_cost, status_summary
+from canal_soberania.db import init_db
 from canal_soberania.logger import logger, setup_logger
+from canal_soberania.services.pipeline_service import PipelineService
 
 app = typer.Typer(
     name="cs",
     help="Canal Soberania — pipeline de cortes automatizado.",
     no_args_is_help=True,
 )
-
-_conn: sqlite3.Connection | None = None
-
-
-def _get_conn() -> sqlite3.Connection:
-    if _conn is None:
-        raise RuntimeError("DB não inicializado — chame o callback principal primeiro")
-    return _conn
 
 
 @app.callback()  # type: ignore[untyped-decorator]
@@ -33,7 +26,6 @@ def main(
     log_level: Annotated[str, typer.Option("--log-level", help="DEBUG|INFO|WARNING|ERROR")] = "",
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Não executa side effects")] = False,
 ) -> None:
-    global _conn
     settings = load_settings()
     if log_level:
         settings = settings.model_copy(update={"log_level": log_level})
@@ -51,12 +43,14 @@ def main(
 
     from canal_soberania.db import connect
 
-    _conn = connect(db_path)
+    conn = connect(db_path)
+    service = PipelineService(conn=conn, settings=settings, paths=paths)
 
     ctx.ensure_object(dict)
     ctx.obj["settings"] = settings
     ctx.obj["paths"] = paths
-    ctx.obj["conn"] = _conn
+    ctx.obj["conn"] = conn
+    ctx.obj["service"] = service
 
 
 # ---------------------------------------------------------------------------
@@ -70,18 +64,18 @@ def status(
     video_id: Annotated[str | None, typer.Option("--video-id", help="Detalhe de um vídeo")] = None,
 ) -> None:
     """Mostra contagem por status e custo do mês."""
-    conn: sqlite3.Connection = ctx.obj["conn"]
+    service: PipelineService = ctx.obj["service"]
 
     if video_id:
-        row = conn.execute("SELECT * FROM videos WHERE video_id = ?", (video_id,)).fetchone()
-        if row is None:
+        video = service.get_video(video_id)
+        if video is None:
             typer.echo(f"Vídeo não encontrado: {video_id}")
             raise typer.Exit(1)
-        for key in row:
-            typer.echo(f"  {key}: {row[key]}")
+        for key, val in video.model_dump().items():
+            typer.echo(f"  {key}: {val}")
         return
 
-    summary = status_summary(conn)
+    summary = service.get_status_summary()
     if not summary:
         typer.echo("Banco vazio — rode `cs discover` primeiro.")
         return
@@ -90,7 +84,7 @@ def status(
     for s, total in sorted(summary.items(), key=lambda x: -x[1]):
         typer.echo(f"  {s:<40} {total:>5}")
 
-    cost = monthly_cost(conn)
+    cost = service.get_monthly_cost()
     typer.echo(f"\nCusto este mês: ${cost:.4f} USD")
 
 
@@ -105,10 +99,8 @@ def discover(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Busca vídeos novos nos canais monitorados."""
-    from canal_soberania.stages.discover import run as discover_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    discover_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_discover(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -130,20 +122,14 @@ def triage(
 ) -> None:
     """Roda uma etapa de triagem sobre vídeos pendentes."""
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    conn = ctx.obj["conn"]
+    service: PipelineService = ctx.obj["service"]
 
     if stage == TriageStage.metadata:
-        from canal_soberania.stages.triage_metadata import run as triage_metadata_run
-
-        triage_metadata_run(conn=conn, dry_run=effective_dry_run)
+        service.run_triage_metadata(dry_run=effective_dry_run)
     elif stage == TriageStage.caption:
-        from canal_soberania.stages.triage_caption import run as triage_caption_run
-
-        triage_caption_run(conn=conn, dry_run=effective_dry_run)
+        service.run_triage_caption(dry_run=effective_dry_run)
     elif stage == TriageStage.transcript:
-        from canal_soberania.stages.triage_transcript import run as triage_transcript_run
-
-        triage_transcript_run(conn=conn, dry_run=effective_dry_run)
+        service.run_triage_transcript(dry_run=effective_dry_run)
     else:
         logger.info("TODO: triage stage={}", stage.value)
         typer.echo(f"triage --stage {stage.value}: não implementado")
@@ -161,10 +147,8 @@ def download(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Baixa áudio/vídeo dos itens aprovados na triagem."""
-    from canal_soberania.stages.download import run as download_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    download_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_download(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -179,10 +163,8 @@ def transcribe(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Transcreve áudio com faster-whisper."""
-    from canal_soberania.stages.transcribe import run as transcribe_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    transcribe_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_transcribe(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +179,8 @@ def find_clips(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Identifica trechos para clipe via Claude Sonnet."""
-    from canal_soberania.stages.find_clips import run as find_clips_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    find_clips_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_find_clips(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -215,10 +195,8 @@ def edit(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Edita clipes: corte, reframe 9:16, legendas, intro/outro."""
-    from canal_soberania.stages.edit import run as edit_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    edit_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_edit(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -233,10 +211,8 @@ def thumbnail(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Gera thumbnail com Pillow."""
-    from canal_soberania.stages.thumbnail import run as thumbnail_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    thumbnail_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_thumbnail(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -251,10 +227,8 @@ def metadata(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Gera título/descrição/tags com Claude Sonnet."""
-    from canal_soberania.stages.metadata import run as metadata_run
-
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    metadata_run(conn=ctx.obj["conn"], dry_run=effective_dry_run)
+    ctx.obj["service"].run_generate_metadata(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -276,16 +250,12 @@ def upload(
 ) -> None:
     """Sobe clipes para a plataforma especificada."""
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    conn = ctx.obj["conn"]
+    service: PipelineService = ctx.obj["service"]
 
     if platform == Platform.youtube:
-        from canal_soberania.stages.upload_youtube import run as upload_youtube_run
-
-        upload_youtube_run(conn=conn, dry_run=effective_dry_run)
+        service.run_upload_youtube(dry_run=effective_dry_run)
     elif platform == Platform.tiktok:
-        from canal_soberania.stages.upload_tiktok import run as upload_tiktok_run
-
-        upload_tiktok_run(conn=conn, dry_run=effective_dry_run)
+        service.run_upload_tiktok(dry_run=effective_dry_run)
 
 
 # ---------------------------------------------------------------------------
