@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -107,9 +107,9 @@ class ClipReviewDialog(QDialog):
         self._payoff_te.setPlaceholderText("Payoff do clipe…")
         edit_layout.addRow("Payoff:", self._payoff_te)
 
-        save_btn = QPushButton("Salvar alterações")
-        save_btn.clicked.connect(lambda: self._save_changes(silent=False))
-        edit_layout.addRow(save_btn)
+        self._save_btn = QPushButton("Salvar alterações")
+        self._save_btn.clicked.connect(lambda: self._save_changes(silent=False))
+        edit_layout.addRow(self._save_btn)
 
         right.addWidget(edit_group)
 
@@ -264,9 +264,15 @@ class ClipReviewDialog(QDialog):
                 title or None,
             )
             if not silent:
-                QMessageBox.information(self, "Salvo", "Alterações salvas com sucesso.")
+                self._save_btn.setText("✓ Salvo")
+                self._save_btn.setStyleSheet("color: #2e7d32; font-weight: bold;")
+                QTimer.singleShot(2000, self._reset_save_btn)
         except Exception as exc:
             QMessageBox.critical(self, "Erro ao salvar", str(exc))
+
+    def _reset_save_btn(self) -> None:
+        self._save_btn.setText("Salvar alterações")
+        self._save_btn.setStyleSheet("")
 
     def _apply_trim(self) -> None:
         start = self._start_spin.value()
