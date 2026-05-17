@@ -185,15 +185,18 @@ Passos para o formato vertical (9:16, 1080x1920):
 1. Cortar trecho: `ffmpeg -ss {start} -to {end} -i video.mp4 -c copy temp_cut.mp4`
 2. Detectar bbox do rosto principal frame-a-frame (mediapipe) → série temporal suavizada
 3. Crop dinâmico centrado no rosto, com fallback para centro se sem rosto detectado
-4. Gerar `.ass` (Advanced SubStation) com legendas palavra-por-palavra a partir dos `word_timestamps`:
-   - Fonte grande (60-80pt)
-   - Highlight da palavra atual (cor diferente)
-   - Sombra/contorno para legibilidade
-5. Queimar legenda: `ffmpeg -vf "scale=...,crop=...,ass=legenda.ass" ...`
+4. Gerar `.ass` (Advanced SubStation Alpha) com legendas palavra-por-palavra (estilo CapCut):
+   - 1 evento ASS por palavra; cada evento exibe o grupo inteiro mas destaca a palavra ativa
+   - Texto base: branco (`&H00FFFFFF`), negrito, fonte Arial 72pt, contorno preto 4px
+   - Palavra ativa: amarelo (`&H0000FFFF`), escala 115%, contorno 6px
+   - Grupos de 3 palavras; chunks respeitam fronteiras de segmento (sem cortar nomes compostos)
+   - Layout de 2 linhas fixo via `\N` explícito — não reflui ao trocar palavra ativa
+   - Timing preciso via `word_timestamps` do Whisper (não distribuição uniforme)
+5. Queimar legenda: `ffmpeg -vf "ass=legenda.ass" ...`
 6. Concatenar intro (3s) + corpo + outro (3s)
 7. Re-encode H.264 (`-c:v libx264 -preset medium -crf 23`) + AAC 128k
 
-Formato horizontal (16:9, 1920x1080) é o trecho original sem reframe, mesma legenda e intro/outro, para upload opcional como vídeo longo curto.
+Formato horizontal (16:9, 1920x1080): trecho original com mesma legenda reescalonada (Arial 40pt, PlayRes 1920×1080, margem proporcional), intro/outro.
 
 ---
 

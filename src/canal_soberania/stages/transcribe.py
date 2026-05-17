@@ -83,13 +83,21 @@ def transcribe_audio(
         language="pt",
         beam_size=5,
         vad_filter=True,
+        word_timestamps=True,
     )
 
     logger.debug("Idioma detectado: {} (prob={:.2f})", info.language, info.language_probability)
 
     segments: list[dict[str, Any]] = []
     for seg in segments_iter:
-        segments.append({"start": seg.start, "end": seg.end, "text": seg.text.strip()})
+        seg_data: dict[str, Any] = {"start": seg.start, "end": seg.end, "text": seg.text.strip()}
+        if seg.words:
+            seg_data["words"] = [
+                {"start": w.start, "end": w.end, "word": w.word.strip()}
+                for w in seg.words
+                if w.word.strip()
+            ]
+        segments.append(seg_data)
 
     logger.info("  {} segmentos transcritos", len(segments))
     return segments

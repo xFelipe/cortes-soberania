@@ -37,21 +37,25 @@ _HORIZONTAL_W = 1920
 _HORIZONTAL_H = 1080
 _FPS = 30
 
-# ASS style para legendas dinâmicas (estilo CapCut)
-_ASS_HEADER = """\
-[Script Info]
-ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
-ScaledBorderAndShadow: yes
+# Tags inline para palavra ativa: amarelo (ASS BGR: 0000FFFF) + 8% maior
+_WORD_ACTIVE = r"{\c&H0000FFFF&\fscx115\fscy115\bord6}"
+_WORD_RESET = r"{\r}"
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Arial,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,80,80,120,1
 
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+def _make_ass_header(
+    play_w: int, play_h: int, font_size: int, margin_v: int
+) -> str:
+    return (
+        f"[Script Info]\nScriptType: v4.00+\nPlayResX: {play_w}\nPlayResY: {play_h}\n"
+        "ScaledBorderAndShadow: yes\n\n[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Caption,Arial,{font_size},"
+        f"&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,-1,0,0,0,100,100,2,0,1,4,0,2,"
+        f"80,80,{margin_v},1\n\n[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
 
 
 def _ts_to_ass(seconds: float) -> str:
@@ -87,34 +91,68 @@ def generate_ass(
     clip_start_s: float,
     output_path: Path,
     words_per_line: int = 3,
+    play_w: int = 1080,
+    play_h: int = 1920,
+    font_size: int = 72,
+    margin_v: int = 280,
 ) -> None:
     """
-    Gera arquivo ASS com legendas palavra-por-palavra (offset pelo clip_start_s).
-    Agrupa 'words_per_line' palavras por evento para evitar flash muito rápido.
-    """
-    all_words: list[tuple[float, float, str]] = []
-    for seg in segments:
-        seg_start = seg["start"] - clip_start_s
-        seg_end = seg["end"] - clip_start_s
-        if seg_end <= 0:
-            continue
-        seg_start = max(0.0, seg_start)
-        words = _words_from_segment(seg["text"], seg_start, seg_end)
-        all_words.extend(words)
+    Gera arquivo ASS com highlight palavra-por-palavra estilo CapCut.
 
-    lines: list[str] = [_ASS_HEADER]
-    # Agrupa em chunks de words_per_line
-    for i in range(0, len(all_words), words_per_line):
-        chunk = all_words[i : i + words_per_line]
-        if not chunk:
+    Chunks respeitam fronteiras de segmento Whisper (evita cortar nomes compostos).
+    Layout de linha é fixo por chunk via \\N explícito (evita reflow ao mudar palavra ativa).
+    """
+    # Coleta chunks dentro de cada segmento — nunca cruza fronteira de frase
+    all_chunks: list[list[tuple[float, float, str]]] = []
+    for seg in segments:
+        if seg["end"] - clip_start_s <= 0:
             continue
-        start = chunk[0][0]
-        end = chunk[-1][1]
-        text = " ".join(w for _, _, w in chunk)
-        # Uppercase para estilo CapCut
-        lines.append(
-            f"Dialogue: 0,{_ts_to_ass(start)},{_ts_to_ass(end)},Caption,,0,0,0,,{text.upper()}"
-        )
+
+        if seg.get("words"):
+            # Timestamps precisos por palavra (requer word_timestamps=True no Whisper)
+            raw_words = [
+                (max(0.0, w["start"] - clip_start_s), w["end"] - clip_start_s, w["word"])
+                for w in seg["words"]
+                if w["end"] > clip_start_s and w["word"].strip()
+            ]
+        else:
+            # Fallback: distribuição uniforme (transcrições sem word_timestamps)
+            seg_start = max(0.0, seg["start"] - clip_start_s)
+            seg_end = seg["end"] - clip_start_s
+            raw_words = _words_from_segment(seg["text"], seg_start, seg_end)
+
+        upper_words = [(ws, we, w.strip().upper()) for ws, we, w in raw_words if we > 0]
+        for i in range(0, len(upper_words), words_per_line):
+            chunk = upper_words[i : i + words_per_line]
+            if chunk:
+                all_chunks.append(chunk)
+
+    header = _make_ass_header(play_w, play_h, font_size, margin_v)
+    lines: list[str] = [header]
+
+    for chunk in all_chunks:
+        n = len(chunk)
+        # Linha 1: primeira metade (floor); linha 2: resto — layout fixo independente da palavra ativa
+        split = n // 2
+
+        for j, (w_start, w_end, _) in enumerate(chunk):
+            line1 = [
+                f"{_WORD_ACTIVE}{chunk[k][2]}{_WORD_RESET}" if k == j else chunk[k][2]
+                for k in range(split)
+            ]
+            line2 = [
+                f"{_WORD_ACTIVE}{chunk[k][2]}{_WORD_RESET}" if k == j else chunk[k][2]
+                for k in range(split, n)
+            ]
+            if line1 and line2:
+                text = " ".join(line1) + r"\N" + " ".join(line2)
+            else:
+                text = " ".join(line1 + line2)
+
+            lines.append(
+                f"Dialogue: 0,{_ts_to_ass(w_start)},{_ts_to_ass(w_end)},"
+                f"Caption,,0,0,0,,{text}"
+            )
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -268,9 +306,26 @@ def edit_clip(
             logger.error("Encode vertical falhou para {}: {}", clip.clip_id, exc)
             return None, None
 
-        # 7. Versão horizontal 1920x1080 (a partir do corte original sem legendas)
+        # 7. Versão horizontal 1920x1080 com legendas (escala proporcional ao vertical)
+        if segments:
+            ass_h_path = tmp / f"{clip.clip_id}_h.ass"
+            cut_with_subs_path = tmp / "cut_with_subs.mp4"
+            # Fonte e margem escalados de 1920px → 1080px (fator 0.5625)
+            generate_ass(
+                segments, clip.start_s, ass_h_path,
+                play_w=_HORIZONTAL_W, play_h=_HORIZONTAL_H,
+                font_size=40, margin_v=157,
+            )
+            try:
+                add_subtitles(cut_path, cut_with_subs_path, ass_h_path)
+                horizontal_src = cut_with_subs_path
+            except FFmpegError as exc:
+                logger.warning("Legendas horizontais falharam para {}: {}", clip.clip_id, exc)
+                horizontal_src = cut_path
+        else:
+            horizontal_src = cut_path
         try:
-            encode_final(cut_path, horizontal_out, _HORIZONTAL_W, _HORIZONTAL_H, _FPS)
+            encode_final(horizontal_src, horizontal_out, _HORIZONTAL_W, _HORIZONTAL_H, _FPS)
         except FFmpegError as exc:
             logger.warning("Encode horizontal falhou para {} (não crítico): {}", clip.clip_id, exc)
             # horizontal é opcional — não bloqueia
