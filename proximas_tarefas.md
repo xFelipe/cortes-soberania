@@ -258,6 +258,35 @@ Status global do projeto: 🟢 Código completo + resiliente a falhas de rede �
 - [ ] Detecção automática de "trecho viral" via análise de prosódia (energia da voz, picos)
 - [ ] Remix automático: pegar 3 clipes curtos do mesmo tema e juntar em um Short de 60s
 - [ ] Tradução automática para outras línguas (mercado lusófono em Portugal, depois ES)
+- [ ] **Emoji contextual acima das legendas** (estilo OpusClip) — detalhes abaixo
+
+### Emoji contextual acima das legendas
+
+> Referência: OpusClip exibe um emoji relevante ao tema acima do bloco de legenda, trocando conforme o assunto muda.
+
+**Onde fica:** `stages/edit.py` — `generate_ass()` + `edit_clip()` + campo novo em `find_clips`/`metadata`.
+
+**Abordagem técnica (ASS):**
+- Adicionar segundo `Style` no header ASS: `EmojiStyle,Segoe UI Emoji,{emoji_size},&H00FFFFFF,...,Alignment=8` (Alignment 8 = topo centralizado)
+- Cada grupo de legendas recebe um evento `EmojiStyle` sincronizado com o início do chunk
+- O emoji fica numa linha independente — não afeta o layout das legendas
+- `MarginV` do emoji: ~200px do topo (PlayRes 1920px)
+
+**Como escolher o emoji:**
+- `find_clips.py`: LLM já analisa o trecho — adicionar campo `"emoji": "<emoji>"` no JSON de saída (1–2 emojis, ex: `"🛢️🇧🇷"` para Petrobras)
+- O emoji fica gravado na tabela `clips.emoji` (nova coluna, nullable)
+- `edit_clip()` recebe `emoji: str | None`; se `None`, não gera o estilo
+
+**Flag opcional:** parâmetro `show_emoji: bool = True` em `edit_clip()` para desligar por canal (canais mais sóbrios).
+
+**Schema:** `ALTER TABLE clips ADD COLUMN emoji TEXT;` → criar `migrations/003_clips_emoji.sql`
+
+**Dependências:**
+1. Fonte com suporte a emoji disponível no sistema (testar `Noto Color Emoji` ou `Segoe UI Emoji` com ffmpeg `subtitles` filter — pode precisar de fallback para `drawtext`)
+2. Prompt `identificar_cortes.txt` precisa incluir o campo `emoji` no JSON de saída
+3. Testes: mockar `edit_clip` com `emoji="🛢️"` e verificar que o ASS gerado contém `EmojiStyle`
+
+**Prioridade:** baixa — só faz diferença visual após o canal ter 50+ cortes publicados e começar a testar retenção.
 
 ---
 
