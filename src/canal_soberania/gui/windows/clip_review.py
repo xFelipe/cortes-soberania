@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -37,12 +38,15 @@ class ClipReviewDialog(QDialog):
     Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar
     """
 
+    _boost_ready = Signal(str)  # path do arquivo com áudio amplificado, ou "" se falhou
+
     def __init__(
         self, clip: Clip, service: PipelineService, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
         self._clip = clip
         self._service = service
+        self._boost_cancelled = False
         self.setWindowTitle(f"Review — {clip.clip_id}")
         self.resize(960, 700)
         self._setup_ui()
@@ -184,38 +188,45 @@ class ClipReviewDialog(QDialog):
         self._temp_preview: Path | None = None
         path = self._clip.clip_path_vertical
         if path and Path(path).exists():
-            self._play_btn.setEnabled(False)
-            self._play_btn.setText("⏳ Preparando…")
-            boosted = self._boost_audio(path)
-            self._temp_preview = boosted
-            self._player.setSource(QUrl.fromLocalFile(str(boosted or path)))
             self._video_widget.setVisible(True)
             self._no_video_label.setVisible(False)
-            self._play_btn.setEnabled(True)
-            self._play_btn.setText("▶ Play")
+            self._play_btn.setEnabled(False)
+            self._play_btn.setText("⏳ Preparando áudio…")
+            self._boost_ready.connect(self._on_boost_ready, Qt.ConnectionType.QueuedConnection)
+            threading.Thread(target=self._run_boost, args=(path,), daemon=True).start()
         else:
             self._video_widget.setVisible(False)
             self._no_video_label.setVisible(True)
             self._play_btn.setEnabled(False)
 
-    def _boost_audio(self, source: str) -> Path | None:
-        """Cria cópia temporária do clipe com áudio amplificado (+8 dB) para review."""
+    def _run_boost(self, source: str) -> None:
+        """Executa em thread de fundo — amplifica áudio via ffmpeg."""
         tmp = Path(tempfile.mktemp(suffix="_preview.mp4"))
         try:
             subprocess.run(
-                [
-                    "ffmpeg", "-i", source,
-                    "-af", "volume=8dB",
-                    "-c:v", "copy",
-                    "-y", str(tmp),
-                ],
+                ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)],
                 capture_output=True,
                 timeout=60,
                 check=True,
             )
-            return tmp
+            self._boost_ready.emit(str(tmp))
         except Exception:
-            return None
+            self._boost_ready.emit("")  # falha: thread principal usará arquivo original
+
+    def _on_boost_ready(self, boosted_path: str) -> None:
+        """Chamado na thread principal quando o ffmpeg termina."""
+        if self._boost_cancelled:
+            if boosted_path:
+                Path(boosted_path).unlink(missing_ok=True)
+            return
+        original = self._clip.clip_path_vertical or ""
+        if boosted_path:
+            self._temp_preview = Path(boosted_path)
+            self._player.setSource(QUrl.fromLocalFile(boosted_path))
+        elif original:
+            self._player.setSource(QUrl.fromLocalFile(original))
+        self._play_btn.setEnabled(True)
+        self._play_btn.setText("▶ Play")
 
     def _toggle_play(self) -> None:
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -338,6 +349,7 @@ class ClipReviewDialog(QDialog):
             QMessageBox.critical(self, "Erro ao rejeitar", str(exc))
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._boost_cancelled = True
         self._player.stop()
         if getattr(self, "_temp_preview", None) and self._temp_preview.exists():
             self._temp_preview.unlink(missing_ok=True)
