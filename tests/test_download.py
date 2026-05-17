@@ -46,7 +46,7 @@ def test_download_audio_returns_existing(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     existing = audio_dir / "dQw4w9WgXcQ.mp3"
-    existing.write_bytes(b"fake_audio")
+    existing.write_bytes(b"x" * 15_000)
     result = download_audio("dQw4w9WgXcQ", audio_dir)
     assert result == existing
 
@@ -70,7 +70,7 @@ def test_download_audio_success(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
 
     def fake_download(urls: list[str]) -> None:
-        (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"audio_data")
+        (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"x" * 15_000)
 
     with patch("canal_soberania.stages.download.yt_dlp.YoutubeDL") as mock_ydl:
         mock_ydl.return_value.__enter__.return_value.download.side_effect = fake_download
@@ -88,7 +88,7 @@ def test_download_video_returns_existing(tmp_path: Path) -> None:
     video_dir = tmp_path / "video"
     video_dir.mkdir()
     existing = video_dir / "dQw4w9WgXcQ.mp4"
-    existing.write_bytes(b"fake_video")
+    existing.write_bytes(b"x" * 15_000)
     result = download_video("dQw4w9WgXcQ", video_dir)
     assert result == existing
 
@@ -123,11 +123,11 @@ def test_download_video_assets_success(
 
     def fake_audio_download(urls: list[str]) -> None:
         audio_dir.mkdir(parents=True, exist_ok=True)
-        (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"audio")
+        (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"x" * 15_000)
 
     def fake_video_download(urls: list[str]) -> None:
         video_dir.mkdir(parents=True, exist_ok=True)
-        (video_dir / "dQw4w9WgXcQ.mp4").write_bytes(b"video")
+        (video_dir / "dQw4w9WgXcQ.mp4").write_bytes(b"x" * 15_000)
 
     call_count = [0]
 
@@ -192,7 +192,7 @@ def test_download_video_assets_video_fail_still_succeeds(
     audio_dir = tmp_path / "audio"
     video_dir = tmp_path / "video"
     audio_dir.mkdir()
-    (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"audio")  # pré-existente
+    (audio_dir / "dQw4w9WgXcQ.mp3").write_bytes(b"x" * 15_000)  # pré-existente
 
     with patch("canal_soberania.stages.download.yt_dlp.YoutubeDL") as mock_ydl:
         # Falha no download de vídeo (arquivo não criado)

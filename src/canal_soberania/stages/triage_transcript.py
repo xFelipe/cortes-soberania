@@ -119,6 +119,24 @@ def triage_video_transcript(
         )
         return None
 
+    # Guard de idempotência: evita chamar LLM se triagem já foi feita
+    existing = conn.execute(
+        "SELECT score, is_relevant FROM triage_results WHERE video_id = ? AND stage = 'transcript'"
+        " ORDER BY created_at DESC LIMIT 1",
+        (video.video_id,),
+    ).fetchone()
+    if existing is not None:
+        new_status = (
+            "triage_transcript_passed" if existing["is_relevant"] else "triage_transcript_rejected"
+        )
+        logger.info(
+            "triage_transcript {} já feita (score={}), pulando LLM → {}",
+            video.video_id, existing["score"], new_status,
+        )
+        with conn:
+            update_video_status(conn, video.video_id, new_status)
+        return None
+
     try:
         resp = llm.complete(prompt, model=model, max_tokens=1024, task="triage_transcript")
     except Exception as exc:

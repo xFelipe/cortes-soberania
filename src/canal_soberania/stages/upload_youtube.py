@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import socket
+import ssl
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -13,6 +16,10 @@ from canal_soberania.logger import logger
 from canal_soberania.models import Clip
 
 _INPUT_STATUS = "metadata_ready"
+_UPLOADING_STATUS = "uploading_youtube"
+
+_RETRIABLE_HTTP_STATUS = {500, 502, 503, 504}
+_RETRIABLE_EXCEPTIONS = (socket.error, ssl.SSLError, ConnectionError, TimeoutError)
 
 # Horários de publicação (UTC-3 = horário de Brasília)
 _PUBLISH_HOURS_BRT = [9, 14, 19]
@@ -138,6 +145,17 @@ def upload_clip(
     Faz upload de um clipe para o YouTube como vídeo privado agendado.
     Retorna o youtube_id ou None em caso de falha.
     """
+    # Idempotência: clipe já foi enviado anteriormente
+    existing = conn.execute(
+        "SELECT youtube_id FROM clips WHERE clip_id = ?", (clip.clip_id,)
+    ).fetchone()
+    if existing and existing["youtube_id"]:
+        logger.info(
+            "upload_youtube: clip {} já tem youtube_id={}, pulando",
+            clip.clip_id, existing["youtube_id"],
+        )
+        return str(existing["youtube_id"])
+
     if not clip.clip_path_vertical:
         logger.warning("upload_youtube: sem clip_path_vertical para {}", clip.clip_id)
         return None
@@ -173,7 +191,15 @@ def upload_clip(
         logger.error("upload_youtube: falha na autenticação: {}", exc)
         return None
 
+    # Marca status intermediário para recovery em caso de crash
+    with conn:
+        conn.execute(
+            "UPDATE clips SET status=? WHERE clip_id=?",
+            (_UPLOADING_STATUS, clip.clip_id),
+        )
+
     try:
+        from googleapiclient.errors import HttpError as GApiHttpError  # type: ignore[import-untyped]
         from googleapiclient.http import MediaFileUpload  # type: ignore[import-untyped]
 
         body = {
@@ -198,8 +224,33 @@ def upload_clip(
         )
 
         response = None
+        retry_count = 0
+        max_retries = 5
         while response is None:
-            _, response = request.next_chunk()
+            try:
+                _, response = request.next_chunk()
+            except GApiHttpError as exc:
+                if exc.resp.status in _RETRIABLE_HTTP_STATUS and retry_count < max_retries:
+                    retry_count += 1
+                    wait = min(2**retry_count, 30)
+                    logger.warning(
+                        "upload chunk HTTP {}, retry {}/{} em {}s",
+                        exc.resp.status, retry_count, max_retries, wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    raise
+            except _RETRIABLE_EXCEPTIONS as exc:
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait = min(2**retry_count, 30)
+                    logger.warning(
+                        "upload chunk erro de rede: {}, retry {}/{} em {}s",
+                        exc, retry_count, max_retries, wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    raise
 
         youtube_id: str = response["id"]
         logger.info(
@@ -224,6 +275,10 @@ def upload_clip(
     except Exception as exc:
         logger.error("upload_youtube: erro no upload de {}: {}", clip.clip_id, exc)
         with conn:
+            conn.execute(
+                "UPDATE clips SET status='metadata_ready', error_message=? WHERE clip_id=?",
+                (str(exc), clip.clip_id),
+            )
             conn.execute(
                 "INSERT INTO uploads_log (clip_id, platform, status, error_message) VALUES (?, 'youtube', 'error', ?)",
                 (clip.clip_id, str(exc)),
@@ -255,7 +310,8 @@ def run(
         )
         return
 
-    clips = get_clips_by_status(conn, _INPUT_STATUS)
+    # Inclui uploading_youtube para recuperar orphans de crash mid-upload
+    clips = get_clips_by_status(conn, _INPUT_STATUS) + get_clips_by_status(conn, _UPLOADING_STATUS)
     logger.info("upload_youtube: {} clipes para processar", len(clips))
 
     success = failed = 0

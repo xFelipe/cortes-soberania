@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp  # type: ignore[import-untyped]
+import yt_dlp.utils as ydl_utils  # type: ignore[import-untyped]
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
 from canal_soberania.db import (
@@ -62,18 +64,29 @@ def download_captions(
         "no_warnings": True,
         "sleep_interval": 3,
         "max_sleep_interval": 6,
+        "retries": 5,
+        "socket_timeout": 30,
     }
 
-    try:
+    @retry(
+        retry=retry_if_exception_type(ydl_utils.DownloadError),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        stop=stop_after_attempt(3),
+        reraise=False,
+    )
+    def _do_download() -> None:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+
+    try:
+        _do_download()
     except Exception as exc:
-        logger.warning("yt-dlp erro para {}: {}", video_id, exc)
+        logger.warning("yt-dlp captions erro para {} (não crítico): {}", video_id, exc)
         return None
 
     for lang in _CAPTION_LANGS:
         path = captions_dir / f"{video_id}.{lang}.vtt"
-        if path.exists():
+        if path.exists() and path.stat().st_size > 0:
             return path
 
     return None
@@ -213,6 +226,22 @@ def triage_video_caption(
             len(caption_texto),
             len(prompt),
         )
+        return None
+
+    # Guard de idempotência: evita chamar LLM se triagem já foi feita
+    existing = conn.execute(
+        "SELECT score, is_relevant FROM triage_results WHERE video_id = ? AND stage = 'caption'"
+        " ORDER BY created_at DESC LIMIT 1",
+        (video.video_id,),
+    ).fetchone()
+    if existing is not None:
+        new_status = "triage_caption_passed" if existing["is_relevant"] else "triage_caption_rejected"
+        logger.info(
+            "triage_caption {} já feita (score={}), pulando LLM → {}",
+            video.video_id, existing["score"], new_status,
+        )
+        with conn:
+            update_video_status(conn, video.video_id, new_status)
         return None
 
     try:

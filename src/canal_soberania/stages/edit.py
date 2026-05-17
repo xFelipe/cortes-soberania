@@ -300,7 +300,8 @@ def run(
     intro_path = data_dir / "intro.mp4"
     outro_path = data_dir / "outro.mp4"
 
-    clips = get_clips_by_status(conn, "identified")
+    # Inclui "editing" para recuperar orphans de crash mid-encode
+    clips = get_clips_by_status(conn, "identified") + get_clips_by_status(conn, "editing")
     logger.info("edit: {} clipes para processar", len(clips))
 
     success = failed = 0

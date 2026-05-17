@@ -126,6 +126,22 @@ def triage_video_metadata(
         )
         return None
 
+    # Guard de idempotência: evita chamar LLM se triagem já foi feita
+    existing = conn.execute(
+        "SELECT score, is_relevant FROM triage_results WHERE video_id = ? AND stage = 'metadata'"
+        " ORDER BY created_at DESC LIMIT 1",
+        (video.video_id,),
+    ).fetchone()
+    if existing is not None:
+        new_status = "triage_metadata_passed" if existing["is_relevant"] else "triage_metadata_rejected"
+        logger.info(
+            "triage_metadata {} já feita (score={}), pulando LLM → {}",
+            video.video_id, existing["score"], new_status,
+        )
+        with conn:
+            update_video_status(conn, video.video_id, new_status)
+        return None
+
     try:
         resp = llm.complete(prompt, model=model, max_tokens=512, task="triage_metadata")
     except Exception as exc:

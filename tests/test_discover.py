@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -46,6 +47,12 @@ def params() -> Parametros:
     return Parametros(janela_dias_discover=7, max_videos_por_canal_por_run=20)
 
 
+def _recent_iso(days_ago: int = 2) -> str:
+    """Retorna uma data ISO 8601 relativa a agora, para evitar testes sensíveis a data."""
+    dt = datetime.now(tz=timezone.utc) - timedelta(days=days_ago)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _make_youtube_mock(
     *,
     playlist_id: str = "UU_abc123",
@@ -54,6 +61,7 @@ def _make_youtube_mock(
 ) -> MagicMock:
     if video_ids is None:
         video_ids = ["dQw4w9WgXcQ", "abc12345678"]
+    recent = _recent_iso(days_ago=2)
     if video_details is None:
         video_details = [
             {
@@ -61,7 +69,7 @@ def _make_youtube_mock(
                 "snippet": {
                     "title": f"Vídeo {vid}",
                     "description": "Descrição do vídeo",
-                    "publishedAt": "2026-05-10T12:00:00Z",
+                    "publishedAt": recent,
                     "tags": ["geopolitica", "soberania"],
                 },
                 "contentDetails": {"duration": "PT1H2M30S"},
@@ -86,7 +94,7 @@ def _make_youtube_mock(
     # playlistItems().list().execute() → vídeos recentes
     playlist_items = [
         {
-            "snippet": {"publishedAt": "2026-05-10T12:00:00Z"},
+            "snippet": {"publishedAt": recent},
             "contentDetails": {"videoId": vid},
         }
         for vid in video_ids
@@ -150,21 +158,23 @@ def test_get_uploads_playlist_id_not_found() -> None:
 
 def test_fetch_recent_video_ids_respects_cutoff() -> None:
     yt = MagicMock()
+    new_date = _recent_iso(days_ago=2)
     yt.playlistItems.return_value.list.return_value.execute.return_value = {
         "items": [
             {
-                "snippet": {"publishedAt": "2026-05-15T00:00:00Z"},
+                "snippet": {"publishedAt": new_date},
                 "contentDetails": {"videoId": "vid_new111111"},
             },
             {
-                "snippet": {"publishedAt": "2026-01-01T00:00:00Z"},  # muito antigo
+                "snippet": {"publishedAt": "2020-01-01T00:00:00Z"},  # muito antigo
                 "contentDetails": {"videoId": "vid_old111111"},
             },
         ],
         "nextPageToken": None,
     }
-    # cutoff é ~7 dias atrás de 2026-05-16, então 2026-01-01 deve ser excluído
-    result = fetch_recent_video_ids(yt, "UU_abc", "2026-05-09T00:00:00Z", 20)
+    # cutoff = 7 dias atrás; new_date está dentro, 2020-01-01 está fora
+    cutoff = _iso_cutoff(7)
+    result = fetch_recent_video_ids(yt, "UU_abc", cutoff, 20)
     assert "vid_new111111" in result
     assert "vid_old111111" not in result
 

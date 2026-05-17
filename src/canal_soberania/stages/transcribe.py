@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import ctypes
 import json
+import os
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -100,10 +102,25 @@ def save_transcript(
     language: str = "pt",
 ) -> Path:
     transcripts_dir.mkdir(parents=True, exist_ok=True)
-    path = transcripts_dir / f"{video_id}.json"
+    final_path = transcripts_dir / f"{video_id}.json"
     data = {"video_id": video_id, "language": language, "segments": segments}
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+
+    # Write atômico: garante que crash mid-write não deixe JSON corrompido
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=transcripts_dir,
+        prefix=f".{video_id}.",
+        suffix=".json.tmp",
+        delete=False,
+        encoding="utf-8",
+    ) as tmp:
+        tmp.write(payload)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = Path(tmp.name)
+    os.replace(tmp_path, final_path)
+    return final_path
 
 
 def format_segments_for_prompt(segments: list[dict[str, Any]], max_chars: int = 12000) -> str:

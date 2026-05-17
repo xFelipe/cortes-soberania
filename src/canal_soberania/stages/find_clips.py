@@ -143,6 +143,19 @@ def find_clips_for_video(
         )
         return []
 
+    # Guard de idempotência: evita chamar LLM se clips já foram identificados
+    existing_count = conn.execute(
+        "SELECT COUNT(*) AS n FROM clips WHERE video_id = ?", (video.video_id,)
+    ).fetchone()
+    if existing_count and existing_count["n"] > 0:
+        logger.info(
+            "find_clips: {} já tem {} clips identificados, pulando LLM",
+            video.video_id, existing_count["n"],
+        )
+        with conn:
+            update_video_status(conn, video.video_id, "clips_found")
+        return []
+
     with conn:
         update_video_status(conn, video.video_id, "finding_clips")
 
@@ -240,7 +253,8 @@ def run(
     prompt_template = prompt_path.read_text(encoding="utf-8")
     criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
 
-    videos = get_videos_by_status(conn, "triage_transcript_passed")
+    # Inclui "finding_clips" para recuperar orphans de crash mid-LLM
+    videos = get_videos_by_status(conn, "triage_transcript_passed") + get_videos_by_status(conn, "finding_clips")
     logger.info("find_clips: {} vídeos para processar", len(videos))
 
     total_clips = 0

@@ -245,4 +245,4 @@ def test_transcribe_video_whisper_error(
         result = transcribe_video(video, db, transcripts_dir)
 
     assert result is None
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, "transcribe_error")) == 1

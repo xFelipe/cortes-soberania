@@ -37,7 +37,7 @@ def get_uploads_playlist_id(youtube: Any, handle: str) -> str | None:
         resp = (
             youtube.channels()
             .list(part="contentDetails", forHandle=handle_clean)
-            .execute()
+            .execute(num_retries=3)
         )
     except HttpError as exc:
         logger.error("YouTube API error buscando handle={}: {}", handle, exc)
@@ -70,7 +70,7 @@ def fetch_recent_video_ids(
             kwargs["pageToken"] = page_token
 
         try:
-            resp = youtube.playlistItems().list(**kwargs).execute()
+            resp = youtube.playlistItems().list(**kwargs).execute(num_retries=3)
         except HttpError as exc:
             logger.error("YouTube API error buscando playlist={}: {}", playlist_id, exc)
             break
@@ -96,7 +96,7 @@ def fetch_video_details(youtube: Any, video_ids: list[str]) -> list[dict[str, An
             resp = (
                 youtube.videos()
                 .list(part="snippet,contentDetails,statistics,liveStreamingDetails", id=",".join(batch))
-                .execute()
+                .execute(num_retries=3)
             )
         except HttpError as exc:
             logger.error("YouTube API error buscando detalhes de vídeos: {}", exc)

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp  # type: ignore[import-untyped]
+import yt_dlp.utils as ydl_utils  # type: ignore[import-untyped]
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import (
@@ -19,8 +21,10 @@ from canal_soberania.db import (
 from canal_soberania.logger import logger
 from canal_soberania.models import Video
 
-# Statuses que entram no stage de download
-_INPUT_STATUSES = ("triage_caption_passed", "triage_caption_skipped")
+# Statuses que entram no stage de download (inclui "downloading" para recovery de orphans)
+_INPUT_STATUSES = ("triage_caption_passed", "triage_caption_skipped", "downloading")
+
+_MIN_VALID_BYTES = 10_240  # 10 KB — arquivos menores são provavelmente parciais
 
 
 def _ydl_audio_opts(dest_path: Path) -> dict[str, Any]:
@@ -36,6 +40,10 @@ def _ydl_audio_opts(dest_path: Path) -> dict[str, Any]:
         ],
         "quiet": True,
         "no_warnings": True,
+        "retries": 10,
+        "fragment_retries": 10,
+        "retry_sleep_functions": {"http": lambda n: min(4 * 2**n, 60)},
+        "socket_timeout": 30,
     }
 
 
@@ -46,7 +54,22 @@ def _ydl_video_opts(dest_path: Path) -> dict[str, Any]:
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
+        "retries": 10,
+        "fragment_retries": 10,
+        "retry_sleep_functions": {"http": lambda n: min(4 * 2**n, 60)},
+        "socket_timeout": 30,
     }
+
+
+@retry(
+    retry=retry_if_exception_type(ydl_utils.DownloadError),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
+def _ydl_download(opts: dict[str, Any], url: str) -> None:
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.download([url])
 
 
 def download_audio(video_id: str, audio_dir: Path, dry_run: bool = False) -> Path | None:
@@ -54,9 +77,13 @@ def download_audio(video_id: str, audio_dir: Path, dry_run: bool = False) -> Pat
     audio_dir.mkdir(parents=True, exist_ok=True)
     dest = audio_dir / f"{video_id}.mp3"
 
-    if dest.exists():
+    if dest.exists() and dest.stat().st_size >= _MIN_VALID_BYTES:
         logger.debug("Áudio já existe: {}", dest)
         return dest
+
+    if dest.exists():
+        logger.warning("Áudio existente parece corrompido ({} bytes), re-baixando", dest.stat().st_size)
+        dest.unlink()
 
     if dry_run:
         logger.info("[dry-run] download_audio {}", video_id)
@@ -66,13 +93,16 @@ def download_audio(video_id: str, audio_dir: Path, dry_run: bool = False) -> Pat
     opts = _ydl_audio_opts(audio_dir / video_id)
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
+        _ydl_download(opts, url)
     except Exception as exc:
         logger.error("yt-dlp audio error {}: {}", video_id, exc)
         return None
 
-    return dest if dest.exists() else None
+    if not dest.exists() or dest.stat().st_size < _MIN_VALID_BYTES:
+        logger.error("Áudio baixado mas inválido: {}", dest)
+        return None
+
+    return dest
 
 
 def download_video(video_id: str, video_dir: Path, dry_run: bool = False) -> Path | None:
@@ -80,9 +110,13 @@ def download_video(video_id: str, video_dir: Path, dry_run: bool = False) -> Pat
     video_dir.mkdir(parents=True, exist_ok=True)
     dest = video_dir / f"{video_id}.mp4"
 
-    if dest.exists():
+    if dest.exists() and dest.stat().st_size >= _MIN_VALID_BYTES:
         logger.debug("Vídeo já existe: {}", dest)
         return dest
+
+    if dest.exists():
+        logger.warning("Vídeo existente parece corrompido ({} bytes), re-baixando", dest.stat().st_size)
+        dest.unlink()
 
     if dry_run:
         logger.info("[dry-run] download_video {}", video_id)
@@ -92,13 +126,16 @@ def download_video(video_id: str, video_dir: Path, dry_run: bool = False) -> Pat
     opts = _ydl_video_opts(dest)
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
+        _ydl_download(opts, url)
     except Exception as exc:
         logger.error("yt-dlp video error {}: {}", video_id, exc)
         return None
 
-    return dest if dest.exists() else None
+    if not dest.exists() or dest.stat().st_size < _MIN_VALID_BYTES:
+        logger.error("Vídeo baixado mas inválido: {}", dest)
+        return None
+
+    return dest
 
 
 def download_video_assets(

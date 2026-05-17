@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import sqlite3
 import urllib.error
 import urllib.request
 
 import anthropic
 from pydantic import BaseModel
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from canal_soberania.logger import logger
 
@@ -108,7 +109,12 @@ class LLMClient:
         self._training_conn = training_conn
 
     @retry(  # type: ignore[untyped-decorator]
-        retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.APITimeoutError)),
+        retry=retry_if_exception_type((
+            anthropic.RateLimitError,
+            anthropic.APITimeoutError,
+            anthropic.APIConnectionError,
+            anthropic.InternalServerError,
+        )),
         wait=wait_exponential(multiplier=2, min=4, max=60),
         stop=stop_after_attempt(5),
         reraise=True,
@@ -154,6 +160,10 @@ class LLMClient:
 # ---------------------------------------------------------------------------
 
 
+def _is_retriable_http_error(exc: BaseException) -> bool:
+    return isinstance(exc, urllib.error.HTTPError) and exc.code in (429, 500, 502, 503, 504)
+
+
 class OpenRouterClient:
     _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -164,6 +174,19 @@ class OpenRouterClient:
     ) -> None:
         self._api_key = api_key
         self._training_conn = training_conn
+
+    @retry(  # type: ignore[untyped-decorator]
+        retry=(
+            retry_if_exception_type((urllib.error.URLError, socket.timeout, json.JSONDecodeError))
+            | retry_if_exception(_is_retriable_http_error)
+        ),
+        wait=wait_exponential(multiplier=2, min=4, max=60),
+        stop=stop_after_attempt(5),
+        reraise=True,
+    )
+    def _call_api(self, req: urllib.request.Request) -> dict[str, object]:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return dict(json.loads(resp.read()))  # type: ignore[arg-type]
 
     def complete(
         self,
@@ -187,21 +210,9 @@ class OpenRouterClient:
             headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
         )
 
-        for attempt in range(1, 6):
-            try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
-                    data = json.loads(resp.read())
-                break
-            except urllib.error.HTTPError as exc:
-                if exc.code == 429 and attempt < 5:
-                    import time
-                    wait = 4 * (2 ** (attempt - 1))
-                    logger.warning("OpenRouter rate limit — aguardando {}s", wait)
-                    time.sleep(wait)
-                else:
-                    raise
+        data = self._call_api(req)
 
-        text = data["choices"][0]["message"]["content"]
+        text = data["choices"][0]["message"]["content"]  # type: ignore[index]
         usage = data.get("usage", {})
         tokens_in = usage.get("prompt_tokens", 0)
         tokens_out = usage.get("completion_tokens", 0)

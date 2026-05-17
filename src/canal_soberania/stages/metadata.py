@@ -110,6 +110,16 @@ def generate_metadata_for_clip(
         logger.info("[dry-run] metadata clip={}", clip.clip_id)
         return True
 
+    # Guard de idempotência: evita chamar LLM se título e descrição já gerados
+    if clip.title and clip.description:
+        logger.info("metadata: clip {} já tem título/descrição, pulando LLM", clip.clip_id)
+        with conn:
+            conn.execute(
+                "UPDATE clips SET status='metadata_ready' WHERE clip_id=? AND status != 'metadata_ready'",
+                (clip.clip_id,),
+            )
+        return True
+
     prompt = _build_metadata_prompt(
         template=prompt_template,
         clip=clip,
