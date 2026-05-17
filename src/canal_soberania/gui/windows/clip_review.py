@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QCursor, QDesktopServices
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -78,7 +79,7 @@ class ClipReviewDialog(QDialog):
         info_group = QGroupBox("Informações do clipe")
         info_layout = QFormLayout(info_group)
         info_layout.addRow("ID:", QLabel(self._clip.clip_id))
-        info_layout.addRow("Vídeo:", QLabel(self._clip.video_id))
+        info_layout.addRow("Vídeo:", self._make_video_link())
         info_layout.addRow("Status:", QLabel(self._clip.status))
         info_layout.addRow("Score viral:", QLabel(str(self._clip.score_viral or "—")))
         info_layout.addRow("Score relevância:", QLabel(str(self._clip.score_relevancia or "—")))
@@ -144,6 +145,18 @@ class ClipReviewDialog(QDialog):
         self._player.setVideoOutput(self._video_widget)
         self._player.positionChanged.connect(self._update_pos)
         self._player.playbackStateChanged.connect(self._on_playback_state)
+
+    def _make_video_link(self) -> QLabel:
+        video = self._service.get_video(self._clip.video_id)
+        title = video.title if video else self._clip.video_id
+        url = f"https://www.youtube.com/watch?v={self._clip.video_id}"
+        label = QLabel(f'<a href="{url}">{title}</a>')
+        label.setOpenExternalLinks(False)
+        label.setTextFormat(Qt.TextFormat.RichText)
+        label.setWordWrap(True)
+        label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        label.linkActivated.connect(lambda _: QDesktopServices.openUrl(QUrl(url)))
+        return label
 
     def _load_video(self) -> None:
         self._temp_preview: Path | None = None
