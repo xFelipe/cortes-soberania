@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
@@ -144,15 +146,41 @@ class ClipReviewDialog(QDialog):
         self._player.playbackStateChanged.connect(self._on_playback_state)
 
     def _load_video(self) -> None:
+        self._temp_preview: Path | None = None
         path = self._clip.clip_path_vertical
         if path and Path(path).exists():
-            self._player.setSource(QUrl.fromLocalFile(path))
+            self._play_btn.setEnabled(False)
+            self._play_btn.setText("⏳ Preparando…")
+            boosted = self._boost_audio(path)
+            self._temp_preview = boosted
+            self._player.setSource(QUrl.fromLocalFile(str(boosted or path)))
             self._video_widget.setVisible(True)
             self._no_video_label.setVisible(False)
+            self._play_btn.setEnabled(True)
+            self._play_btn.setText("▶ Play")
         else:
             self._video_widget.setVisible(False)
             self._no_video_label.setVisible(True)
             self._play_btn.setEnabled(False)
+
+    def _boost_audio(self, source: str) -> Path | None:
+        """Cria cópia temporária do clipe com áudio amplificado (+8 dB) para review."""
+        tmp = Path(tempfile.mktemp(suffix="_preview.mp4"))
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-i", source,
+                    "-af", "volume=8dB",
+                    "-c:v", "copy",
+                    "-y", str(tmp),
+                ],
+                capture_output=True,
+                timeout=60,
+                check=True,
+            )
+            return tmp
+        except Exception:
+            return None
 
     def _toggle_play(self) -> None:
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -199,4 +227,6 @@ class ClipReviewDialog(QDialog):
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._player.stop()
+        if getattr(self, "_temp_preview", None) and self._temp_preview.exists():
+            self._temp_preview.unlink(missing_ok=True)
         super().closeEvent(event)
