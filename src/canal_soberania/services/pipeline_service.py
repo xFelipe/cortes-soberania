@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
 from canal_soberania.config import Settings
 from canal_soberania.core.events import EventBus, PipelineEvent
 from canal_soberania.core.repositories import ClipRepository, VideoRepository
+from canal_soberania.core.stage import JobContext
 from canal_soberania.core.state import ClipStateMachine, VideoStateMachine
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
@@ -44,10 +46,23 @@ class PipelineService:
 
         self._video_repo = video_repo
         self._clip_repo = clip_repo
+        self._cancel_event = threading.Event()
 
     @property
     def event_bus(self) -> EventBus:
         return self._bus
+
+    def cancel(self) -> None:
+        """Sinaliza ao pipeline para parar na próxima oportunidade."""
+        self._cancel_event.set()
+
+    def reset_cancel(self) -> None:
+        """Limpa o sinal de cancelamento para permitir novos runs."""
+        self._cancel_event.clear()
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancel_event.is_set()
 
     # ------------------------------------------------------------------
     # Queries
@@ -89,9 +104,31 @@ class PipelineService:
     # ------------------------------------------------------------------
 
     def _run_stage(self, stage_name: str, stage_fn: Any, dry_run: bool) -> None:
-        self._bus.publish(PipelineEvent(PipelineEvent.STAGE_STARTED, {"stage": stage_name}))
+        if self._cancel_event.is_set():
+            self._bus.publish(PipelineEvent("stage_cancelled", {"stage": stage_name}))
+            return
+
+        from canal_soberania.stages.wrappers import get_stage
         try:
-            stage_fn(conn=self._conn, dry_run=dry_run)
+            stage = get_stage(stage_name)
+        except KeyError:
+            stage = None  # fallback: stage sem wrapper (ex. futuro stage customizado)
+
+        self._bus.publish(PipelineEvent(PipelineEvent.STAGE_STARTED, {"stage": stage_name}))
+        ctx = JobContext(conn=self._conn, settings=self._settings, paths=self._paths, dry_run=dry_run)
+
+        try:
+            if stage is not None:
+                result = stage.execute(ctx)
+                if not result.success and result.error is not None:
+                    if stage.can_retry(result.error):
+                        self._bus.publish(PipelineEvent("stage_will_retry", {"stage": stage_name}))
+                    else:
+                        stage.rollback(ctx)
+                    raise result.error
+            else:
+                stage_fn(conn=self._conn, dry_run=dry_run)
+
             self._bus.publish(PipelineEvent(PipelineEvent.STAGE_COMPLETED, {"stage": stage_name}))
         except Exception as exc:
             self._bus.publish(PipelineEvent(PipelineEvent.STAGE_ERROR, {"stage": stage_name, "error": str(exc)}))
