@@ -3,7 +3,7 @@
 > Regra TDAH: **uma caixinha por vez.** Não pule fases. Tarefa "doing" no máximo 1.
 > Sempre que terminar, marque `[x]` e commite. Dopamina visível é dopamina conquistada.
 
-Status global do projeto: 🟢 Código completo — aguardando setup operacional
+Status global do projeto: 🟢 Código completo + resiliente a falhas de rede — aguardando setup operacional
 
 ---
 
@@ -109,8 +109,33 @@ Status global do projeto: 🟢 Código completo — aguardando setup operacional
 - [x] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
 - [x] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
 
+### Hardening — resiliência de rede
+
+> Objetivo: qualquer comando pode ser interrompido e re-executado sem duplicação, custo extra ou estado travado.
+
+**P0 — Crítico (feito)**
+- [x] `upload_youtube.py` — guard de `youtube_id` (sem upload duplicado), retry exponencial no `next_chunk()` para HTTP 5xx/socket, recovery do status `uploading_youtube`
+- [x] `download.py` — yt-dlp com `retries=10`/`fragment_retries=10`, tenacity para `DownloadError`, validação de tamanho mínimo (10 KB), recovery de `"downloading"` em reruns
+- [x] `llm.py` — `LLMClient` cobre `APIConnectionError` + `InternalServerError`; `OpenRouterClient` reescrito com tenacity (cobre `URLError`, timeout, 5xx, `JSONDecodeError`)
+
+**P1 — Alto (feito)**
+- [x] `triage_metadata/caption/transcript.py` — guard SQL antes do LLM: rerun não gera chamada duplicada nem gasto extra
+- [x] `find_clips.py` — guard por contagem de clips existentes + recovery de `"finding_clips"`
+- [x] `metadata.py` — pula LLM se título e descrição já preenchidos
+
+**P2 — Médio (feito)**
+- [x] `transcribe.py` — write atômico via `tempfile` + `os.replace` (sem JSON corrompido em crash)
+- [x] `triage_caption.py` — retries no yt-dlp de captions + validação de VTT não-vazio
+- [x] `edit.py` — recovery de status `"editing"` em reruns
+
+**P3 — Baixo (feito)**
+- [x] `discover.py` — `.execute(num_retries=3)` em todas as chamadas YouTube Data API
+- [x] `utils/retry.py` — novo decorator `network_retry` centralizado para reuso futuro
+- [x] Testes de regressão corrigidos (datas hardcoded, status `transcribe_error`, tamanho de arquivo mock)
+
 ### Checkpoint Fase 2
 - [x] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta (código completo, 159 testes)
+- [x] Pipeline resiliente a falhas de rede: retry, idempotência e recovery de orphans em todos os stages
 - [ ] 10 clipes gerados automaticamente e revisados manualmente para qualidade
 - [ ] Tempo total por vídeo de 1h: < 15 min de wall-clock (Whisper é o gargalo)
 
@@ -160,6 +185,7 @@ Status global do projeto: 🟢 Código completo — aguardando setup operacional
 
 ## Backlog (sem prazo)
 
+- [x] Pesquisa: estratégias de ganchos (hooks) eficazes em vídeos curtos — o que prende nos primeiros 3s, padrões de abertura viral, referências de canais de cortes BR bem-sucedidos → ver `docs/hooks_videos_curtos.md`
 - [ ] Dashboard simples (Streamlit) para métricas por canal/clip
 - [ ] A/B test de thumbnails (2 variantes, pick winner pelo CTR)
 - [ ] Detecção automática de "trecho viral" via análise de prosódia (energia da voz, picos)
