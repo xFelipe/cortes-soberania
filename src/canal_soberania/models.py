@@ -80,8 +80,10 @@ class Clip(BaseModel):
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
     youtube_id: str | None = None
+    youtube_id_horizontal: str | None = None
     tiktok_id: str | None = None
     youtube_publish_at: str | None = None
+    youtube_publish_at_horizontal: str | None = None
     status: ClipStatus = "identified"
     error_message: str | None = None
     created_at: str | None = None

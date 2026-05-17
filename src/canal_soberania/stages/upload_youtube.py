@@ -134,6 +134,73 @@ def _slot_matches(
         return False
 
 
+def _do_upload(
+    youtube: object,
+    video_path: Path,
+    title: str,
+    description: str,
+    tags: list[str],
+    publish_at_iso: str,
+    is_short: bool = False,
+) -> str:
+    """Executa o upload de um arquivo de vídeo e retorna o youtube_id."""
+    from googleapiclient.errors import HttpError as GApiHttpError  # type: ignore[import-untyped]
+    from googleapiclient.http import MediaFileUpload  # type: ignore[import-untyped]
+
+    full_title = f"#Shorts {title[:93]}" if is_short else title[:100]
+    body = {
+        "snippet": {
+            "title": full_title,
+            "description": description,
+            "tags": tags,
+            "categoryId": "22",  # People & Blogs
+        },
+        "status": {
+            "privacyStatus": "private",
+            "publishAt": publish_at_iso,
+            "selfDeclaredMadeForKids": False,
+        },
+    }
+
+    media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True)
+    request = youtube.videos().insert(  # type: ignore[attr-defined]
+        part="snippet,status",
+        body=body,
+        media_body=media,
+    )
+
+    response = None
+    retry_count = 0
+    max_retries = 5
+    while response is None:
+        try:
+            _, response = request.next_chunk()
+        except GApiHttpError as exc:
+            if exc.resp.status in _RETRIABLE_HTTP_STATUS and retry_count < max_retries:
+                retry_count += 1
+                wait = min(2**retry_count, 30)
+                logger.warning(
+                    "upload chunk HTTP {}, retry {}/{} em {}s",
+                    exc.resp.status, retry_count, max_retries, wait,
+                )
+                time.sleep(wait)
+            else:
+                raise
+        except _RETRIABLE_EXCEPTIONS as exc:
+            if retry_count < max_retries:
+                retry_count += 1
+                wait = min(2**retry_count, 30)
+                logger.warning(
+                    "upload chunk erro de rede: {}, retry {}/{} em {}s",
+                    exc, retry_count, max_retries, wait,
+                )
+                time.sleep(wait)
+            else:
+                raise
+
+    return str(response["id"])  # type: ignore[index]
+
+
 def upload_clip(
     clip: Clip,
     conn: sqlite3.Connection,
@@ -142,17 +209,22 @@ def upload_clip(
     dry_run: bool = False,
 ) -> str | None:
     """
-    Faz upload de um clipe para o YouTube como vídeo privado agendado.
-    Retorna o youtube_id ou None em caso de falha.
+    Faz upload de um clipe para o YouTube.
+    - vertical (9:16) → Short (privado agendado), youtube_id
+    - horizontal (16:9) → vídeo regular (privado agendado), youtube_id_horizontal
+    Retorna o youtube_id do Short, ou None em caso de falha.
     """
-    # Idempotência: clipe já foi enviado anteriormente
     existing = conn.execute(
-        "SELECT youtube_id FROM clips WHERE clip_id = ?", (clip.clip_id,)
+        "SELECT youtube_id, youtube_id_horizontal FROM clips WHERE clip_id = ?",
+        (clip.clip_id,),
     ).fetchone()
-    if existing and existing["youtube_id"]:
+    vertical_done = existing and existing["youtube_id"]
+    horizontal_done = existing and existing["youtube_id_horizontal"]
+
+    if vertical_done and horizontal_done:
         logger.info(
-            "upload_youtube: clip {} já tem youtube_id={}, pulando",
-            clip.clip_id, existing["youtube_id"],
+            "upload_youtube: clip {} já tem youtube_id={} e horizontal={}, pulando",
+            clip.clip_id, existing["youtube_id"], existing["youtube_id_horizontal"],
         )
         return str(existing["youtube_id"])
 
@@ -160,9 +232,11 @@ def upload_clip(
         logger.warning("upload_youtube: sem clip_path_vertical para {}", clip.clip_id)
         return None
 
-    video_path = Path(clip.clip_path_vertical)
-    if not video_path.exists():
-        logger.warning("upload_youtube: arquivo não encontrado: {}", video_path)
+    vertical_path = Path(clip.clip_path_vertical)
+    horizontal_path = Path(clip.clip_path_horizontal) if clip.clip_path_horizontal else None
+
+    if not vertical_path.exists():
+        logger.warning("upload_youtube: arquivo vertical não encontrado: {}", vertical_path)
         return None
 
     title = clip.title or clip.hook or clip.clip_id
@@ -175,13 +249,15 @@ def upload_clip(
 
     publish_at = _next_publish_slot(conn)
     publish_at_iso = publish_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    # Horizontal publica 1h depois do Short para evitar conflito de slot
+    from datetime import timedelta
+    publish_at_h = publish_at + timedelta(hours=1)
+    publish_at_h_iso = publish_at_h.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     if dry_run:
         logger.info(
-            "[dry-run] upload_youtube clip={} title={!r} publish_at={}",
-            clip.clip_id,
-            title[:40],
-            publish_at_iso,
+            "[dry-run] upload_youtube clip={} short_title={!r} publish_at={} | horizontal publish_at={}",
+            clip.clip_id, f"#Shorts {title[:40]}", publish_at_iso, publish_at_h_iso,
         )
         return None
 
@@ -199,75 +275,51 @@ def upload_clip(
         )
 
     try:
-        from googleapiclient.errors import HttpError as GApiHttpError  # type: ignore[import-untyped]
-        from googleapiclient.http import MediaFileUpload  # type: ignore[import-untyped]
+        youtube_id: str | None = None
+        youtube_id_h: str | None = None
 
-        body = {
-            "snippet": {
-                "title": title[:100],
-                "description": description,
-                "tags": tags,
-                "categoryId": "22",  # People & Blogs
-            },
-            "status": {
-                "privacyStatus": "private",
-                "publishAt": publish_at_iso,
-                "selfDeclaredMadeForKids": False,
-            },
-        }
+        # 1. Upload vertical → Short
+        if not vertical_done:
+            youtube_id = _do_upload(
+                youtube, vertical_path, title, description, tags,
+                publish_at_iso, is_short=True,
+            )
+            logger.info("upload_youtube Short: clip={} → {}", clip.clip_id, youtube_id)
+            with conn:
+                conn.execute(
+                    "UPDATE clips SET youtube_id=?, youtube_publish_at=? WHERE clip_id=?",
+                    (youtube_id, publish_at_iso, clip.clip_id),
+                )
+                conn.execute(
+                    "INSERT INTO uploads_log (clip_id, platform, status, platform_id) VALUES (?, 'youtube_short', 'success', ?)",
+                    (clip.clip_id, youtube_id),
+                )
+        else:
+            youtube_id = str(existing["youtube_id"])
 
-        media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True)
-        request = youtube.videos().insert(  # type: ignore[attr-defined]
-            part="snippet,status",
-            body=body,
-            media_body=media,
-        )
-
-        response = None
-        retry_count = 0
-        max_retries = 5
-        while response is None:
-            try:
-                _, response = request.next_chunk()
-            except GApiHttpError as exc:
-                if exc.resp.status in _RETRIABLE_HTTP_STATUS and retry_count < max_retries:
-                    retry_count += 1
-                    wait = min(2**retry_count, 30)
-                    logger.warning(
-                        "upload chunk HTTP {}, retry {}/{} em {}s",
-                        exc.resp.status, retry_count, max_retries, wait,
-                    )
-                    time.sleep(wait)
-                else:
-                    raise
-            except _RETRIABLE_EXCEPTIONS as exc:
-                if retry_count < max_retries:
-                    retry_count += 1
-                    wait = min(2**retry_count, 30)
-                    logger.warning(
-                        "upload chunk erro de rede: {}, retry {}/{} em {}s",
-                        exc, retry_count, max_retries, wait,
-                    )
-                    time.sleep(wait)
-                else:
-                    raise
-
-        youtube_id: str = response["id"]
-        logger.info(
-            "upload_youtube: clip={} → youtube_id={} agendado={}",
-            clip.clip_id,
-            youtube_id,
-            publish_at_iso,
-        )
+        # 2. Upload horizontal → vídeo regular
+        if not horizontal_done and horizontal_path and horizontal_path.exists():
+            youtube_id_h = _do_upload(
+                youtube, horizontal_path, title, description, tags,
+                publish_at_h_iso, is_short=False,
+            )
+            logger.info("upload_youtube horizontal: clip={} → {}", clip.clip_id, youtube_id_h)
+            with conn:
+                conn.execute(
+                    "UPDATE clips SET youtube_id_horizontal=?, youtube_publish_at_horizontal=? WHERE clip_id=?",
+                    (youtube_id_h, publish_at_h_iso, clip.clip_id),
+                )
+                conn.execute(
+                    "INSERT INTO uploads_log (clip_id, platform, status, platform_id) VALUES (?, 'youtube_horizontal', 'success', ?)",
+                    (clip.clip_id, youtube_id_h),
+                )
+        elif not horizontal_done:
+            logger.warning("upload_youtube: sem clip_path_horizontal para {}, pulando vídeo regular", clip.clip_id)
 
         with conn:
             conn.execute(
-                "UPDATE clips SET youtube_id=?, youtube_publish_at=?, status='scheduled_youtube' WHERE clip_id=?",
-                (youtube_id, publish_at_iso, clip.clip_id),
-            )
-            conn.execute(
-                "INSERT INTO uploads_log (clip_id, platform, status, platform_id) VALUES (?, 'youtube', 'success', ?)",
-                (clip.clip_id, youtube_id),
+                "UPDATE clips SET status='scheduled_youtube' WHERE clip_id=?",
+                (clip.clip_id,),
             )
 
         return youtube_id
