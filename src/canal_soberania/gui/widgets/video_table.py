@@ -38,14 +38,13 @@ _STATUS_COLOR: dict[str, str] = {
     "processing_error": "#d50000",
 }
 
-# Statuses que devem aparecer no fim da lista (rejeitados / erros)
-_TAIL_STATUSES: frozenset[str] = frozenset({
-    "triage_metadata_rejected",
-    "triage_caption_rejected",
-    "triage_transcript_rejected",
-    "transcribe_error",
-    "processing_error",
-})
+# Prioridade de ordenação: 0 = normal, 1 = outros rejeitados, 2 = triage_metadata_rejected (último)
+def _sort_priority(status: str) -> int:
+    if status == "triage_metadata_rejected":
+        return 2
+    if status in ("triage_caption_rejected", "triage_transcript_rejected", "transcribe_error", "processing_error"):
+        return 1
+    return 0
 
 _COLUMNS = ["ID", "Canal", "Título", "Status", "Duração (s)", "Publicado"]
 
@@ -106,8 +105,8 @@ class VideoTable(QWidget):
             if selected_status is None
             else [v for v in self._videos if v.status == selected_status]
         )
-        # Rejeitados/erros no fim; dentro de cada grupo preserva ordem original
-        rows = sorted(rows, key=lambda v: v.status in _TAIL_STATUSES)
+        # triage_metadata_rejected por último; outros rejeitados antes; normais primeiro
+        rows = sorted(rows, key=lambda v: _sort_priority(v.status))
 
         self._table.setRowCount(0)
         for video in rows:
