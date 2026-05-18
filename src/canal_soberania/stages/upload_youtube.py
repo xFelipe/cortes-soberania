@@ -13,10 +13,12 @@ from pathlib import Path
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS = "metadata_ready"
-_UPLOADING_STATUS = "uploading_youtube"
+_INPUT_STATUS: ClipStatus = "metadata_ready"
+_UPLOADING_STATUS: ClipStatus = "uploading_youtube"
+# Clipes em scheduled_youtube com render_flag=True mas sem ID → novo formato a enviar
+_REUPLOAD_STATUS: ClipStatus = "scheduled_youtube"
 
 _RETRIABLE_HTTP_STATUS = {500, 502, 503, 504}
 _RETRIABLE_EXCEPTIONS = (socket.error, ssl.SSLError, ConnectionError, TimeoutError)
@@ -121,8 +123,8 @@ def _do_upload(
     is_short: bool = False,
 ) -> str:
     """Executa o upload de um arquivo de vídeo e retorna o youtube_id."""
-    from googleapiclient.errors import HttpError as GApiHttpError  # type: ignore[import-untyped]
-    from googleapiclient.http import MediaFileUpload  # type: ignore[import-untyped]
+    from googleapiclient.errors import HttpError as GApiHttpError
+    from googleapiclient.http import MediaFileUpload
 
     full_title = f"#Shorts {title[:93]}" if is_short else title[:100]
     body = {
@@ -175,7 +177,7 @@ def _do_upload(
             else:
                 raise
 
-    return str(response["id"])  # type: ignore[index]
+    return str(response["id"])
 
 
 def upload_clip(
@@ -293,20 +295,24 @@ def upload_clip(
         elif not horizontal_done:
             logger.warning("upload_youtube: sem clip_path_horizontal para {}, pulando vídeo regular", clip.clip_id)
 
+        # Preserva scheduled_youtube se o clipe já estava nesse status (re-upload de formato)
+        final_status = "scheduled_youtube" if clip.status == "scheduled_youtube" else "scheduled_youtube"
         with conn:
             conn.execute(
-                "UPDATE clips SET status='scheduled_youtube' WHERE clip_id=?",
-                (clip.clip_id,),
+                "UPDATE clips SET status=? WHERE clip_id=?",
+                (final_status, clip.clip_id),
             )
 
         return youtube_id
 
     except Exception as exc:
         logger.error("upload_youtube: erro no upload de {}: {}", clip.clip_id, exc)
+        # Se estava em scheduled_youtube (re-upload), volta para scheduled (não perde status)
+        rollback_status = "scheduled_youtube" if clip.status == "scheduled_youtube" else "metadata_ready"
         with conn:
             conn.execute(
-                "UPDATE clips SET status='metadata_ready', error_message=? WHERE clip_id=?",
-                (str(exc), clip.clip_id),
+                "UPDATE clips SET status=?, error_message=? WHERE clip_id=?",
+                (rollback_status, str(exc), clip.clip_id),
             )
             conn.execute(
                 "INSERT INTO uploads_log (clip_id, platform, status, error_message) VALUES (?, 'youtube', 'error', ?)",
@@ -339,8 +345,18 @@ def run(
         )
         return
 
-    # Inclui uploading_youtube para recuperar orphans de crash mid-upload
-    clips = get_clips_by_status(conn, _INPUT_STATUS) + get_clips_by_status(conn, _UPLOADING_STATUS)
+    # Inclui uploading_youtube (orphans de crash) e scheduled_youtube com formato pendente
+    scheduled_all = get_clips_by_status(conn, _REUPLOAD_STATUS)
+    scheduled_pending = [
+        c for c in scheduled_all
+        if (c.render_vertical and not c.youtube_id)
+        or (c.render_horizontal and not c.youtube_id_horizontal and c.clip_path_horizontal)
+    ]
+    clips = (
+        get_clips_by_status(conn, _INPUT_STATUS)
+        + get_clips_by_status(conn, _UPLOADING_STATUS)
+        + scheduled_pending
+    )
     logger.info("upload_youtube: {} clipes para processar", len(clips))
 
     success = failed = 0

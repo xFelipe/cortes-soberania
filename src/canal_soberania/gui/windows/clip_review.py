@@ -129,7 +129,7 @@ class ClipReviewDialog(QDialog):
 
         right.addWidget(info_group)
 
-        # Textos editáveis: título, hook, payoff
+        # Textos editáveis: título, hook, payoff, descrição, tags
         edit_group = QGroupBox("Textos (editável)")
         edit_layout = QFormLayout(edit_group)
 
@@ -146,6 +146,16 @@ class ClipReviewDialog(QDialog):
         self._payoff_te.setMaximumHeight(72)
         self._payoff_te.setPlaceholderText("Payoff do clipe…")
         edit_layout.addRow("Payoff:", self._payoff_te)
+
+        self._description_te = QTextEdit(self._clip.description or "")
+        self._description_te.setMaximumHeight(80)
+        self._description_te.setPlaceholderText("Descrição para YouTube / TikTok…")
+        edit_layout.addRow("Descrição:", self._description_te)
+
+        tags_str = ", ".join(self._clip.tags) if self._clip.tags else ""
+        self._tags_edit = QLineEdit(tags_str)
+        self._tags_edit.setPlaceholderText("tag1, tag2, tag3… (máx 15)")
+        edit_layout.addRow("Tags:", self._tags_edit)
 
         # Agendamento de publicação
         sched_row = QWidget()
@@ -175,17 +185,30 @@ class ClipReviewDialog(QDialog):
         right.addWidget(edit_group)
 
         # Formatos de saída
+        is_scheduled = self._clip.status in {"scheduled_youtube", "uploaded_youtube",
+                                             "uploading_youtube"}
         formats_group = QGroupBox("Formatos de saída")
         formats_layout = QVBoxLayout(formats_group)
         self._render_vertical_chk = QCheckBox("Vertical (9:16 — Shorts / TikTok)")
         self._render_vertical_chk.setChecked(self._clip.render_vertical)
         self._render_horizontal_chk = QCheckBox("Horizontal (16:9 — YouTube)")
         self._render_horizontal_chk.setChecked(self._clip.render_horizontal)
+        if is_scheduled:
+            v_has_id = bool(self._clip.youtube_id)
+            h_has_id = bool(self._clip.youtube_id_horizontal)
+            self._render_vertical_chk.setToolTip(
+                "Desmarcar vai deletar o Short do YouTube" if v_has_id
+                else "Marcar vai fazer upload do Short na próxima execução do pipeline"
+            )
+            self._render_horizontal_chk.setToolTip(
+                "Desmarcar vai deletar o vídeo horizontal do YouTube" if h_has_id
+                else "Marcar vai fazer upload horizontal na próxima execução do pipeline"
+            )
         formats_layout.addWidget(self._render_vertical_chk)
         formats_layout.addWidget(self._render_horizontal_chk)
         right.addWidget(formats_group)
 
-        # Trim
+        # Trim (bloqueado enquanto clipe está agendado/publicado)
         trim_group = QGroupBox("Editar trim")
         trim_layout = QFormLayout(trim_group)
         self._start_spin = QDoubleSpinBox()
@@ -200,33 +223,66 @@ class ClipReviewDialog(QDialog):
         self._end_spin.setSuffix(" s")
         self._end_spin.setValue(self._clip.end_s)
         trim_layout.addRow("Fim:", self._end_spin)
-        apply_trim_btn = QPushButton("Aplicar trim")
-        apply_trim_btn.clicked.connect(self._apply_trim)
-        trim_layout.addRow(apply_trim_btn)
+        self._apply_trim_btn = QPushButton("Aplicar trim")
+        self._apply_trim_btn.clicked.connect(self._apply_trim)
+        trim_layout.addRow(self._apply_trim_btn)
+        if is_scheduled:
+            self._start_spin.setEnabled(False)
+            self._end_spin.setEnabled(False)
+            self._apply_trim_btn.setEnabled(False)
+            trim_group.setToolTip("Cancele o agendamento primeiro para alterar o corte.")
         right.addWidget(trim_group)
 
         right.addStretch()
 
-        # Botões — label do Aprovar muda quando clip está pronto para publicar
+        # Botões — layout condicional por status
+        btn_box = QDialogButtonBox()
         approve_label = (
             "Liberar para publicação" if self._clip.status == "metadata_ready" else "Aprovar etapa"
         )
-        btn_box = QDialogButtonBox()
         self._approve_btn = btn_box.addButton(approve_label, QDialogButtonBox.ButtonRole.AcceptRole)
         self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
-        self._reject_btn = btn_box.addButton("Rejeitar", QDialogButtonBox.ButtonRole.RejectRole)
-        self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
-        close_btn = btn_box.addButton("Fechar", QDialogButtonBox.ButtonRole.DestructiveRole)
         self._approve_btn.clicked.connect(self._approve)
-        self._reject_btn.clicked.connect(self._toggle_reject)
+
+        self._unschedule_btn: QPushButton | None = None
+        self._discard_btn: QPushButton | None = None
+
+        if self._clip.status in {"scheduled_youtube", "uploaded_youtube", "uploading_youtube"}:
+            # Dois botões de remoção para clipes já no YouTube
+            self._unschedule_btn = btn_box.addButton(
+                "Cancelar agendamento", QDialogButtonBox.ButtonRole.ActionRole
+            )
+            self._unschedule_btn.setStyleSheet("background-color: #e65100; color: white;")
+            self._unschedule_btn.setToolTip("Torna o vídeo privado sem data de publicação (reversível)")
+            self._unschedule_btn.clicked.connect(self._do_unschedule)
+
+            self._discard_btn = btn_box.addButton(
+                "Descartar", QDialogButtonBox.ButtonRole.RejectRole
+            )
+            self._discard_btn.setStyleSheet("background-color: #b71c1c; color: white;")
+            self._discard_btn.setToolTip("Deleta o vídeo do YouTube permanentemente")
+            self._discard_btn.clicked.connect(self._do_discard)
+
+            self._reject_btn = self._discard_btn  # alias para o atalho R
+        else:
+            self._reject_btn = btn_box.addButton("Rejeitar", QDialogButtonBox.ButtonRole.RejectRole)
+            self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
+            self._reject_btn.clicked.connect(self._toggle_reject)
+
+        close_btn = btn_box.addButton("Fechar", QDialogButtonBox.ButtonRole.DestructiveRole)
         close_btn.clicked.connect(self.reject)
         right.addWidget(btn_box)
 
         # Inicializa estado dos botões conforme status atual do clipe
         if self._clip.status == "processing_error":
             self._set_rejected_ui(True)
+        elif self._clip.status in {"unscheduled_youtube", "deleted_youtube"}:
+            self._approve_btn.setEnabled(False)
+            self._approve_btn.setStyleSheet("background-color: #444444; color: #888888;")
 
-        hint = QLabel("Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar")
+        hint = QLabel(
+            "Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar"
+        )
         hint.setStyleSheet("color: #888; font-size: 10px;")
         hint.setWordWrap(True)
         right.addWidget(hint)
@@ -366,6 +422,12 @@ class ClipReviewDialog(QDialog):
         hook = self._hook_te.toPlainText().strip() or None
         payoff = self._payoff_te.toPlainText().strip() or None
         title = self._title_edit.text().strip() or None
+        description = self._description_te.toPlainText().strip() or None
+        tags_raw = self._tags_edit.text().strip()
+        tags: list[str] | None = (
+            [t.strip() for t in tags_raw.split(",") if t.strip()][:15]
+            if tags_raw else None
+        )
         schedule: str | None = (
             self._schedule_dt.dateTime().toString("yyyy-MM-ddTHH:mm:00")
             if self._schedule_chk.isChecked()
@@ -373,12 +435,20 @@ class ClipReviewDialog(QDialog):
         )
         render_v = self._render_vertical_chk.isChecked()
         render_h = self._render_horizontal_chk.isChecked()
+
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._service.update_clip_text(
-                self._clip.clip_id, hook, payoff, title, schedule, render_v, render_h
+                self._clip.clip_id, hook, payoff, title, schedule, render_v, render_h,
+                description=description, tags=tags,
             )
             self._clip = self._clip.model_copy(update={
-                "hook": hook, "payoff": payoff, "title": title, "youtube_publish_at": schedule,
+                "hook": hook, "payoff": payoff, "title": title,
+                "description": description,
+                "tags": tags if tags is not None else self._clip.tags,
+                "youtube_publish_at": schedule,
                 "render_vertical": render_v, "render_horizontal": render_h,
             })
             if not silent:
@@ -387,6 +457,8 @@ class ClipReviewDialog(QDialog):
                 QTimer.singleShot(2000, self._reset_save_btn)
         except Exception as exc:
             QMessageBox.critical(self, "Erro ao salvar", str(exc))
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _reset_save_btn(self) -> None:
         self._save_btn.setText("Salvar alterações")
@@ -449,6 +521,59 @@ class ClipReviewDialog(QDialog):
                 self.accept()
             except Exception as exc:
                 QMessageBox.critical(self, "Erro ao liberar", str(exc))
+
+    def _do_unschedule(self) -> None:
+        """Cancela o agendamento no YouTube (vídeo vira privado sem publishAt)."""
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            self._service.unschedule_clip(self._clip.clip_id)
+            self._clip = self._clip.model_copy(update={
+                "status": "unscheduled_youtube", "youtube_publish_at": None,
+            })
+        except Exception as exc:
+            QMessageBox.critical(self, "Erro ao cancelar agendamento", str(exc))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        # Atualiza UI: desativa botões de plataforma, libera trim
+        if self._unschedule_btn:
+            self._unschedule_btn.setEnabled(False)
+        if self._discard_btn:
+            self._discard_btn.setEnabled(False)
+        self._approve_btn.setEnabled(False)
+        self._approve_btn.setStyleSheet("background-color: #444444; color: #888888;")
+        self._start_spin.setEnabled(True)
+        self._end_spin.setEnabled(True)
+        self._apply_trim_btn.setEnabled(True)
+        self._schedule_chk.setChecked(False)
+
+    def _do_discard(self) -> None:
+        """Deleta o vídeo do YouTube permanentemente."""
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar descarte",
+            "Deletar o vídeo do YouTube é irreversível.\n\nDeseja continuar?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            self._service.discard_clip(self._clip.clip_id)
+            self._clip = self._clip.model_copy(update={
+                "status": "deleted_youtube", "youtube_id": None, "youtube_id_horizontal": None,
+            })
+        except Exception as exc:
+            QMessageBox.critical(self, "Erro ao descartar", str(exc))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.accept()
 
     def _toggle_reject(self) -> None:
         """Alterna entre rejeitado e aguardando aprovação (sem fechar o diálogo)."""

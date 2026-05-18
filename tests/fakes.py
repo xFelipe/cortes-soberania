@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
+from typing import Literal
 
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
@@ -61,12 +63,61 @@ class InMemoryClipRepository:
         payoff: str | None,
         title: str | None,
         youtube_publish_at: str | None,
+        render_vertical: bool = True,
+        render_horizontal: bool = True,
     ) -> None:
         if clip_id not in self._clips:
             raise ValueError(f"Clip não encontrado no banco: {clip_id}")
         self._clips[clip_id] = self._clips[clip_id].model_copy(
-            update={"hook": hook, "payoff": payoff, "title": title, "youtube_publish_at": youtube_publish_at}
+            update={
+                "hook": hook, "payoff": payoff, "title": title,
+                "youtube_publish_at": youtube_publish_at,
+                "render_vertical": render_vertical, "render_horizontal": render_horizontal,
+            }
         )
+
+    def update_metadata_fields(
+        self,
+        clip_id: str,
+        *,
+        hook: str | None = None,
+        payoff: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        youtube_publish_at: str | None = None,
+        render_vertical: bool | None = None,
+        render_horizontal: bool | None = None,
+    ) -> None:
+        if clip_id not in self._clips:
+            raise ValueError(f"Clip não encontrado: {clip_id}")
+        updates: dict = {}
+        if hook is not None:
+            updates["hook"] = hook
+        if payoff is not None:
+            updates["payoff"] = payoff
+        if title is not None:
+            updates["title"] = title
+        if description is not None:
+            updates["description"] = description
+        if tags is not None:
+            updates["tags"] = tags
+        if youtube_publish_at is not None:
+            updates["youtube_publish_at"] = youtube_publish_at
+        if render_vertical is not None:
+            updates["render_vertical"] = render_vertical
+        if render_horizontal is not None:
+            updates["render_horizontal"] = render_horizontal
+        if updates:
+            self._clips[clip_id] = self._clips[clip_id].model_copy(update=updates)
+
+    def clear_platform_id(
+        self, clip_id: str, *, kind: Literal["vertical", "horizontal"]
+    ) -> None:
+        if clip_id not in self._clips:
+            return
+        field = "youtube_id" if kind == "vertical" else "youtube_id_horizontal"
+        self._clips[clip_id] = self._clips[clip_id].model_copy(update={field: None})
 
     def update_status(self, clip_id: str, new_status: str) -> None:
         if clip_id in self._clips:
@@ -76,6 +127,12 @@ class InMemoryClipRepository:
         if clip_id in self._clips:
             self._clips[clip_id] = self._clips[clip_id].model_copy(
                 update={"status": "processing_error", "error_message": reason}
+            )
+
+    def restore(self, clip_id: str) -> None:
+        if clip_id in self._clips and self._clips[clip_id].status == "processing_error":
+            self._clips[clip_id] = self._clips[clip_id].model_copy(
+                update={"status": "identified", "error_message": None}
             )
 
     def update_trim(self, clip_id: str, start_s: float, end_s: float) -> None:

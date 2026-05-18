@@ -3,6 +3,8 @@
 Cada protocolo define a interface que implementações concretas devem cumprir,
 permitindo trocar algoritmos sem alterar o core (ex: reframe por face detection
 vs. crop central, Whisper local vs. cloud API).
+
+Upload/distribuição para plataformas externas → ver core/platforms.py.
 """
 
 from __future__ import annotations
@@ -67,26 +69,3 @@ class TranscriptionBackend(Protocol):
         audio_path: Path,
         language: str = "pt",
     ) -> list[TranscriptionSegment]: ...
-
-
-# ---------------------------------------------------------------------------
-# UploadAdapter — abstrai YouTube, TikTok, fila manual
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class UploadAdapter(Protocol):
-    """Sobe um clipe para uma plataforma e retorna o ID gerado pela plataforma."""
-
-    @property
-    def platform(self) -> str: ...
-
-    def upload(
-        self,
-        video_path: Path,
-        title: str,
-        description: str,
-        tags: list[str],
-        thumbnail_path: Path | None = None,
-        publish_at: str | None = None,
-    ) -> str: ...  # retorna platform_id

@@ -6,9 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from canal_soberania.core.strategies import CropParams, ReframeStrategy, TranscriptionBackend, UploadAdapter
+from canal_soberania.core.strategies import CropParams, ReframeStrategy, TranscriptionBackend
 from canal_soberania.strategies.reframe import CenterCropReframe, FaceDetectionReframe
-from canal_soberania.strategies.upload import ManualQueueAdapter, YouTubeUploadAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -22,14 +21,6 @@ def test_center_crop_satisfies_reframe_protocol() -> None:
 
 def test_face_detection_satisfies_reframe_protocol() -> None:
     assert isinstance(FaceDetectionReframe(), ReframeStrategy)
-
-
-def test_manual_queue_satisfies_upload_protocol() -> None:
-    assert isinstance(ManualQueueAdapter(Path("/tmp")), UploadAdapter)
-
-
-def test_youtube_adapter_satisfies_upload_protocol() -> None:
-    assert isinstance(YouTubeUploadAdapter(), UploadAdapter)
 
 
 # ---------------------------------------------------------------------------
@@ -97,64 +88,3 @@ def test_face_detection_fallback_to_center_when_no_mediapipe() -> None:
     assert params == center
 
 
-# ---------------------------------------------------------------------------
-# ManualQueueAdapter
-# ---------------------------------------------------------------------------
-
-
-def test_manual_queue_platform() -> None:
-    adapter = ManualQueueAdapter(Path("/tmp"))
-    assert adapter.platform == "manual_queue"
-
-
-def test_manual_queue_copies_file(tmp_path: Path) -> None:
-    queue_dir = tmp_path / "queue"
-    video = tmp_path / "clip.mp4"
-    video.write_bytes(b"fake_video_data")
-
-    adapter = ManualQueueAdapter(queue_dir)
-    result_id = adapter.upload(
-        video_path=video,
-        title="Título",
-        description="Desc",
-        tags=["tag1", "tag2"],
-    )
-    assert (queue_dir / "clip.mp4").exists()
-    assert result_id == "clip"
-
-
-def test_manual_queue_writes_metadata(tmp_path: Path) -> None:
-    queue_dir = tmp_path / "queue"
-    video = tmp_path / "clip.mp4"
-    video.write_bytes(b"data")
-
-    ManualQueueAdapter(queue_dir).upload(
-        video_path=video,
-        title="Meu Título",
-        description="Minha Desc",
-        tags=["a", "b"],
-    )
-    meta = (queue_dir / "clip.txt").read_text()
-    assert "Meu Título" in meta
-    assert "a, b" in meta
-
-
-# ---------------------------------------------------------------------------
-# YouTubeUploadAdapter
-# ---------------------------------------------------------------------------
-
-
-def test_youtube_adapter_platform() -> None:
-    assert YouTubeUploadAdapter().platform == "youtube"
-
-
-def test_youtube_adapter_upload_raises_not_implemented(tmp_path: Path) -> None:
-    video = tmp_path / "clip.mp4"
-    video.write_bytes(b"data")
-    with pytest.raises(NotImplementedError):
-        YouTubeUploadAdapter().upload(
-            video_path=video,
-            title="T",
-            description="D",
-            tags=[],
-        )

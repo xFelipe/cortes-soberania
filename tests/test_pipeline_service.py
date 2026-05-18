@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -307,3 +307,186 @@ def test_inmemory_get_clips_by_status(
     clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"))
     assert len(service_mem.get_clips(status="identified")) == 1
     assert len(service_mem.get_clips(status="edited")) == 1
+
+
+# ---------------------------------------------------------------------------
+# Propagação para plataformas
+# ---------------------------------------------------------------------------
+
+
+def _make_service_with_mock_yt(
+    tmp_path: Path,
+    db: sqlite3.Connection,
+    clip_repo: InMemoryClipRepository,
+) -> tuple[PipelineService, MagicMock]:
+    """Retorna (service, mock_youtube_client) com PlatformClient mockado."""
+    yt_mock = MagicMock()
+    settings = Settings(data_dir=tmp_path)
+    paths: dict[str, Path] = {
+        "data_dir": tmp_path,
+        "db_path": tmp_path / "test.db",
+        "schema_path": SCHEMA,
+        "log_dir": tmp_path / "logs",
+    }
+    svc = PipelineService(
+        conn=db,
+        settings=settings,
+        paths=paths,
+        clip_repo=clip_repo,
+        platforms={"youtube": yt_mock},
+    )
+    return svc, yt_mock
+
+
+def test_update_clip_text_propagates_to_youtube_when_scheduled(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """update_clip_text chama update_metadata no YouTube quando clipe está scheduled."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="scheduled_youtube",
+        title="Título antigo",
+        youtube_id="YT_001",
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.update_clip_text(
+        "dQw4w9WgXcQ_10_40",
+        hook=None, payoff=None,
+        title="Título novo",
+        youtube_publish_at=None,
+        description=None, tags=None,
+    )
+
+    yt.update_metadata.assert_called_once()
+    args = yt.update_metadata.call_args
+    assert args.args[0] == "YT_001"
+    assert "#Shorts" in args.kwargs["title"]
+    assert "Título novo" in args.kwargs["title"]
+
+
+def test_update_clip_text_no_propagation_pre_upload(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Clipe em metadata_ready não chama update_metadata."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="metadata_ready",
+        title="Título antigo",
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.update_clip_text(
+        "dQw4w9WgXcQ_10_40",
+        hook=None, payoff=None,
+        title="Título novo",
+        youtube_publish_at=None,
+    )
+
+    yt.update_metadata.assert_not_called()
+
+
+def test_unschedule_clip_calls_platform_and_transitions(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """unschedule_clip chama yt.unschedule() e transiciona para unscheduled_youtube."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="scheduled_youtube",
+        youtube_id="YT_002",
+        youtube_id_horizontal="YT_002H",
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.unschedule_clip("dQw4w9WgXcQ_10_40")
+
+    assert yt.unschedule.call_count == 2  # vertical + horizontal
+    clip = clip_repo.get("dQw4w9WgXcQ_10_40")
+    assert clip is not None
+    assert clip.status == "unscheduled_youtube"
+
+
+def test_discard_clip_deletes_and_transitions(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """discard_clip chama yt.delete() para cada formato e transiciona para deleted_youtube."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="scheduled_youtube",
+        youtube_id="YT_003",
+        youtube_id_horizontal="YT_003H",
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.discard_clip("dQw4w9WgXcQ_10_40")
+
+    assert yt.delete.call_count == 2
+    clip = clip_repo.get("dQw4w9WgXcQ_10_40")
+    assert clip is not None
+    assert clip.status == "deleted_youtube"
+    assert clip.youtube_id is None
+    assert clip.youtube_id_horizontal is None
+
+
+def test_format_unchecked_deletes_upload(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Desmarcar render_horizontal com ID existente → delete() + coluna limpa."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="scheduled_youtube",
+        youtube_id="YT_004",
+        youtube_id_horizontal="YT_004H",
+        render_vertical=True,
+        render_horizontal=True,
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.update_clip_text(
+        "dQw4w9WgXcQ_10_40",
+        hook=None, payoff=None, title=None,
+        youtube_publish_at=None,
+        render_vertical=True,
+        render_horizontal=False,  # desmarcado
+    )
+
+    yt.delete.assert_called_once_with("YT_004H")
+    clip = clip_repo.get("dQw4w9WgXcQ_10_40")
+    assert clip is not None
+    assert clip.youtube_id_horizontal is None
+    # status deve ser scheduled_youtube (vertical ainda existe)
+    assert clip.status == "scheduled_youtube"
+
+
+def test_format_checked_marks_pending_reupload(
+    db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Marcar render_horizontal=True sem ID existente → salva flag, sem chamada de plataforma."""
+    clip_repo = InMemoryClipRepository()
+    clip_repo.add(_make_clip(
+        clip_id="dQw4w9WgXcQ_10_40",
+        status="scheduled_youtube",
+        youtube_id="YT_005",
+        youtube_id_horizontal=None,
+        render_vertical=True,
+        render_horizontal=False,  # estava desmarcado
+    ))
+    svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
+
+    svc.update_clip_text(
+        "dQw4w9WgXcQ_10_40",
+        hook=None, payoff=None, title=None,
+        youtube_publish_at=None,
+        render_vertical=True,
+        render_horizontal=True,  # marcado novamente
+    )
+
+    yt.delete.assert_not_called()
+    clip = clip_repo.get("dQw4w9WgXcQ_10_40")
+    assert clip is not None
+    assert clip.render_horizontal is True  # flag salvo

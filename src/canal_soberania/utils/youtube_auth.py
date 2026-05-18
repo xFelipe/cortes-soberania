@@ -9,11 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 # Escopos necessários:
-#   youtube.upload  — permite fazer upload de vídeos
-#   youtube.readonly — permite listar e consultar status de vídeos próprios
+#   youtube.upload     — upload de vídeos
+#   youtube.readonly   — listar e consultar status de vídeos próprios
+#   youtube.force-ssl  — videos.update e videos.delete (editar/remover vídeos enviados)
 YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
 
 

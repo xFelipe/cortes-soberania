@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -187,6 +187,62 @@ class SqliteClipRepository:
         self._conn.execute(
             "UPDATE clips SET status = 'identified', error_message = NULL, "
             "updated_at = datetime('now') WHERE clip_id = ? AND status = 'processing_error'",
+            (clip_id,),
+        )
+        self._conn.commit()
+
+    def update_metadata_fields(
+        self,
+        clip_id: str,
+        *,
+        hook: str | None = None,
+        payoff: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        youtube_publish_at: str | None = None,
+        render_vertical: bool | None = None,
+        render_horizontal: bool | None = None,
+    ) -> None:
+        """UPDATE dinâmico — só altera os campos explicitamente passados (None = não mexer)."""
+        cols: dict[str, Any] = {}
+        if hook is not None:
+            cols["hook"] = hook
+        if payoff is not None:
+            cols["payoff"] = payoff
+        if title is not None:
+            cols["title"] = title
+        if description is not None:
+            cols["description"] = description
+        if tags is not None:
+            cols["tags"] = json.dumps(tags, ensure_ascii=False)
+        if youtube_publish_at is not None:
+            cols["youtube_publish_at"] = youtube_publish_at
+        if render_vertical is not None:
+            cols["render_vertical"] = 1 if render_vertical else 0
+        if render_horizontal is not None:
+            cols["render_horizontal"] = 1 if render_horizontal else 0
+        if not cols:
+            return
+        assignments = ", ".join(f"{k} = ?" for k in cols)
+        cur = self._conn.execute(
+            f"UPDATE clips SET {assignments}, updated_at = datetime('now') WHERE clip_id = ?",
+            (*cols.values(), clip_id),
+        )
+        if cur.rowcount == 0:
+            raise ValueError(f"Clip não encontrado: {clip_id}")
+        self._conn.commit()
+
+    def clear_platform_id(
+        self, clip_id: str, *, kind: Literal["vertical", "horizontal"]
+    ) -> None:
+        """Limpa youtube_id (vertical) ou youtube_id_horizontal após remoção remota."""
+        if kind == "vertical":
+            col = "youtube_id"
+        else:
+            col = "youtube_id_horizontal"
+        self._conn.execute(
+            f"UPDATE clips SET {col} = NULL, updated_at = datetime('now') WHERE clip_id = ?",
             (clip_id,),
         )
         self._conn.commit()

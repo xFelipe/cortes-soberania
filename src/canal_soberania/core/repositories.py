@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
@@ -16,7 +16,7 @@ class VideoRepository(Protocol):
     def monthly_cost(self) -> float: ...
     def update_status(self, video_id: str, new_status: str) -> None: ...
     def reject(self, video_id: str) -> None: ...
-    def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int: ...
+    def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int: ...
 
 
 @runtime_checkable
@@ -31,8 +31,27 @@ class ClipRepository(Protocol):
         payoff: str | None,
         title: str | None,
         youtube_publish_at: str | None,
+        render_vertical: bool = True,
+        render_horizontal: bool = True,
+    ) -> None: ...
+    def update_metadata_fields(
+        self,
+        clip_id: str,
+        *,
+        hook: str | None = None,
+        payoff: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        youtube_publish_at: str | None = None,
+        render_vertical: bool | None = None,
+        render_horizontal: bool | None = None,
+    ) -> None: ...
+    def clear_platform_id(
+        self, clip_id: str, *, kind: Literal["vertical", "horizontal"]
     ) -> None: ...
     def update_status(self, clip_id: str, new_status: str) -> None: ...
     def reject(self, clip_id: str, reason: str) -> None: ...
+    def restore(self, clip_id: str) -> None: ...
     def update_trim(self, clip_id: str, start_s: float, end_s: float) -> None: ...
-    def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int: ...
+    def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int: ...

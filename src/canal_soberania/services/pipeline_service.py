@@ -9,10 +9,20 @@ from typing import Any
 
 from canal_soberania.config import Settings
 from canal_soberania.core.events import EventBus, PipelineEvent
+from canal_soberania.core.platforms import PlatformClient, PlatformOperationNotSupported
 from canal_soberania.core.repositories import ClipRepository, VideoRepository
 from canal_soberania.core.stage import JobContext
 from canal_soberania.core.state import ClipStateMachine, VideoStateMachine
+from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
+
+# Status em que o clipe já foi enviado a pelo menos uma plataforma
+_PLATFORM_STATUSES: frozenset[ClipStatus] = frozenset({
+    "scheduled_youtube",
+    "uploading_youtube",
+    "uploaded_youtube",
+    "unscheduled_youtube",
+})
 
 
 class PipelineService:
@@ -31,11 +41,13 @@ class PipelineService:
         video_repo: VideoRepository | None = None,
         clip_repo: ClipRepository | None = None,
         event_bus: EventBus | None = None,
+        platforms: dict[str, PlatformClient] | None = None,
     ) -> None:
         self._conn = conn
         self._settings = settings
         self._paths = paths
         self._bus = event_bus or EventBus()
+        self._platforms: dict[str, PlatformClient] | None = platforms  # None = lazy init
 
         if video_repo is None:
             from canal_soberania.repositories.sqlite import SqliteVideoRepository
@@ -44,8 +56,8 @@ class PipelineService:
             from canal_soberania.repositories.sqlite import SqliteClipRepository
             clip_repo = SqliteClipRepository(conn)
 
-        self._video_repo = video_repo
-        self._clip_repo = clip_repo
+        self._video_repo: VideoRepository = video_repo
+        self._clip_repo: ClipRepository = clip_repo
         self._cancel_event = threading.Event()
 
     @property
@@ -270,6 +282,17 @@ class PipelineService:
         self._video_repo.reject(video_id)
         self._bus.publish(PipelineEvent("video_rejected", {"video_id": video_id}))
 
+    def _get_youtube(self) -> PlatformClient:
+        """Retorna o cliente YouTube (cria lazy se não injetado)."""
+        if self._platforms is not None and "youtube" in self._platforms:
+            return self._platforms["youtube"]
+        from canal_soberania.core.platforms import get_platform
+        yt = get_platform("youtube", self._settings)
+        if self._platforms is None:
+            self._platforms = {}
+        self._platforms["youtube"] = yt
+        return yt
+
     def update_clip_text(
         self,
         clip_id: str,
@@ -279,12 +302,177 @@ class PipelineService:
         youtube_publish_at: str | None,
         render_vertical: bool = True,
         render_horizontal: bool = True,
+        description: str | None = None,
+        tags: list[str] | None = None,
     ) -> None:
-        """Persiste edições manuais de hook, payoff, título, agendamento e formatos do clipe."""
-        self._clip_repo.update_text(
-            clip_id, hook, payoff, title, youtube_publish_at, render_vertical, render_horizontal
+        """Persiste edições manuais e propaga às plataformas se o clipe já foi enviado."""
+        old = self._clip_repo.get(clip_id)
+        if old is None:
+            raise ValueError(f"Clip não encontrado: {clip_id}")
+
+        # Persiste campos editáveis (description/tags via update_metadata_fields)
+        self._clip_repo.update_metadata_fields(
+            clip_id,
+            hook=hook,
+            payoff=payoff,
+            title=title,
+            description=description,
+            tags=tags,
+            youtube_publish_at=youtube_publish_at,
+            render_vertical=render_vertical,
+            render_horizontal=render_horizontal,
         )
+        # Propaga a plataformas se o clipe já está em alguma delas
+        if old.status in _PLATFORM_STATUSES:
+            self._propagate_metadata_changes(
+                old, title=title, description=description,
+                tags=tags, publish_at=youtube_publish_at,
+            )
+            self._propagate_format_changes(old, render_vertical, render_horizontal)
+
         self._bus.publish(PipelineEvent("clip_text_updated", {"clip_id": clip_id}))
+
+    def _propagate_metadata_changes(
+        self,
+        old: Clip,
+        *,
+        title: str | None,
+        description: str | None,
+        tags: list[str] | None,
+        publish_at: str | None,
+    ) -> None:
+        """Chama update_metadata no YouTube se algum campo de texto mudou."""
+        meta_changed = (
+            (title is not None and title != old.title)
+            or (description is not None and description != old.description)
+            or (tags is not None and tags != old.tags)
+        )
+        schedule_changed = publish_at is not None and publish_at != old.youtube_publish_at
+
+        if not meta_changed and not schedule_changed:
+            return
+
+        yt = self._get_youtube()
+        # Vertical (Short): título recebe prefixo #Shorts
+        if old.youtube_id:
+            short_title = f"#Shorts {title[:93]}" if title is not None else None
+            try:
+                yt.update_metadata(
+                    old.youtube_id,
+                    title=short_title,
+                    description=description,
+                    tags=tags,
+                    publish_at=publish_at if schedule_changed else None,
+                )
+            except Exception as exc:
+                logger.error(
+                    "propagate_metadata: falha ao atualizar vertical {}: {}", old.youtube_id, exc
+                )
+                raise
+
+        # Horizontal: título sem prefixo
+        if old.youtube_id_horizontal:
+            horiz_title = title[:100] if title is not None else None
+            try:
+                yt.update_metadata(
+                    old.youtube_id_horizontal,
+                    title=horiz_title,
+                    description=description,
+                    tags=tags,
+                    publish_at=publish_at if schedule_changed else None,
+                )
+            except Exception as exc:
+                logger.error(
+                    "propagate_metadata: falha ao atualizar horizontal {}: {}",
+                    old.youtube_id_horizontal, exc,
+                )
+                raise
+
+    def _propagate_format_changes(
+        self, old: Clip, new_render_v: bool, new_render_h: bool
+    ) -> None:
+        """Deleta ou marca para re-upload quando os formatos de saída mudam."""
+        yt = self._get_youtube()
+        v_deleted = h_deleted = False
+
+        # Vertical removido
+        if old.render_vertical and not new_render_v and old.youtube_id:
+            try:
+                yt.delete(old.youtube_id)
+                self._clip_repo.clear_platform_id(old.clip_id, kind="vertical")
+                logger.info("propagate_formats: deletado vertical {}", old.youtube_id)
+                v_deleted = True
+            except Exception as exc:
+                logger.error(
+                    "propagate_formats: falha ao deletar vertical {}: {}", old.youtube_id, exc
+                )
+                raise
+
+        # Horizontal removido
+        if old.render_horizontal and not new_render_h and old.youtube_id_horizontal:
+            try:
+                yt.delete(old.youtube_id_horizontal)
+                self._clip_repo.clear_platform_id(old.clip_id, kind="horizontal")
+                logger.info("propagate_formats: deletado horizontal {}", old.youtube_id_horizontal)
+                h_deleted = True
+            except Exception as exc:
+                logger.error(
+                    "propagate_formats: falha ao deletar horizontal {}: {}",
+                    old.youtube_id_horizontal, exc,
+                )
+                raise
+
+        # Se ambos foram deletados → transiciona para deleted_youtube
+        both_gone = (
+            (v_deleted or not old.youtube_id)
+            and (h_deleted or not old.youtube_id_horizontal)
+        )
+        if both_gone and old.status in _PLATFORM_STATUSES:
+            try:
+                ClipStateMachine.transition(old.clip_id, old.status, "deleted_youtube")
+                self._clip_repo.update_status(old.clip_id, "deleted_youtube")
+            except Exception as exc:
+                logger.error(
+                    "propagate_formats: falha ao transicionar {}: {}", old.clip_id, exc
+                )
+                raise
+        # Novos formatos marcados (sem ID existente) → upload ocorre na próxima execução
+        # do stage upload_youtube; apenas salvar o flag (já feito em update_metadata_fields)
+
+    def unschedule_clip(self, clip_id: str) -> None:
+        """Cancela agendamento no YouTube; status → unscheduled_youtube."""
+        clip = self._clip_repo.get(clip_id)
+        if clip is None:
+            raise ValueError(f"Clip não encontrado: {clip_id}")
+
+        yt = self._get_youtube()
+        if clip.youtube_id:
+            yt.unschedule(clip.youtube_id)
+        if clip.youtube_id_horizontal:
+            yt.unschedule(clip.youtube_id_horizontal)
+
+        ClipStateMachine.transition(clip_id, clip.status, "unscheduled_youtube")
+        self._clip_repo.update_status(clip_id, "unscheduled_youtube")
+        self._clip_repo.update_metadata_fields(clip_id, youtube_publish_at="")
+        self._bus.publish(PipelineEvent("clip_unscheduled", {"clip_id": clip_id}))
+
+    def discard_clip(self, clip_id: str) -> None:
+        """Deleta vídeo(s) do YouTube e marca o clipe como deleted_youtube."""
+        clip = self._clip_repo.get(clip_id)
+        if clip is None:
+            raise ValueError(f"Clip não encontrado: {clip_id}")
+
+        yt = self._get_youtube()
+        if clip.youtube_id:
+            yt.delete(clip.youtube_id)
+            self._clip_repo.clear_platform_id(clip_id, kind="vertical")
+        if clip.youtube_id_horizontal:
+            yt.delete(clip.youtube_id_horizontal)
+            self._clip_repo.clear_platform_id(clip_id, kind="horizontal")
+
+        ClipStateMachine.transition(clip_id, clip.status, "deleted_youtube")
+        self._clip_repo.update_status(clip_id, "deleted_youtube")
+        self._bus.publish(PipelineEvent("clip_discarded", {"clip_id": clip_id}))
 
     def approve_clip(self, clip_id: str) -> None:
         """Avança clip para o próximo status."""
@@ -355,7 +543,7 @@ class PipelineService:
         """
         from canal_soberania.db import insert_video
         from canal_soberania.stages.discover import _parse_duration, fetch_video_details
-        from googleapiclient.discovery import build  # type: ignore[import-untyped]
+        from googleapiclient.discovery import build
 
         if not self._settings.youtube_api_key:
             raise ValueError("youtube_api_key não está configurada em .env")
