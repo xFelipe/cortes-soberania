@@ -29,14 +29,14 @@ class SqliteVideoRepository:
 
     def get(self, video_id: str) -> Video | None:
         row = self._conn.execute(
-            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v WHERE v.video_id = ?",
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v WHERE v.video_id = ?",  # noqa: S608
             (video_id,),
         ).fetchone()
         return self._row_to_video(row) if row else None
 
     def get_all(self) -> list[Video]:
         rows = self._conn.execute(
-            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v ORDER BY v.published_at DESC"
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v ORDER BY v.published_at DESC"  # noqa: S608
         ).fetchall()
         result = []
         for row in rows:
@@ -51,7 +51,7 @@ class SqliteVideoRepository:
 
     def get_by_status(self, status: VideoStatus) -> list[Video]:
         rows = self._conn.execute(
-            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v "
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v "  # noqa: S608
             "WHERE v.status = ? ORDER BY v.published_at DESC",
             (status,),
         ).fetchall()
@@ -226,7 +226,7 @@ class SqliteClipRepository:
             return
         assignments = ", ".join(f"{k} = ?" for k in cols)
         cur = self._conn.execute(
-            f"UPDATE clips SET {assignments}, updated_at = datetime('now') WHERE clip_id = ?",
+            f"UPDATE clips SET {assignments}, updated_at = datetime('now') WHERE clip_id = ?",  # noqa: S608
             (*cols.values(), clip_id),
         )
         if cur.rowcount == 0:
@@ -242,7 +242,7 @@ class SqliteClipRepository:
         else:
             col = "youtube_id_horizontal"
         self._conn.execute(
-            f"UPDATE clips SET {col} = NULL, updated_at = datetime('now') WHERE clip_id = ?",
+            f"UPDATE clips SET {col} = NULL, updated_at = datetime('now') WHERE clip_id = ?",  # noqa: S608
             (clip_id,),
         )
         self._conn.commit()

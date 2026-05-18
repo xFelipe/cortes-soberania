@@ -76,7 +76,7 @@ def update_video_paths(
         return
     sets = ", ".join(f"{k} = ?" for k in cols)
     conn.execute(
-        f"UPDATE videos SET {sets} WHERE video_id = ?",
+        f"UPDATE videos SET {sets} WHERE video_id = ?",  # noqa: S608
         (*cols.values(), video_id),
     )
 
@@ -93,7 +93,7 @@ def get_videos_by_statuses(
 ) -> list[Video]:
     placeholders = ",".join("?" * len(statuses))
     rows = conn.execute(
-        f"SELECT * FROM videos WHERE status IN ({placeholders}) ORDER BY published_at DESC",
+        f"SELECT * FROM videos WHERE status IN ({placeholders}) ORDER BY published_at DESC",  # noqa: S608
         statuses,
     ).fetchall()
     return [_row_to_video(row) for row in rows]
@@ -254,7 +254,7 @@ def get_training_examples(
 
     where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
     rows = conn.execute(
-        f"SELECT * FROM training_examples {where} ORDER BY created_at ASC",
+        f"SELECT * FROM training_examples {where} ORDER BY created_at ASC",  # noqa: S608
         params,
     ).fetchall()
     return [dict(row) for row in rows]

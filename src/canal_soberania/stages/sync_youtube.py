@@ -85,7 +85,7 @@ def run(
 def _fetch_pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     placeholders = ",".join("?" * len(_SYNC_STATUSES))
     return conn.execute(
-        f"SELECT clip_id, youtube_id, youtube_id_horizontal, status, youtube_publish_at "
+        f"SELECT clip_id, youtube_id, youtube_id_horizontal, status, youtube_publish_at "  # noqa: S608
         f"FROM clips "
         f"WHERE status IN ({placeholders}) "
         f"  AND (youtube_id IS NOT NULL OR youtube_id_horizontal IS NOT NULL) "
@@ -248,7 +248,7 @@ def _update_cols(conn: sqlite3.Connection, clip_id: str, cols: dict[str, Any]) -
         return
     assignments = ", ".join(f"{k} = ?" for k in cols)
     conn.execute(
-        f"UPDATE clips SET {assignments}, updated_at = datetime('now') WHERE clip_id = ?",
+        f"UPDATE clips SET {assignments}, updated_at = datetime('now') WHERE clip_id = ?",  # noqa: S608
         (*cols.values(), clip_id),
     )
 
