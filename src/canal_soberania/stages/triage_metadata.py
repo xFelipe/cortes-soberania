@@ -188,7 +188,7 @@ def triage_video_metadata(
     return result
 
 
-def run(
+def run(  # noqa: C901
     llm: LLMClient | OpenRouterClient | None = None,
     conn: sqlite3.Connection | None = None,
     youtube: Any | None = None,

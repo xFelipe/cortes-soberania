@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import ValidationError
 
+from canal_soberania.config import Canal
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 
@@ -205,23 +206,17 @@ class SqliteClipRepository:
         render_horizontal: bool | None = None,
     ) -> None:
         """UPDATE dinâmico — só altera os campos explicitamente passados (None = não mexer)."""
-        cols: dict[str, Any] = {}
-        if hook is not None:
-            cols["hook"] = hook
-        if payoff is not None:
-            cols["payoff"] = payoff
-        if title is not None:
-            cols["title"] = title
-        if description is not None:
-            cols["description"] = description
+        scalar: dict[str, Any] = {
+            "hook": hook, "payoff": payoff, "title": title,
+            "description": description, "youtube_publish_at": youtube_publish_at,
+        }
+        cols: dict[str, Any] = {k: v for k, v in scalar.items() if v is not None}
         if tags is not None:
             cols["tags"] = json.dumps(tags, ensure_ascii=False)
-        if youtube_publish_at is not None:
-            cols["youtube_publish_at"] = youtube_publish_at
         if render_vertical is not None:
-            cols["render_vertical"] = 1 if render_vertical else 0
+            cols["render_vertical"] = int(render_vertical)
         if render_horizontal is not None:
-            cols["render_horizontal"] = 1 if render_horizontal else 0
+            cols["render_horizontal"] = int(render_horizontal)
         if not cols:
             return
         assignments = ", ".join(f"{k} = ?" for k in cols)
@@ -285,3 +280,76 @@ class SqliteClipRepository:
         d["tags"] = json.loads(d["tags"] or "[]")
         d.pop("duracao_s", None)
         return Clip.model_validate(d)
+
+
+class SqliteCanaisRepository:
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    # ── leitura ───────────────────────────────────────────────────────────
+
+    def get_all(self) -> list[Canal]:
+        rows = self._conn.execute(
+            "SELECT * FROM canais ORDER BY nome ASC"
+        ).fetchall()
+        return [self._row_to_canal(row) for row in rows]
+
+    def get_active(self) -> list[Canal]:
+        rows = self._conn.execute(
+            "SELECT * FROM canais WHERE ativo = 1 ORDER BY nome ASC"
+        ).fetchall()
+        return [self._row_to_canal(row) for row in rows]
+
+    def get(self, canal_id: str) -> Canal | None:
+        row = self._conn.execute(
+            "SELECT * FROM canais WHERE id = ?", (canal_id,)
+        ).fetchone()
+        return self._row_to_canal(row) if row else None
+
+    # ── escrita ───────────────────────────────────────────────────────────
+
+    def upsert(self, canal: Canal) -> None:
+        with self._conn:
+            self._conn.execute(
+                """INSERT INTO canais
+                       (id, nome, handle, channel_url, tema_primario,
+                        peso, auto_publish, tolerancia_cortes, nota, ativo)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       nome=excluded.nome,
+                       handle=excluded.handle,
+                       channel_url=excluded.channel_url,
+                       tema_primario=excluded.tema_primario,
+                       peso=excluded.peso,
+                       auto_publish=excluded.auto_publish,
+                       tolerancia_cortes=excluded.tolerancia_cortes,
+                       nota=excluded.nota,
+                       ativo=excluded.ativo""",
+                (
+                    canal.id, canal.nome, canal.handle, canal.channel_url,
+                    canal.tema_primario, canal.peso,
+                    1 if canal.auto_publish else 0,
+                    canal.tolerancia_cortes, canal.nota,
+                    1 if canal.ativo else 0,
+                ),
+            )
+
+    def set_active(self, canal_id: str, ativo: bool) -> None:
+        with self._conn:
+            self._conn.execute(
+                "UPDATE canais SET ativo = ? WHERE id = ?",
+                (1 if ativo else 0, canal_id),
+            )
+
+    def delete(self, canal_id: str) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM canais WHERE id = ?", (canal_id,))
+
+    # ── helpers ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _row_to_canal(row: sqlite3.Row) -> Canal:
+        d: dict[str, Any] = dict(row)
+        d["auto_publish"] = bool(d["auto_publish"])
+        d["ativo"] = bool(d["ativo"])
+        return Canal.model_validate(d)

@@ -94,7 +94,7 @@ def _fetch_pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def _process_batch(
+def _process_batch(  # noqa: C901
     conn: sqlite3.Connection,
     youtube: Any,
     batch: list[tuple[str, str, str, str, str | None]],

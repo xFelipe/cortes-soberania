@@ -99,7 +99,7 @@ def _parse_clips_response(
     return candidates[: params.max_clipes_por_video]
 
 
-def find_clips_for_video(
+def find_clips_for_video(  # noqa: C901
     video: Video,
     conn: sqlite3.Connection,
     llm: LLMClient | OpenRouterClient,

@@ -294,7 +294,7 @@ def triage_video_caption(
     return result
 
 
-def run(
+def run(  # noqa: C901
     llm: LLMClient | OpenRouterClient | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,

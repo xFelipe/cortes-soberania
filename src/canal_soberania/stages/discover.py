@@ -16,6 +16,17 @@ from canal_soberania.logger import logger
 from canal_soberania.models import Video
 
 
+def _extract_handle(text: str) -> str | None:
+    """Extrai @handle de URL do YouTube ou texto direto."""
+    text = text.strip()
+    m = re.search(r"youtube\.com/@([A-Za-z0-9_.-]+)", text)
+    if m:
+        return f"@{m.group(1)}"
+    if re.match(r"^@?[A-Za-z0-9_.-]+$", text):
+        return text if text.startswith("@") else f"@{text}"
+    return None
+
+
 def _iso_cutoff(days_back: int) -> str:
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days_back)
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -187,12 +198,20 @@ def discover_canal(
     return inserted, skipped
 
 
-def run(
+def run(  # noqa: C901
     youtube: Any | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
+    canal_ids: list[str] | None = None,
+    janela_dias: int | None = None,
+    max_videos: int | None = None,
 ) -> None:
-    """Entry point chamado pelo CLI e pelos scripts de cron."""
+    """Entry point chamado pelo CLI, scripts de cron e GUI.
+
+    canal_ids: subset de canais a processar (None = todos ativos do banco).
+    janela_dias: override de janela_dias_discover do YAML.
+    max_videos: override de max_videos_por_canal_por_run do YAML.
+    """
     settings = load_settings()
     paths = get_paths(settings)
 
@@ -210,16 +229,35 @@ def run(
     if youtube is None:
         youtube = build("youtube", "v3", developerKey=settings.youtube_api_key)
 
+    # Parâmetros globais vêm do YAML; canal_ids e janela/max podem ser overridados
     canais_cfg = load_canais(paths["canais_path"])
+    parametros = canais_cfg.parametros
+    if janela_dias is not None:
+        parametros = parametros.model_copy(update={"janela_dias_discover": janela_dias})
+    if max_videos is not None:
+        parametros = parametros.model_copy(update={"max_videos_por_canal_por_run": max_videos})
+
+    # Canais vêm do banco de dados (não do YAML)
+    from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+    canal_repo = SqliteCanaisRepository(conn)
+    if canal_ids is not None:
+        canais = [c for cid in canal_ids for c in [canal_repo.get(cid)] if c is not None]
+    else:
+        canais = canal_repo.get_active()
+
+    if not canais:
+        logger.warning("Nenhum canal ativo encontrado — abortando discover")
+        return
+
     total_inserted = 0
     total_skipped = 0
 
-    for canal in canais_cfg.canais:
+    for canal in canais:
         try:
             ins, skip = discover_canal(
                 youtube,
                 canal,
-                canais_cfg.parametros,
+                parametros,
                 conn,
                 dry_run=effective_dry_run,
             )
@@ -233,3 +271,55 @@ def run(
         total_inserted,
         total_skipped,
     )
+
+
+def discover_canal_adhoc(
+    youtube: Any,
+    channel_url_or_handle: str,
+    parametros: Parametros,
+    conn: sqlite3.Connection,
+    dry_run: bool = False,
+    persist: bool = False,
+) -> tuple[int, Canal | None]:
+    """Descobre vídeos de um canal não necessariamente cadastrado.
+
+    Retorna (nº_inseridos, Canal cadastrado ou None se não persistiu).
+    """
+    handle = _extract_handle(channel_url_or_handle)
+    if not handle:
+        logger.error("Não foi possível extrair handle de: {}", channel_url_or_handle)
+        return 0, None
+
+    handle_clean = handle.lstrip("@")
+    try:
+        resp = (
+            youtube.channels()
+            .list(part="contentDetails,snippet", forHandle=handle_clean)
+            .execute(num_retries=3)
+        )
+    except HttpError as exc:
+        logger.error("YouTube API error buscando canal {}: {}", handle, exc)
+        return 0, None
+
+    items = resp.get("items", [])
+    if not items:
+        logger.warning("Canal não encontrado para handle={}", handle)
+        return 0, None
+
+    snippet = items[0].get("snippet", {})
+    canal_id_slug = re.sub(r"[^a-z0-9_]", "_", handle_clean.lower())
+    canal = Canal(
+        id=canal_id_slug,
+        nome=snippet.get("title", handle_clean),
+        handle=handle,
+        channel_url=f"https://www.youtube.com/@{handle_clean}",
+        tema_primario="",
+        ativo=True,
+    )
+
+    if persist:
+        from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+        SqliteCanaisRepository(conn).upsert(canal)
+
+    ins, _ = discover_canal(youtube, canal, parametros, conn, dry_run=dry_run)
+    return ins, canal if persist else None

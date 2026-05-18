@@ -180,7 +180,7 @@ def _do_upload(
     return str(response["id"])
 
 
-def upload_clip(
+def upload_clip(  # noqa: C901
     clip: Clip,
     conn: sqlite3.Connection,
     client_secrets_path: Path,

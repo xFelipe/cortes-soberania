@@ -201,7 +201,7 @@ def detect_face_crop_x(video_path: Path, sample_time: float = 2.0) -> int | None
     return crop_x
 
 
-def edit_clip(
+def edit_clip(  # noqa: C901
     clip: Clip,
     source_video_path: Path,
     transcript_path: Path | None,
