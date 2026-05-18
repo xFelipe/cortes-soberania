@@ -74,21 +74,25 @@ class SqliteVideoRepository:
         )
         self._conn.commit()
 
-    def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int:
+    def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int:
+        """Reseta vídeos cujo heartbeat está atrasado ≥ 3 min (processo morreu mid-execução)."""
         from canal_soberania.logger import logger
 
         total = 0
-        for stuck_status, timeout_min, reset_to in stuck_configs:
+        for stuck_status, reset_to in stuck_configs:
             cur = self._conn.execute(
-                "UPDATE videos SET status = ?, updated_at = datetime('now') "
-                "WHERE status = ? AND updated_at < datetime('now', ? || ' minutes')",
-                (reset_to, stuck_status, f"-{timeout_min}"),
+                "UPDATE videos "
+                "SET status = ?, processing_since = NULL, updated_at = datetime('now') "
+                "WHERE status = ? "
+                "  AND processing_since IS NOT NULL "
+                "  AND processing_since < datetime('now', '-3 minutes')",
+                (reset_to, stuck_status),
             )
             if cur.rowcount > 0:
                 self._conn.commit()
                 logger.info(
-                    "reset_stuck: {} vídeo(s) '{}' → '{}' (timeout {}min)",
-                    cur.rowcount, stuck_status, reset_to, timeout_min,
+                    "reset_stuck: {} vídeo(s) '{}' → '{}' (heartbeat expirado)",
+                    cur.rowcount, stuck_status, reset_to,
                 )
                 total += cur.rowcount
         return total
@@ -167,21 +171,25 @@ class SqliteClipRepository:
         )
         self._conn.commit()
 
-    def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int:
+    def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int:
+        """Reseta clipes cujo heartbeat está atrasado ≥ 3 min (processo morreu mid-execução)."""
         from canal_soberania.logger import logger
 
         total = 0
-        for stuck_status, timeout_min, reset_to in stuck_configs:
+        for stuck_status, reset_to in stuck_configs:
             cur = self._conn.execute(
-                "UPDATE clips SET status = ?, updated_at = datetime('now') "
-                "WHERE status = ? AND updated_at < datetime('now', ? || ' minutes')",
-                (reset_to, stuck_status, f"-{timeout_min}"),
+                "UPDATE clips "
+                "SET status = ?, processing_since = NULL, updated_at = datetime('now') "
+                "WHERE status = ? "
+                "  AND processing_since IS NOT NULL "
+                "  AND processing_since < datetime('now', '-3 minutes')",
+                (reset_to, stuck_status),
             )
             if cur.rowcount > 0:
                 self._conn.commit()
                 logger.info(
-                    "reset_stuck: {} clipe(s) '{}' → '{}' (timeout {}min)",
-                    cur.rowcount, stuck_status, reset_to, timeout_min,
+                    "reset_stuck: {} clipe(s) '{}' → '{}' (heartbeat expirado)",
+                    cur.rowcount, stuck_status, reset_to,
                 )
                 total += cur.rowcount
         return total

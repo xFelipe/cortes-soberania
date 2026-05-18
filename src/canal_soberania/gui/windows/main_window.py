@@ -32,7 +32,7 @@ _CLIP_STATUS_COLOR: dict[str, str] = {
     "editing": "#f57f17",
     "edited": "#33691e",
     "thumbnail_ready": "#1565c0",
-    "metadata_ready": "#6a1e8a",
+    "metadata_ready": "#e65100",   # âmbar — aguarda aprovação manual
     "scheduled_youtube": "#004d40",
     "uploaded_youtube": "#1b5e20",
     "pending_tiktok_manual": "#e65100",

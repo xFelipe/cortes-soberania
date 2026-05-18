@@ -254,7 +254,7 @@ def run(
     criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
 
     # Inclui "finding_clips" para recuperar orphans de crash mid-LLM
-    videos = get_videos_by_status(conn, "triage_transcript_passed") + get_videos_by_status(conn, "finding_clips")
+    videos = get_videos_by_status(conn, "approved_for_clips") + get_videos_by_status(conn, "finding_clips")
     logger.info("find_clips: {} vídeos para processar", len(videos))
 
     total_clips = 0

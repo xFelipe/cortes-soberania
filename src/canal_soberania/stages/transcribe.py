@@ -6,10 +6,13 @@ import ctypes
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 
 def _preload_cuda_from_venv() -> None:
@@ -59,6 +62,25 @@ def _format_ts(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:05.2f}"
 
 
+_WHISPER_SAMPLE_RATE = 16_000
+
+
+def _decode_audio(audio_path: Path) -> np.ndarray:
+    """Decodifica áudio para float32 via ffmpeg.
+
+    Bypassa o decoder interno do faster-whisper (PyAV), que falha quando o
+    arquivo tem metadados ID3 com caracteres não-ASCII (ã, é, etc.).
+    """
+    cmd = [
+        "ffmpeg", "-nostdin", "-threads", "0",
+        "-i", str(audio_path),
+        "-f", "s16le", "-ac", "1", "-acodec", "pcm_s16le",
+        "-ar", str(_WHISPER_SAMPLE_RATE), "-",
+    ]
+    result = subprocess.run(cmd, capture_output=True, check=True)
+    return np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def transcribe_audio(
     audio_path: Path,
     model_size: str = "large-v3",
@@ -78,8 +100,9 @@ def transcribe_audio(
     model = WhisperModel(model_size, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
 
     logger.info("Transcrevendo {}...", audio_path.name)
+    audio_array = _decode_audio(audio_path)
     segments_iter, info = model.transcribe(
-        str(audio_path),
+        audio_array,
         language="pt",
         beam_size=5,
         vad_filter=True,
@@ -184,8 +207,11 @@ def transcribe_video(
     with conn:
         update_video_status(conn, video.video_id, "transcribing")
 
+    from canal_soberania.utils.heartbeat import HeartbeatKeeper
+
     try:
-        segments = transcribe_audio(audio_path, model_size, device, compute_type)
+        with HeartbeatKeeper(conn, "videos", "video_id", video.video_id):
+            segments = transcribe_audio(audio_path, model_size, device, compute_type)
     except Exception as exc:
         logger.error("Whisper error para {}: {}", video.video_id, exc)
         with conn:

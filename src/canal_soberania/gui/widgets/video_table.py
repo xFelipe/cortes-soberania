@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, QUrl, Signal
+from PySide6.QtCore import QPoint, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QCursor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -32,8 +32,9 @@ _STATUS_COLOR: dict[str, str] = {
     "transcribing": "#e65100",
     "transcribed": "#1a237e",
     "transcribe_error": "#b71c1c",
-    "triage_transcript_passed": "#004d40",
+    "triage_transcript_passed": "#e65100",   # âmbar — aguarda aprovação manual
     "triage_transcript_rejected": "#880e4f",
+    "approved_for_clips": "#004d40",          # verde escuro — aprovado, pipeline vai rodar
     "finding_clips": "#4a148c",
     "clips_found": "#1565c0",
     "processing_error": "#d50000",
@@ -69,7 +70,11 @@ def _fmt_date(iso: str | None) -> str:
 _COLUMNS = ["Título", "Canal", "Status", "Duração", "Publicado"]
 
 _LINK_COLOR = "#1565c0"
-_URL_ROLE = Qt.ItemDataRole.UserRole + 1  # armazena URL clicável
+_URL_ROLE = Qt.ItemDataRole.UserRole + 1   # armazena URL clicável
+_STATUS_ROLE = Qt.ItemDataRole.UserRole + 2  # armazena status bruto (sem spinner)
+
+_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_ACTIVE_STATUSES: frozenset[str] = frozenset({"downloading", "transcribing", "finding_clips"})
 
 
 class VideoTable(QWidget):
@@ -87,7 +92,13 @@ class VideoTable(QWidget):
         super().__init__(parent)
         self._videos: list[Video] = []
         self._canal_urls: dict[str, str] = canal_urls or {}
+        self._spinner_frame: int = 0
         self._setup_ui()
+
+        self._spinner_timer = QTimer(self)
+        self._spinner_timer.setInterval(120)
+        self._spinner_timer.timeout.connect(self._tick_spinner)
+        self._spinner_timer.start()
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -156,17 +167,17 @@ class VideoTable(QWidget):
                 item_canal.setToolTip(channel_url)
             self._table.setItem(row, 1, item_canal)
 
-            # cols 2-4: status, duração, publicado
-            remaining: list[tuple[int, str]] = [
-                (2, video.status),
-                (3, _fmt_duration(video.duration_s)),
-                (4, _fmt_date(video.published_at)),
-            ]
-            for col, val in remaining:
+            # col 2: status (com suporte a spinner animado)
+            item_status = QTableWidgetItem(self._fmt_status(video.status))
+            item_status.setData(Qt.ItemDataRole.UserRole, video.video_id)
+            item_status.setData(_STATUS_ROLE, video.status)
+            item_status.setForeground(QColor(_STATUS_COLOR.get(video.status, "#555555")))
+            self._table.setItem(row, 2, item_status)
+
+            # cols 3-4: duração, publicado
+            for col, val in [(3, _fmt_duration(video.duration_s)), (4, _fmt_date(video.published_at))]:
                 item = QTableWidgetItem(val)
                 item.setData(Qt.ItemDataRole.UserRole, video.video_id)
-                if col == 2:
-                    item.setForeground(QColor(_STATUS_COLOR.get(video.status, "#555555")))
                 self._table.setItem(row, col, item)
 
     def _on_cell_clicked(self, row: int, col: int) -> None:
@@ -189,6 +200,21 @@ class VideoTable(QWidget):
         item = self._table.item(row, 0)
         if item:
             self.video_selected.emit(item.data(Qt.ItemDataRole.UserRole))
+
+    def _fmt_status(self, status: str) -> str:
+        if status in _ACTIVE_STATUSES:
+            return f"{_SPINNER_FRAMES[self._spinner_frame]}  {status}"
+        return status
+
+    def _tick_spinner(self) -> None:
+        self._spinner_frame = (self._spinner_frame + 1) % len(_SPINNER_FRAMES)
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 2)
+            if item is None:
+                continue
+            status: str = item.data(_STATUS_ROLE) or ""
+            if status in _ACTIVE_STATUSES:
+                item.setText(self._fmt_status(status))
 
     def _on_context_menu(self, pos: QPoint) -> None:
         item = self._table.itemAt(pos)

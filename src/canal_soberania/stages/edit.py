@@ -387,15 +387,18 @@ def run(
         with conn:
             update_clip_status(conn, clip.clip_id, "editing")
 
-        vertical, horizontal = edit_clip(
-            clip=clip,
-            source_video_path=source_video,
-            transcript_path=transcript,
-            clips_dir=paths["clips_dir"],
-            intro_path=intro_path if intro_path.exists() else None,
-            outro_path=outro_path if outro_path.exists() else None,
-            dry_run=dry_run or settings.dry_run,
-        )
+        from canal_soberania.utils.heartbeat import HeartbeatKeeper
+
+        with HeartbeatKeeper(conn, "clips", "clip_id", clip.clip_id):
+            vertical, horizontal = edit_clip(
+                clip=clip,
+                source_video_path=source_video,
+                transcript_path=transcript,
+                clips_dir=paths["clips_dir"],
+                intro_path=intro_path if intro_path.exists() else None,
+                outro_path=outro_path if outro_path.exists() else None,
+                dry_run=dry_run or settings.dry_run,
+            )
 
         if vertical is None and not (dry_run or settings.dry_run):
             with conn:

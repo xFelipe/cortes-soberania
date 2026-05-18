@@ -183,21 +183,18 @@ class PipelineService:
         self._run_stage("upload_tiktok", run, dry_run)
 
     def reset_stuck_videos(self) -> int:
-        """Reseta vídeos presos em estados transitórios para o estado processável anterior.
-
-        Retorna o número de vídeos resetados.
-        """
-        _STUCK: list[tuple[str, int, str]] = [
-            ("downloading",   90,  "triage_caption_passed"),
-            ("transcribing",  180, "downloaded"),
-            ("finding_clips", 45,  "triage_transcript_passed"),
+        """Reseta vídeos cujo heartbeat está ≥ 3 min atrasado (processo morreu mid-execução)."""
+        _STUCK: list[tuple[str, str]] = [
+            ("downloading",   "triage_caption_passed"),
+            ("transcribing",  "downloaded"),
+            ("finding_clips", "triage_transcript_passed"),
         ]
         return self._video_repo.reset_stuck(_STUCK)
 
     def reset_stuck_clips(self) -> int:
-        """Reseta clipes presos em estados transitórios para o estado processável anterior."""
-        _STUCK_CLIPS: list[tuple[str, int, str]] = [
-            ("editing", 60, "identified"),
+        """Reseta clipes cujo heartbeat está ≥ 3 min atrasado (processo morreu mid-execução)."""
+        _STUCK_CLIPS: list[tuple[str, str]] = [
+            ("editing", "identified"),
         ]
         return self._clip_repo.reset_stuck(_STUCK_CLIPS)
 
@@ -255,7 +252,7 @@ class PipelineService:
             "transcribe_error": "transcribed",
             "triage_transcript_rejected": "triage_transcript_passed",
             "transcribed": "triage_transcript_passed",
-            "triage_transcript_passed": "finding_clips",
+            "triage_transcript_passed": "approved_for_clips",
         }
         new_status = _APPROVE_MAP.get(video.status)
         if new_status is None:

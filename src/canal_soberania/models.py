@@ -21,6 +21,7 @@ VideoStatus = Literal[
     "transcribe_error",
     "triage_transcript_passed",
     "triage_transcript_rejected",
+    "approved_for_clips",
     "finding_clips",
     "clips_found",
     "processing_error",

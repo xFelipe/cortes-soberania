@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from canal_soberania.db import connect, get_videos_by_status, init_db, insert_video, update_video_paths
@@ -142,7 +143,11 @@ def test_transcribe_video_success(
 
     transcripts_dir = tmp_path / "transcripts"
 
-    with patch("faster_whisper.WhisperModel", return_value=_mock_whisper()):
+    fake_audio = np.zeros(16000, dtype=np.float32)
+    with (
+        patch("canal_soberania.stages.transcribe._decode_audio", return_value=fake_audio),
+        patch("faster_whisper.WhisperModel", return_value=_mock_whisper()),
+    ):
         result = transcribe_video(video, db, transcripts_dir)
 
     assert result is not None

@@ -149,12 +149,15 @@ def download_video_assets(
     Baixa áudio + vídeo para um vídeo. Atualiza paths e status no banco.
     Retorna True se ao menos o áudio foi baixado com sucesso.
     """
+    from canal_soberania.utils.heartbeat import HeartbeatKeeper
+
     if not dry_run:
         with conn:
             update_video_status(conn, video.video_id, "downloading")
 
-    audio_path = download_audio(video.video_id, audio_dir, dry_run=dry_run)
-    video_path = download_video(video.video_id, video_dir, dry_run=dry_run)
+    with HeartbeatKeeper(conn, "videos", "video_id", video.video_id):
+        audio_path = download_audio(video.video_id, audio_dir, dry_run=dry_run)
+        video_path = download_video(video.video_id, video_dir, dry_run=dry_run)
 
     if dry_run:
         return True
