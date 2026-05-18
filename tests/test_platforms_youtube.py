@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from canal_soberania.platforms.youtube import YouTubePlatformClient, _parse_platform_status
-from canal_soberania.core.platforms import PlatformStatus
+from canal_soberania.core.platforms import PlatformClient, PlatformOperationNotSupported, PlatformStatus, get_platform
 
 
 def _make_client() -> tuple[YouTubePlatformClient, MagicMock]:
@@ -210,3 +210,38 @@ def test_parse_platform_status_full() -> None:
     assert ps.view_count == 10
     assert ps.like_count == 2
     assert ps.comment_count == 1
+
+
+# ---------------------------------------------------------------------------
+# get_platform factory
+# ---------------------------------------------------------------------------
+
+
+def test_get_platform_youtube_returns_client() -> None:
+    settings = MagicMock()
+    settings.youtube_oauth_client_secrets_path = "config/client_secrets.json"
+    settings.youtube_oauth_token_path = "config/youtube_token.json"
+    client = get_platform("youtube", settings)
+    assert isinstance(client, YouTubePlatformClient)
+    assert isinstance(client, PlatformClient)
+
+
+def test_get_platform_tiktok_returns_client() -> None:
+    from canal_soberania.platforms.tiktok import TikTokPlatformClient
+    settings = MagicMock()
+    client = get_platform("tiktok", settings)
+    assert isinstance(client, TikTokPlatformClient)
+    assert isinstance(client, PlatformClient)
+
+
+def test_get_platform_unknown_raises() -> None:
+    import pytest
+    settings = MagicMock()
+    with pytest.raises(ValueError, match="desconhecida"):
+        get_platform("unknown", settings)  # type: ignore[arg-type]
+
+
+def test_platform_operation_not_supported_is_exception() -> None:
+    exc = PlatformOperationNotSupported("op não suportada")
+    assert str(exc) == "op não suportada"
+    assert isinstance(exc, Exception)

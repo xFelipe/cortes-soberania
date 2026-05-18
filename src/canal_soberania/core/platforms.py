@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from canal_soberania.config import Settings
     from canal_soberania.models import Clip
 

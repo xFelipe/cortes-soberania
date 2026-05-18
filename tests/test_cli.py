@@ -238,3 +238,25 @@ def test_sync_youtube_delegates(svc: MagicMock) -> None:
     result = _invoke(["sync-youtube"], svc)
     assert result.exit_code == 0  # type: ignore[union-attr]
     svc.run_sync_youtube.assert_called_once_with(dry_run=False)
+
+
+# ---------------------------------------------------------------------------
+# training-stats
+# ---------------------------------------------------------------------------
+
+
+def test_training_stats_empty(svc: MagicMock) -> None:
+    with patch("canal_soberania.db.training_stats", return_value={}):
+        result = _invoke(["training-stats"], svc)
+    assert result.exit_code == 0  # type: ignore[union-attr]
+    assert "Nenhum exemplo" in result.output  # type: ignore[union-attr]
+
+
+def test_training_stats_with_data(svc: MagicMock) -> None:
+    stats = {
+        "triage_metadata": {"total": 10, "approved": 7, "rejected": 2, "uncurated": 1}
+    }
+    with patch("canal_soberania.db.training_stats", return_value=stats):
+        result = _invoke(["training-stats"], svc)
+    assert result.exit_code == 0  # type: ignore[union-attr]
+    assert "triage_metadata" in result.output  # type: ignore[union-attr]

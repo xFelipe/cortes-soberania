@@ -114,7 +114,7 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 65   # GUI omitida; sobe para 75 após T1 (testes GUI)
+fail_under = 75   # GUI omitida (requer display Qt — testado em T1 GUI)
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.",
