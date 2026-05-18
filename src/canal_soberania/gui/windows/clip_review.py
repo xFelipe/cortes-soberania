@@ -343,12 +343,8 @@ class ClipReviewDialog(QDialog):
         with tempfile.NamedTemporaryFile(suffix="_preview.mp4", delete=False) as _f:
             tmp = Path(_f.name)
         try:
-            subprocess.run(
-                ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)],
-                capture_output=True,
-                timeout=60,
-                check=True,
-            )
+            cmd = ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)]  # noqa: S607
+            subprocess.run(cmd, capture_output=True, timeout=60, check=True)  # noqa: S603
             self._boost_ready.emit(str(tmp))
         except Exception:
             self._boost_ready.emit("")  # falha: thread principal usará arquivo original

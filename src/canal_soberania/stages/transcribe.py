@@ -77,7 +77,7 @@ def _decode_audio(audio_path: Path) -> np.ndarray:
         "-f", "s16le", "-ac", "1", "-acodec", "pcm_s16le",
         "-ar", str(_WHISPER_SAMPLE_RATE), "-",
     ]
-    result = subprocess.run(cmd, capture_output=True, check=True)
+    result = subprocess.run(cmd, capture_output=True, check=True)  # noqa: S603
     return np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
 

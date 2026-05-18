@@ -13,7 +13,7 @@ class FFmpegError(RuntimeError):
 
 
 def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    result = subprocess.run(args, capture_output=True, text=True, check=False)  # noqa: S603
     if check and result.returncode != 0:
         raise FFmpegError(f"ffmpeg falhou ({result.returncode}): {result.stderr[-500:]}")
     return result

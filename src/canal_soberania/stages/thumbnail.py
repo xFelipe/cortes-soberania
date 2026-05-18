@@ -41,18 +41,8 @@ def _find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 def extract_frame(video_path: Path, seek_s: float, output_path: Path) -> bool:
     """Extrai um frame do vídeo no tempo seek_s. Retorna True se bem-sucedido."""
     try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-ss", str(seek_s),
-                "-i", str(video_path),
-                "-vframes", "1",
-                "-q:v", "2",
-                str(output_path),
-            ],
-            capture_output=True,
-            check=True,
-        )
+        cmd = ["ffmpeg", "-y", "-ss", str(seek_s), "-i", str(video_path), "-vframes", "1", "-q:v", "2", str(output_path)]  # noqa: S607
+        subprocess.run(cmd, capture_output=True, check=True)  # noqa: S603
         return output_path.exists()
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         logger.warning("Falha ao extrair frame de {}: {}", video_path.name, exc)

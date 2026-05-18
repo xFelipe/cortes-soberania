@@ -185,7 +185,7 @@ class OpenRouterClient:
         reraise=True,
     )
     def _call_api(self, req: urllib.request.Request) -> dict[str, object]:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
             return dict(json.loads(resp.read()))  # type: ignore[arg-type]
 
     def complete(
@@ -204,7 +204,7 @@ class OpenRouterClient:
         logger.debug("OpenRouter call | model={} | task={} | prompt_len={}", model, task, len(prompt))
 
         payload = json.dumps({"model": model, "messages": messages, "max_tokens": max_tokens}).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310
             self._OPENROUTER_URL,
             data=payload,
             headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
