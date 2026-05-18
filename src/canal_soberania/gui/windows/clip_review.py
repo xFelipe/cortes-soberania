@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
 from canal_soberania.models import Clip
 from canal_soberania.services.pipeline_service import PipelineService
 
+_DESC_PREVIEW_LEN = 300
+
 
 class _SeekSlider(QSlider):
     """QSlider que pula direto para o ponto clicado em vez de avançar um page step."""
@@ -495,7 +497,7 @@ class ClipReviewDialog(QDialog):
         title_str = clip.title or "(sem título)"
         tags_str = ", ".join(clip.tags[:10]) if clip.tags else "(sem tags)"
         desc = clip.description or ""
-        desc_preview = desc[:300] + ("…" if len(desc) > 300 else "")
+        desc_preview = desc[:_DESC_PREVIEW_LEN] + ("…" if len(desc) > _DESC_PREVIEW_LEN else "")
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Confirmar publicação no YouTube")

@@ -60,6 +60,10 @@ class PipelineService:
         self._clip_repo: ClipRepository = clip_repo
         self._cancel_event = threading.Event()
 
+        if "canais_path" in paths:
+            from canal_soberania.db import ensure_canais_seeded
+            ensure_canais_seeded(conn, paths["canais_path"])
+
     @property
     def event_bus(self) -> EventBus:
         return self._bus
@@ -146,9 +150,17 @@ class PipelineService:
             self._bus.publish(PipelineEvent(PipelineEvent.STAGE_ERROR, {"stage": stage_name, "error": str(exc)}))
             raise
 
-    def run_discover(self, dry_run: bool = False) -> None:
+    def run_discover(
+        self,
+        dry_run: bool = False,
+        canal_ids: list[str] | None = None,
+        janela_dias: int | None = None,
+        max_videos: int | None = None,
+    ) -> None:
         from canal_soberania.stages.discover import run
-        self._run_stage("discover", run, dry_run)
+        import functools
+        fn = functools.partial(run, canal_ids=canal_ids, janela_dias=janela_dias, max_videos=max_videos)
+        self._run_stage("discover", fn, dry_run)
 
     def run_triage_metadata(self, dry_run: bool = False) -> None:
         from canal_soberania.stages.triage_metadata import run
@@ -589,3 +601,68 @@ class PipelineService:
             raise ValueError("end_s deve ser maior que start_s")
         self._clip_repo.update_trim(clip_id, start_s, end_s)
         self._bus.publish(PipelineEvent("clip_trim_updated", {"clip_id": clip_id, "start_s": start_s, "end_s": end_s}))
+
+    # ------------------------------------------------------------------
+    # Gerenciamento de canais
+    # ------------------------------------------------------------------
+
+    def get_canais(self, apenas_ativos: bool = False) -> list[Any]:
+        from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+        repo = SqliteCanaisRepository(self._conn)
+        return repo.get_active() if apenas_ativos else repo.get_all()
+
+    def upsert_canal(self, canal: Any) -> None:
+        from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+        SqliteCanaisRepository(self._conn).upsert(canal)
+        self._bus.publish(PipelineEvent("canal_upserted", {"canal_id": canal.id}))
+
+    def toggle_canal_ativo(self, canal_id: str, ativo: bool) -> None:
+        from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+        SqliteCanaisRepository(self._conn).set_active(canal_id, ativo)
+        self._bus.publish(PipelineEvent("canal_toggled", {"canal_id": canal_id, "ativo": ativo}))
+
+    def delete_canal(self, canal_id: str) -> None:
+        from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+        SqliteCanaisRepository(self._conn).delete(canal_id)
+        self._bus.publish(PipelineEvent("canal_deleted", {"canal_id": canal_id}))
+
+    def discover_adhoc(
+        self,
+        channel_url_or_handle: str,
+        persist: bool = False,
+        janela_dias: int | None = None,
+        max_videos: int | None = None,
+        dry_run: bool = False,
+    ) -> int:
+        """Roda discover em um canal ad-hoc (não necessariamente cadastrado).
+
+        Se persist=True, salva o canal na tabela canais.
+        Retorna o número de vídeos inseridos.
+        """
+        from canal_soberania.config import load_canais, get_paths
+        from canal_soberania.stages.discover import discover_canal_adhoc
+        from googleapiclient.discovery import build  # type: ignore[import-untyped]
+
+        if not self._settings.youtube_api_key:
+            raise ValueError("YOUTUBE_API_KEY não está configurada em .env")
+
+        youtube = build("youtube", "v3", developerKey=self._settings.youtube_api_key)
+        paths = get_paths(self._settings)
+        canais_cfg = load_canais(paths["canais_path"])
+        parametros = canais_cfg.parametros
+        if janela_dias is not None:
+            parametros = parametros.model_copy(update={"janela_dias_discover": janela_dias})
+        if max_videos is not None:
+            parametros = parametros.model_copy(update={"max_videos_por_canal_por_run": max_videos})
+
+        ins, canal = discover_canal_adhoc(
+            youtube, channel_url_or_handle, parametros, self._conn,
+            dry_run=dry_run, persist=persist,
+        )
+        if canal is not None:
+            self._bus.publish(PipelineEvent("canal_upserted", {"canal_id": canal.id}))
+        self._bus.publish(PipelineEvent(
+            "discover_adhoc_done",
+            {"handle": channel_url_or_handle, "inserted": ins, "persisted": persist},
+        ))
+        return ins

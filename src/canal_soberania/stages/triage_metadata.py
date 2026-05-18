@@ -21,6 +21,9 @@ from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, Video
 
 
+_MIN_RELEVANCE_SCORE = 5
+
+
 def _fetch_top_comments(youtube: Any, video_id: str, max_results: int = 20) -> list[str]:
     """Retorna os top comentários de um vídeo. Retorna lista vazia se desabilitados."""
     try:
@@ -77,7 +80,7 @@ def _parse_triage_response(
 ) -> TriageResult:
     data = extract_json(raw)
     score = int(data.get("score", 0))
-    is_relevant = bool(data.get("is_relevant", score >= 5))
+    is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
     themes = [str(t) for t in data.get("themes_detected", [])]
     rationale = str(data.get("rationale", ""))
     return TriageResult(

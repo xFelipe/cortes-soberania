@@ -68,13 +68,15 @@ def _fmt_date(iso: str | None) -> str:
 
 
 _COLUMNS = ["Título", "Canal", "Status", "Score", "Duração", "Publicado"]
+_SCORE_GOOD = 7
+_SCORE_MEDIUM = 4
 
 def _score_color(score: int | None) -> str | None:
     if score is None:
         return None
-    if score >= 7:
+    if score >= _SCORE_GOOD:
         return "#2e7d32"   # verde
-    if score >= 4:
+    if score >= _SCORE_MEDIUM:
         return "#e65100"   # laranja
     return "#b71c1c"       # vermelho
 

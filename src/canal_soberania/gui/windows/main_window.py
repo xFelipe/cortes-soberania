@@ -27,6 +27,9 @@ from canal_soberania.gui.workers import PipelineLoopWorker, StageWorker
 from canal_soberania.models import Clip
 from canal_soberania.services.pipeline_service import PipelineService
 
+_HOOK_DISPLAY_LEN = 90
+_TAB_INDEX_PIPELINE = 2
+
 _CLIP_STATUS_COLOR: dict[str, str] = {
     "identified": "#555555",
     "editing": "#f57f17",
@@ -226,7 +229,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(card)
 
         hook_text = clip.hook or clip.clip_id
-        display = hook_text[:90] + ("…" if len(hook_text) > 90 else "")
+        display = hook_text[:_HOOK_DISPLAY_LEN] + ("…" if len(hook_text) > _HOOK_DISPLAY_LEN else "")
         header_lbl = QLabel(f"<b>{display}</b>")
         header_lbl.setTextFormat(Qt.TextFormat.RichText)
         header_lbl.setWordWrap(True)
@@ -340,7 +343,7 @@ class MainWindow(QMainWindow):
 
     @Slot(str, dict)
     def _on_pipeline_event(self, event_type: str, payload: dict) -> None:  # type: ignore[type-arg]
-        if self._tabs.currentIndex() == 2:
+        if self._tabs.currentIndex() == _TAB_INDEX_PIPELINE:
             self._pipeline_log.append_event(event_type, payload)
         else:
             self._pipeline_log.append_event(event_type, payload)

@@ -25,6 +25,8 @@ from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_l
 from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, Video
 
+_MIN_RELEVANCE_SCORE = 6
+
 # Línguas de preferência para auto-captions
 _CAPTION_LANGS = ["pt", "pt-BR", "en"]
 
@@ -153,7 +155,7 @@ def _parse_caption_response(
 ) -> TriageResult:
     data = extract_json(raw)
     score = int(data.get("score", 0))
-    is_relevant = bool(data.get("is_relevant", score >= 6))
+    is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
     themes = [str(t) for t in data.get("themes_detected", [])]
     rationale = str(data.get("rationale", ""))
     return TriageResult(

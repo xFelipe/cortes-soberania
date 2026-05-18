@@ -21,6 +21,9 @@ from canal_soberania.models import TriageResult, Video
 from canal_soberania.stages.transcribe import format_segments_for_prompt
 
 
+_MIN_RELEVANCE_SCORE = 7
+
+
 def _load_transcript_segments(transcript_path: str) -> list[dict[str, object]]:
     data = json.loads(Path(transcript_path).read_text(encoding="utf-8"))
     return list(data.get("segments", []))
@@ -53,7 +56,7 @@ def _parse_transcript_response(
 ) -> TriageResult:
     data = extract_json(raw)
     score = int(data.get("score", 0))
-    is_relevant = bool(data.get("is_relevant", score >= 7))
+    is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
     themes = [str(t) for t in data.get("themes_detected", [])]
     rationale = str(data.get("rationale", ""))
     return TriageResult(

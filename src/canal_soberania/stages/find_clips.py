@@ -21,6 +21,10 @@ from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipCandidate, Video
 
 
+_MIN_SCORE_VIRAL = 6
+_MIN_SCORE_RELEVANCIA = 6
+
+
 def _format_segments_seconds(segments: list[dict[str, Any]]) -> str:
     """Formata segmentos como '[start_s - end_s] texto' para o prompt de cortes."""
     lines: list[str] = []
@@ -81,7 +85,7 @@ def _parse_clips_response(
             )
             continue
 
-        if candidate.score_viral < 6 or candidate.score_relevancia < 6:
+        if candidate.score_viral < _MIN_SCORE_VIRAL or candidate.score_relevancia < _MIN_SCORE_RELEVANCIA:
             logger.debug(
                 "Clip com scores baixos ({}/{}) — ignorado para {}",
                 candidate.score_viral,
