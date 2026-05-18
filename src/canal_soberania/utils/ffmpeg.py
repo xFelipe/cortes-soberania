@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from canal_soberania.logger import logger
+
 
 class FFmpegError(RuntimeError):
     pass
@@ -28,6 +30,22 @@ def probe(path: Path) -> dict[str, Any]:
         str(path),
     ])
     return dict(json.loads(result.stdout))
+
+
+def _av1_decoder_args(path: Path) -> list[str]:
+    """Retorna ['-c:v', 'libdav1d'] se o input é AV1, senão lista vazia.
+
+    Necessário porque o decoder padrão av1 tenta aceleração hardware e falha
+    em plataformas sem suporte, enquanto libdav1d funciona em software puro.
+    """
+    try:
+        data = probe(path)
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "video" and stream.get("codec_name") == "av1":
+                return ["-c:v", "libdav1d"]
+    except Exception as exc:
+        logger.debug("av1_decoder_args: probe falhou: {}", exc)
+    return []
 
 
 def get_video_dimensions(path: Path) -> tuple[int, int]:
@@ -56,6 +74,7 @@ def cut_video(
         "ffmpeg",
         *([ "-y"] if overwrite else []),
         "-hwaccel", "none",
+        *_av1_decoder_args(input_path),
         "-i", str(input_path),
         "-ss", str(start_s),
         "-t", str(duration),
@@ -82,6 +101,7 @@ def crop_and_scale(
         "ffmpeg",
         *([ "-y"] if overwrite else []),
         "-hwaccel", "none",
+        *_av1_decoder_args(input_path),
         "-i", str(input_path),
         "-vf", vf,
         "-c:a", "copy",
@@ -101,6 +121,7 @@ def add_subtitles(
         "ffmpeg",
         *([ "-y"] if overwrite else []),
         "-hwaccel", "none",
+        *_av1_decoder_args(input_path),
         "-i", str(input_path),
         "-vf", f"ass={ass_path}",
         "-c:a", "copy",
@@ -126,7 +147,7 @@ def concat_videos(
     # Monta lista de inputs e filter_complex
     input_args: list[str] = []
     for p in inputs:
-        input_args += ["-hwaccel", "none", "-i", str(p)]
+        input_args += ["-hwaccel", "none", *_av1_decoder_args(p), "-i", str(p)]
 
     n = len(inputs)
     filter_str = "".join(f"[{i}:v][{i}:a]" for i in range(n))
@@ -160,6 +181,7 @@ def encode_final(
         "ffmpeg",
         *([ "-y"] if overwrite else []),
         "-hwaccel", "none",
+        *_av1_decoder_args(input_path),
         "-i", str(input_path),
         "-vf", vf,
         "-r", str(fps),

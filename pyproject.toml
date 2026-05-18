@@ -29,6 +29,7 @@ dependencies = [
     "tenacity>=9.0.0",  # retry decorator
     "nvidia-cublas-cu12>=12.9.2.10",
     "nvidia-cudnn-cu12>=9.22.0.52",
+    "pyside6>=6.11.1",
 ]
 
 [project.scripts]
@@ -42,6 +43,8 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.11.0",
     "ipython>=8.27.0",
+    "vulture>=2.11",
+    "pip-audit>=2.7",
 ]
 gui = [
     "PySide6>=6.7.0",

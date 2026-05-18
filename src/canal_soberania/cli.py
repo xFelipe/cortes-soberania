@@ -157,7 +157,7 @@ def triage(
 @app.command()  # type: ignore[untyped-decorator]
 def download(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Baixa áudio/vídeo dos itens aprovados na triagem."""
@@ -173,7 +173,7 @@ def download(
 @app.command()  # type: ignore[untyped-decorator]
 def transcribe(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Transcreve áudio com faster-whisper."""
@@ -189,7 +189,7 @@ def transcribe(
 @app.command(name="find-clips")  # type: ignore[untyped-decorator]
 def find_clips(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Identifica trechos para clipe via Claude Sonnet."""
@@ -205,7 +205,7 @@ def find_clips(
 @app.command()  # type: ignore[untyped-decorator]
 def edit(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Edita clipes: corte, reframe 9:16, legendas, intro/outro."""
@@ -221,7 +221,7 @@ def edit(
 @app.command()  # type: ignore[untyped-decorator]
 def thumbnail(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Gera thumbnail com Pillow."""
@@ -237,7 +237,7 @@ def thumbnail(
 @app.command()  # type: ignore[untyped-decorator]
 def metadata(
     ctx: typer.Context,
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Gera título/descrição/tags com Claude Sonnet."""
@@ -259,7 +259,7 @@ class Platform(StrEnum):
 def upload(
     ctx: typer.Context,
     platform: Annotated[Platform, typer.Option("--platform", help="youtube|tiktok")],
-    pending: Annotated[bool, typer.Option("--pending")] = True,
+    _pending: Annotated[bool, typer.Option("--pending")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Sobe clipes para a plataforma especificada."""
