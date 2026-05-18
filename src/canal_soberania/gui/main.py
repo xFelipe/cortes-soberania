@@ -39,6 +39,7 @@ def main() -> None:
     setup_logger(paths["log_dir"], settings.log_level)
 
     conn = connect(db_path)
+    app.aboutToQuit.connect(conn.close)
     service = PipelineService(conn=conn, settings=settings, paths=paths)
 
     from canal_soberania.gui.windows.main_window import MainWindow

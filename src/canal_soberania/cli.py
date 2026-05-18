@@ -45,6 +45,7 @@ def main(
     from canal_soberania.db import connect
 
     conn = connect(db_path)
+    ctx.call_on_close(conn.close)
     service = PipelineService(conn=conn, settings=settings, paths=paths)
 
     ctx.ensure_object(dict)
