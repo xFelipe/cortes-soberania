@@ -7,6 +7,8 @@ import threading
 from types import TracebackType
 from typing import Literal
 
+from canal_soberania.logger import logger
+
 
 class HeartbeatKeeper:
     """Context manager que atualiza `processing_since` a cada `interval` segundos.
@@ -48,14 +50,14 @@ class HeartbeatKeeper:
         while not self._stop.wait(self._interval):
             try:
                 self._beat()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("heartbeat: falha ao atualizar processing_since: {}", exc)
 
     def __enter__(self) -> "HeartbeatKeeper":
         try:
             self._beat()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("heartbeat: falha na batida inicial: {}", exc)
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -76,5 +78,5 @@ class HeartbeatKeeper:
                 (self._row_id,),
             )
             self._conn.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("heartbeat: falha ao limpar processing_since: {}", exc)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from canal_soberania.core.strategies import CropParams, ReframeStrategy
+from canal_soberania.logger import logger
 
 
 class CenterCropReframe:
@@ -63,8 +64,8 @@ class FaceDetectionReframe:
                     lms = results.multi_face_landmarks[0].landmark
                     xs = [lm.x for lm in lms]
                     face_cx = int(sum(xs) / len(xs) * source_width)
-        except Exception:
-            pass  # mediapipe indisponível ou frame inválido → fallback
+        except Exception as exc:
+            logger.debug("face_detection: mediapipe indisponível ou frame inválido → fallback ({})", exc)
 
         if face_cx is None:
             x = (source_width - crop_w) // 2
