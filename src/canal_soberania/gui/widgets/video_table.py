@@ -67,7 +67,17 @@ def _fmt_date(iso: str | None) -> str:
         return iso[:10]
 
 
-_COLUMNS = ["Título", "Canal", "Status", "Duração", "Publicado"]
+_COLUMNS = ["Título", "Canal", "Status", "Score", "Duração", "Publicado"]
+
+def _score_color(score: int | None) -> str | None:
+    if score is None:
+        return None
+    if score >= 7:
+        return "#2e7d32"   # verde
+    if score >= 4:
+        return "#e65100"   # laranja
+    return "#b71c1c"       # vermelho
+
 
 _LINK_COLOR = "#1565c0"
 _URL_ROLE = Qt.ItemDataRole.UserRole + 1   # armazena URL clicável
@@ -122,6 +132,8 @@ class VideoTable(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(3, 64)   # Score — coluna estreita
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         self._table.verticalHeader().setVisible(False)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.cellDoubleClicked.connect(self._on_double_click)
@@ -174,8 +186,18 @@ class VideoTable(QWidget):
             item_status.setForeground(QColor(_STATUS_COLOR.get(video.status, "#555555")))
             self._table.setItem(row, 2, item_status)
 
-            # cols 3-4: duração, publicado
-            for col, val in [(3, _fmt_duration(video.duration_s)), (4, _fmt_date(video.published_at))]:
+            # col 3: score de triagem (mais avançado disponível)
+            score_text = str(video.score_triage) if video.score_triage is not None else "—"
+            item_score = QTableWidgetItem(score_text)
+            item_score.setData(Qt.ItemDataRole.UserRole, video.video_id)
+            item_score.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            color = _score_color(video.score_triage)
+            if color:
+                item_score.setForeground(QColor(color))
+            self._table.setItem(row, 3, item_score)
+
+            # cols 4-5: duração, publicado
+            for col, val in [(4, _fmt_duration(video.duration_s)), (5, _fmt_date(video.published_at))]:
                 item = QTableWidgetItem(val)
                 item.setData(Qt.ItemDataRole.UserRole, video.video_id)
                 self._table.setItem(row, col, item)

@@ -250,7 +250,7 @@ class PipelineService:
             "triage_caption_skipped": "downloading",
             "triage_caption_passed": "downloading",
             "transcribe_error": "transcribed",
-            "triage_transcript_rejected": "triage_transcript_passed",
+            "triage_transcript_rejected": "approved_for_clips",
             "transcribed": "triage_transcript_passed",
             "triage_transcript_passed": "approved_for_clips",
         }
@@ -304,6 +304,39 @@ class PipelineService:
         """Marca clip como erro de processamento."""
         self._clip_repo.reject(clip_id, reason)
         self._bus.publish(PipelineEvent("clip_rejected", {"clip_id": clip_id, "reason": reason}))
+
+    def restore_clip(self, clip_id: str) -> None:
+        """Desfaz rejeição manual: processing_error → identified."""
+        from canal_soberania.core.state import ClipStateMachine
+
+        self._clip_repo.restore(clip_id)
+        self._bus.publish(PipelineEvent("clip_restored", {"clip_id": clip_id}))
+
+    def mark_video_burned_subtitles(self, video_id: str, has_subs: bool) -> int:
+        """Marca o vídeo como tendo (ou não) legenda queimada e re-enfileira os clipes para re-edit.
+
+        Retorna o número de clipes re-enfileirados.
+        """
+        with self._conn:
+            self._conn.execute(
+                "UPDATE videos SET legendas_queimadas = ?, updated_at = datetime('now') WHERE video_id = ?",
+                (1 if has_subs else 0, video_id),
+            )
+            if has_subs:
+                cur = self._conn.execute(
+                    "UPDATE clips SET status = 'identified', "
+                    "clip_path_vertical = NULL, clip_path_horizontal = NULL, "
+                    "updated_at = datetime('now') "
+                    "WHERE video_id = ? AND status NOT IN ('processing_error')",
+                    (video_id,),
+                )
+                count = cur.rowcount
+            else:
+                count = 0
+        self._bus.publish(PipelineEvent("video_burned_subtitles_updated", {
+            "video_id": video_id, "has_subs": has_subs, "clips_requeued": count,
+        }))
+        return count
 
     def update_clip_trim(self, clip_id: str, start_s: float, end_s: float) -> None:
         """Atualiza os pontos de corte de um clipe (sem re-editar automaticamente)."""

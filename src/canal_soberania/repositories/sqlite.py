@@ -17,15 +17,26 @@ class SqliteVideoRepository:
 
     # ── leitura ───────────────────────────────────────────────────────────
 
+    _SCORE_SUBQUERY = (
+        "(SELECT score FROM triage_results tr "
+        " WHERE tr.video_id = v.video_id "
+        " ORDER BY CASE tr.stage "
+        "   WHEN 'transcript' THEN 3 "
+        "   WHEN 'caption' THEN 2 "
+        "   ELSE 1 END DESC, tr.created_at DESC "
+        " LIMIT 1) AS score_triage"
+    )
+
     def get(self, video_id: str) -> Video | None:
         row = self._conn.execute(
-            "SELECT * FROM videos WHERE video_id = ?", (video_id,)
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v WHERE v.video_id = ?",
+            (video_id,),
         ).fetchone()
         return self._row_to_video(row) if row else None
 
     def get_all(self) -> list[Video]:
         rows = self._conn.execute(
-            "SELECT * FROM videos ORDER BY published_at DESC"
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v ORDER BY v.published_at DESC"
         ).fetchall()
         result = []
         for row in rows:
@@ -40,7 +51,9 @@ class SqliteVideoRepository:
 
     def get_by_status(self, status: VideoStatus) -> list[Video]:
         rows = self._conn.execute(
-            "SELECT * FROM videos WHERE status = ? ORDER BY published_at DESC", (status,)
+            f"SELECT v.*, {self._SCORE_SUBQUERY} FROM videos v "
+            "WHERE v.status = ? ORDER BY v.published_at DESC",
+            (status,),
         ).fetchall()
         return [self._row_to_video(row) for row in rows]
 
@@ -59,11 +72,11 @@ class SqliteVideoRepository:
     # ── escrita ───────────────────────────────────────────────────────────
 
     def update_status(self, video_id: str, new_status: str) -> None:
-        self._conn.execute(
-            "UPDATE videos SET status = ?, updated_at = datetime('now') WHERE video_id = ?",
-            (new_status, video_id),
-        )
-        self._conn.commit()
+        with self._conn:
+            self._conn.execute(
+                "UPDATE videos SET status = ?, updated_at = datetime('now') WHERE video_id = ?",
+                (new_status, video_id),
+            )
 
     def reject(self, video_id: str) -> None:
         self._conn.execute(
@@ -150,17 +163,26 @@ class SqliteClipRepository:
         self._conn.commit()
 
     def update_status(self, clip_id: str, new_status: str) -> None:
-        self._conn.execute(
-            "UPDATE clips SET status = ?, updated_at = datetime('now') WHERE clip_id = ?",
-            (new_status, clip_id),
-        )
-        self._conn.commit()
+        with self._conn:
+            self._conn.execute(
+                "UPDATE clips SET status = ?, updated_at = datetime('now') WHERE clip_id = ?",
+                (new_status, clip_id),
+            )
 
     def reject(self, clip_id: str, reason: str) -> None:
         self._conn.execute(
             "UPDATE clips SET status = 'processing_error', error_message = ?, "
             "updated_at = datetime('now') WHERE clip_id = ?",
             (reason, clip_id),
+        )
+        self._conn.commit()
+
+    def restore(self, clip_id: str) -> None:
+        """Restaura clipe de processing_error → identified (desfaz rejeição manual)."""
+        self._conn.execute(
+            "UPDATE clips SET status = 'identified', error_message = NULL, "
+            "updated_at = datetime('now') WHERE clip_id = ? AND status = 'processing_error'",
+            (clip_id,),
         )
         self._conn.commit()
 

@@ -58,10 +58,12 @@ class Video(BaseModel):
     video_path: str | None = None
     caption_path: str | None = None
     transcript_path: str | None = None
+    legendas_queimadas: bool | None = None
     status: VideoStatus = "discovered"
     error_message: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    score_triage: int | None = None  # score da triagem mais avançada disponível (0-10)
 
 
 class Clip(BaseModel):

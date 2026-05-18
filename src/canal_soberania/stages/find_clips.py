@@ -46,7 +46,7 @@ def _build_clips_prompt(
         title=video.title,
         transcript_segmentos=transcript_segmentos,
         max_clipes=params.max_clipes_por_video,
-        min_clipes=3,
+        min_clipes=1,
         dur_min=params.clip_duracao_min,
         dur_max=params.clip_duracao_max,
         dur_ideal=params.clip_duracao_ideal,
@@ -195,6 +195,30 @@ def find_clips_for_video(
             justificativa=candidate.justificativa,
         )
         clips.append(clip)
+
+    # Vídeos curtos (Shorts, trechos) que cabem inteiros na janela de duração mas o
+    # LLM não identificou nenhum sub-clipe: usa o vídeo inteiro como um clipe.
+    if not clips and segments:
+        total_s = segments[-1]["end"]
+        if params.clip_duracao_min <= total_s <= params.clip_duracao_max:
+            logger.info(
+                "find_clips {}: 0 candidatos, vídeo curto ({:.0f}s) — usando vídeo inteiro como clipe",
+                video.video_id, total_s,
+            )
+            clip_id = f"{video.video_id}_0_{int(total_s)}"
+            full_text = " ".join(seg["text"] for seg in segments).strip()
+            clips.append(Clip(
+                clip_id=clip_id,
+                video_id=video.video_id,
+                start_s=0.0,
+                end_s=total_s,
+                hook=full_text[:120] if full_text else video.title,
+                payoff=None,
+                tema_soberania=None,
+                score_viral=7,
+                score_relevancia=7,
+                justificativa="Vídeo curto aprovado manualmente — usado integralmente",
+            ))
 
     with conn:
         for clip in clips:

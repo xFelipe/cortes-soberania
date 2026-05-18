@@ -116,6 +116,17 @@ class ClipReviewDialog(QDialog):
         info_layout.addRow("Score viral:", QLabel(str(self._clip.score_viral or "—")))
         info_layout.addRow("Score relevância:", QLabel(str(self._clip.score_relevancia or "—")))
         info_layout.addRow("Tema:", QLabel(self._clip.tema_soberania or "—"))
+
+        video = self._service.get_video(self._clip.video_id)
+        self._burned_subs_chk = QCheckBox("Vídeo já vem com legenda queimada")
+        self._burned_subs_chk.setChecked(bool(video.legendas_queimadas) if video else False)
+        self._burned_subs_chk.setToolTip(
+            "Marque se o vídeo original já possui legendas na imagem.\n"
+            "Os clipes deste vídeo serão re-editados sem legenda sobreposta."
+        )
+        self._burned_subs_chk.toggled.connect(self._on_burned_subs_toggled)
+        info_layout.addRow(self._burned_subs_chk)
+
         right.addWidget(info_group)
 
         # Textos editáveis: título, hook, payoff
@@ -196,9 +207,13 @@ class ClipReviewDialog(QDialog):
         self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
         close_btn = btn_box.addButton("Fechar", QDialogButtonBox.ButtonRole.DestructiveRole)
         self._approve_btn.clicked.connect(self._approve)
-        self._reject_btn.clicked.connect(self._reject)
+        self._reject_btn.clicked.connect(self._toggle_reject)
         close_btn.clicked.connect(self.reject)
         right.addWidget(btn_box)
+
+        # Inicializa estado dos botões conforme status atual do clipe
+        if self._clip.status == "processing_error":
+            self._set_rejected_ui(True)
 
         hint = QLabel("Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar")
         hint.setStyleSheet("color: #888; font-size: 10px;")
@@ -216,6 +231,16 @@ class ClipReviewDialog(QDialog):
         self._player.positionChanged.connect(self._update_pos)
         self._player.durationChanged.connect(self._on_duration_changed)
         self._player.playbackStateChanged.connect(self._on_playback_state)
+
+    def _on_burned_subs_toggled(self, checked: bool) -> None:
+        count = self._service.mark_video_burned_subtitles(self._clip.video_id, checked)
+        if checked and count > 0:
+            QMessageBox.information(
+                self,
+                "Legenda queimada marcada",
+                f"{count} clipe(s) deste vídeo foram re-enfileirados para edição sem legenda.\n"
+                "Rode o stage Edit para re-renderizar.",
+            )
 
     def _make_video_link(self) -> QLabel:
         video = self._service.get_video(self._clip.video_id)
@@ -320,7 +345,7 @@ class ClipReviewDialog(QDialog):
                 self._approve()
                 return
             elif key == Qt.Key.Key_R:
-                self._reject()
+                self._toggle_reject()
                 return
         super().keyPressEvent(event)
 
@@ -409,13 +434,36 @@ class ClipReviewDialog(QDialog):
             except Exception as exc:
                 QMessageBox.critical(self, "Erro ao liberar", str(exc))
 
-    def _reject(self) -> None:
-        try:
-            self._service.reject_clip(self._clip.clip_id, "Rejeitado manualmente via GUI")
-            QMessageBox.information(self, "Rejeitado", "Clipe marcado como erro de processamento.")
-            self.accept()
-        except Exception as exc:
-            QMessageBox.critical(self, "Erro ao rejeitar", str(exc))
+    def _toggle_reject(self) -> None:
+        """Alterna entre rejeitado e aguardando aprovação (sem fechar o diálogo)."""
+        if self._clip.status == "processing_error":
+            try:
+                self._service.restore_clip(self._clip.clip_id)
+                self._clip = self._clip.model_copy(update={"status": "identified"})
+                self._set_rejected_ui(False)
+            except Exception as exc:
+                QMessageBox.critical(self, "Erro ao restaurar", str(exc))
+        else:
+            try:
+                self._service.reject_clip(self._clip.clip_id, "Rejeitado manualmente via GUI")
+                self._clip = self._clip.model_copy(update={"status": "processing_error"})
+                self._set_rejected_ui(True)
+            except Exception as exc:
+                QMessageBox.critical(self, "Erro ao rejeitar", str(exc))
+
+    def _set_rejected_ui(self, rejected: bool) -> None:
+        if rejected:
+            self._reject_btn.setText("Rejeitado ✓")
+            self._reject_btn.setStyleSheet("background-color: #555555; color: #cccccc;")
+            self._reject_btn.setToolTip("Clique para desfazer a rejeição")
+            self._approve_btn.setEnabled(False)
+            self._approve_btn.setStyleSheet("background-color: #444444; color: #888888;")
+        else:
+            self._reject_btn.setText("Rejeitar")
+            self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
+            self._reject_btn.setToolTip("")
+            self._approve_btn.setEnabled(True)
+            self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._boost_cancelled = True

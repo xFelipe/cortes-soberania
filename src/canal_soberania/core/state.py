@@ -23,7 +23,7 @@ VIDEO_TRANSITIONS: dict[VideoStatus, list[VideoStatus]] = {
     "transcribe_error": ["transcribing"],  # permite retry
     "transcribed": ["triage_transcript_passed", "triage_transcript_rejected", "processing_error"],
     "triage_transcript_passed": ["approved_for_clips", "processing_error"],
-    "triage_transcript_rejected": [],
+    "triage_transcript_rejected": ["approved_for_clips"],  # override manual da rejeição
     "approved_for_clips": ["finding_clips", "processing_error"],
     "finding_clips": ["clips_found", "processing_error"],
     "clips_found": [],

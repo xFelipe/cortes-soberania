@@ -209,6 +209,7 @@ def edit_clip(
     intro_path: Path | None = None,
     outro_path: Path | None = None,
     dry_run: bool = False,
+    skip_subtitles: bool = False,
 ) -> tuple[Path | None, Path | None]:
     """
     Edita um clipe. Retorna (vertical_path, horizontal_path).
@@ -274,7 +275,7 @@ def edit_clip(
         # 4. Gerar e queimar legendas ASS
         ass_path = tmp / f"{clip.clip_id}.ass"
         with_subs_path = tmp / "with_subs.mp4"
-        if segments:
+        if segments and not skip_subtitles:
             generate_ass(segments, clip.start_s, ass_path)
             try:
                 add_subtitles(cropped_path, with_subs_path, ass_path)
@@ -282,6 +283,8 @@ def edit_clip(
                 logger.warning("Falha nas legendas para {} — prosseguindo sem: {}", clip.clip_id, exc)
                 shutil.copy2(cropped_path, with_subs_path)
         else:
+            if skip_subtitles and segments:
+                logger.info("Legendas queimadas no canal-fonte — pulando geração para {}", clip.clip_id)
             shutil.copy2(cropped_path, with_subs_path)
 
         # 5. Montar lista de partes para concat (intro + conteúdo + outro)
@@ -307,7 +310,7 @@ def edit_clip(
             return None, None
 
         # 7. Versão horizontal 1920x1080 com legendas (escala proporcional ao vertical)
-        if segments:
+        if segments and not skip_subtitles:
             ass_h_path = tmp / f"{clip.clip_id}_h.ass"
             cut_with_subs_path = tmp / "cut_with_subs.mp4"
             # Fonte e margem escalados de 1920px → 1080px (fator 0.5625)
@@ -363,7 +366,7 @@ def run(
     for clip in clips:
         # Busca o vídeo-fonte
         row = conn.execute(
-            "SELECT video_path, transcript_path FROM videos WHERE video_id = ?",
+            "SELECT video_path, transcript_path, legendas_queimadas FROM videos WHERE video_id = ?",
             (clip.video_id,),
         ).fetchone()
 
@@ -376,6 +379,7 @@ def run(
 
         source_video = Path(row["video_path"])
         transcript = Path(row["transcript_path"]) if row["transcript_path"] else None
+        skip_subs = bool(row["legendas_queimadas"])
 
         if not source_video.exists():
             logger.error("Arquivo de vídeo não encontrado: {}", source_video)
@@ -398,6 +402,7 @@ def run(
                 intro_path=intro_path if intro_path.exists() else None,
                 outro_path=outro_path if outro_path.exists() else None,
                 dry_run=dry_run or settings.dry_run,
+                skip_subtitles=skip_subs,
             )
 
         if vertical is None and not (dry_run or settings.dry_run):

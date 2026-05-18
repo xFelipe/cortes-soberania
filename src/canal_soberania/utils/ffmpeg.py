@@ -55,6 +55,7 @@ def cut_video(
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
+        "-hwaccel", "none",
         "-i", str(input_path),
         "-ss", str(start_s),
         "-t", str(duration),
@@ -80,6 +81,7 @@ def crop_and_scale(
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
+        "-hwaccel", "none",
         "-i", str(input_path),
         "-vf", vf,
         "-c:a", "copy",
@@ -98,6 +100,7 @@ def add_subtitles(
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
+        "-hwaccel", "none",
         "-i", str(input_path),
         "-vf", f"ass={ass_path}",
         "-c:a", "copy",
@@ -123,7 +126,7 @@ def concat_videos(
     # Monta lista de inputs e filter_complex
     input_args: list[str] = []
     for p in inputs:
-        input_args += ["-i", str(p)]
+        input_args += ["-hwaccel", "none", "-i", str(p)]
 
     n = len(inputs)
     filter_str = "".join(f"[{i}:v][{i}:a]" for i in range(n))
@@ -156,6 +159,7 @@ def encode_final(
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
+        "-hwaccel", "none",
         "-i", str(input_path),
         "-vf", vf,
         "-r", str(fps),
