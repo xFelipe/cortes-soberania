@@ -8,7 +8,7 @@ PlatformOperationNotSupported e registram a pendência em pendencias_tiktok.md.
 from __future__ import annotations
 
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +116,7 @@ def record_tiktok_pending(
 ) -> None:
     """Registra uma operação pendente no TikTok em pendencias_tiktok.md."""
     target = file or _PENDENCIAS_FILE
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     row = f"| {ts} | {clip_id} | {operation} | {details} |\n"
     try:
         with target.open("a", encoding="utf-8") as f:

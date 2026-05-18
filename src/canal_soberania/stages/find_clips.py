@@ -20,7 +20,6 @@ from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_l
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipCandidate, Video
 
-
 _MIN_SCORE_VIRAL = 6
 _MIN_SCORE_RELEVANCIA = 6
 

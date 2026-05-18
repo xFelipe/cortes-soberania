@@ -9,7 +9,7 @@ from typing import Any
 
 from canal_soberania.config import Settings
 from canal_soberania.core.events import EventBus, PipelineEvent
-from canal_soberania.core.platforms import PlatformClient, PlatformOperationNotSupported
+from canal_soberania.core.platforms import PlatformClient
 from canal_soberania.core.repositories import ClipRepository, VideoRepository
 from canal_soberania.core.stage import JobContext
 from canal_soberania.core.state import ClipStateMachine, VideoStateMachine
@@ -157,8 +157,9 @@ class PipelineService:
         janela_dias: int | None = None,
         max_videos: int | None = None,
     ) -> None:
-        from canal_soberania.stages.discover import run
         import functools
+
+        from canal_soberania.stages.discover import run
         fn = functools.partial(run, canal_ids=canal_ids, janela_dias=janela_dias, max_videos=max_videos)
         self._run_stage("discover", fn, dry_run)
 
@@ -489,7 +490,6 @@ class PipelineService:
     def approve_clip(self, clip_id: str) -> None:
         """Avança clip para o próximo status."""
         from canal_soberania.core.state import ClipStateMachine
-        from canal_soberania.models import ClipStatus
 
         clip = self._clip_repo.get(clip_id)
         if clip is None:
@@ -516,7 +516,6 @@ class PipelineService:
 
     def restore_clip(self, clip_id: str) -> None:
         """Desfaz rejeição manual: processing_error → identified."""
-        from canal_soberania.core.state import ClipStateMachine
 
         self._clip_repo.restore(clip_id)
         self._bus.publish(PipelineEvent("clip_restored", {"clip_id": clip_id}))
@@ -553,9 +552,10 @@ class PipelineService:
         Usa canal_id='manual' para vídeos adicionados fora do discover automático.
         Levanta ValueError se o vídeo não for encontrado ou a API key não estiver configurada.
         """
+        from googleapiclient.discovery import build
+
         from canal_soberania.db import insert_video
         from canal_soberania.stages.discover import _parse_duration, fetch_video_details
-        from googleapiclient.discovery import build
 
         if not self._settings.youtube_api_key:
             raise ValueError("youtube_api_key não está configurada em .env")
@@ -639,9 +639,10 @@ class PipelineService:
         Se persist=True, salva o canal na tabela canais.
         Retorna o número de vídeos inseridos.
         """
-        from canal_soberania.config import load_canais, get_paths
-        from canal_soberania.stages.discover import discover_canal_adhoc
         from googleapiclient.discovery import build
+
+        from canal_soberania.config import get_paths, load_canais
+        from canal_soberania.stages.discover import discover_canal_adhoc
 
         if not self._settings.youtube_api_key:
             raise ValueError("YOUTUBE_API_KEY não está configurada em .env")

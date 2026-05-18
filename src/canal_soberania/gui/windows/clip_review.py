@@ -8,10 +8,9 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QDateTime, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent
+from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent, QMouseEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
-from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateTimeEdit,
@@ -345,7 +344,7 @@ class ClipReviewDialog(QDialog):
         with tempfile.NamedTemporaryFile(suffix="_preview.mp4", delete=False) as _f:
             tmp = Path(_f.name)
         try:
-            cmd = ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)]  # noqa: S607
+            cmd = ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)]
             subprocess.run(cmd, capture_output=True, timeout=60, check=True)  # noqa: S603
             self._boost_ready.emit(str(tmp))
         except Exception:

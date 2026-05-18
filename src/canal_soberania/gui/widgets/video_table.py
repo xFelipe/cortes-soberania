@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from canal_soberania.models import Video, VideoStatus
+from canal_soberania.models import Video
 
 _STATUS_COLOR: dict[str, str] = {
     "discovered": "#555555",

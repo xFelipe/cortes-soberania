@@ -49,7 +49,12 @@ def _ydl_audio_opts(dest_path: Path) -> dict[str, Any]:
 
 def _ydl_video_opts(dest_path: Path) -> dict[str, Any]:
     return {
-        "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+        "format": (
+            "bestvideo[height<=1080][ext=mp4][vcodec!^=av01]+bestaudio[ext=m4a]"
+            "/bestvideo[height<=1080][vcodec!^=av01]+bestaudio"
+            "/bestvideo[height<=1080]+bestaudio"
+            "/best[height<=1080]/best"
+        ),
         "outtmpl": str(dest_path),
         "merge_output_format": "mp4",
         "quiet": True,

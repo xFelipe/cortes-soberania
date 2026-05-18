@@ -6,8 +6,7 @@ alterar os módulos de stage existentes (preserva os 181 testes anteriores).
 
 from __future__ import annotations
 
-import sqlite3
-from typing import Callable
+from collections.abc import Callable
 
 from canal_soberania.core.stage import JobContext, Stage, StageResult
 

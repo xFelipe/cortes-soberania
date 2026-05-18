@@ -8,8 +8,9 @@ publicou o evento — UIs com event loop próprio (Qt) devem usar bridge.py.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass

@@ -15,7 +15,7 @@ O horizontal só atualiza colunas informacionais.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +110,7 @@ def _process_batch(  # noqa: C901
     ).execute()
 
     returned_ids = {item["id"] for item in resp.get("items", [])}
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Itens retornados — atualiza colunas e transiciona status
     for item in resp.get("items", []):
@@ -231,7 +231,6 @@ def _apply_item(
 
 def _transition(conn: sqlite3.Connection, clip_id: str, current: str, new: str) -> None:
     from canal_soberania.core.state import ClipStateMachine
-    from canal_soberania.models import ClipStatus
 
     try:
         ClipStateMachine.transition(clip_id, current, new)  # type: ignore[arg-type]

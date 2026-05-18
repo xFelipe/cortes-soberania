@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
@@ -19,7 +17,6 @@ from canal_soberania.db import (
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, Video
-
 
 _MIN_RELEVANCE_SCORE = 5
 

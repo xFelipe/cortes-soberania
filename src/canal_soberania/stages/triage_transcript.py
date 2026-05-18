@@ -20,7 +20,6 @@ from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, Video
 from canal_soberania.stages.transcribe import format_segments_for_prompt
 
-
 _MIN_RELEVANCE_SCORE = 7
 
 

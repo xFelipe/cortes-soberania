@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont  # type: ignore[import-untyped]
 
 from canal_soberania.config import get_paths, load_settings
-from canal_soberania.db import connect, get_clips_by_status, init_db, update_clip_status
+from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip
 
@@ -41,7 +41,7 @@ def _find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 def extract_frame(video_path: Path, seek_s: float, output_path: Path) -> bool:
     """Extrai um frame do vídeo no tempo seek_s. Retorna True se bem-sucedido."""
     try:
-        cmd = ["ffmpeg", "-y", "-ss", str(seek_s), "-i", str(video_path), "-vframes", "1", "-q:v", "2", str(output_path)]  # noqa: S607
+        cmd = ["ffmpeg", "-y", "-ss", str(seek_s), "-i", str(video_path), "-vframes", "1", "-q:v", "2", str(output_path)]
         subprocess.run(cmd, capture_output=True, check=True)  # noqa: S603
         return output_path.exists()
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
@@ -67,10 +67,7 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, ma
     current = ""
     for word in words:
         test = (current + " " + word).strip()
-        if hasattr(font, "getlength"):
-            w = font.getlength(test)
-        else:
-            w = len(test) * 10  # fallback grosseiro
+        w = font.getlength(test) if hasattr(font, "getlength") else len(test) * 10  # fallback grosseiro
         if w <= max_width:
             current = test
         else:

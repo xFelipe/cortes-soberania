@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-from PySide6.QtCore import QThread, Qt, Signal, Slot
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -162,6 +162,7 @@ class DiscoverPanel(QWidget):
         self._canais_table.setColumnWidth(4, 46)
         self._canais_table.setColumnWidth(5, 56)
         self._canais_table.verticalHeader().setVisible(False)
+        self._canais_table.cellDoubleClicked.connect(lambda _r, _c: self._on_edit_canal())
         layout.addWidget(self._canais_table)
 
         btn_row = QHBoxLayout()

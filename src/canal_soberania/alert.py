@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import urllib.parse
 import urllib.request
 
 from canal_soberania.db import status_summary
@@ -15,10 +16,7 @@ _HTTP_OK = 200
 def _send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
     """Envia mensagem via Telegram Bot API. Retorna True se bem-sucedido."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    data = f"chat_id={chat_id}&text={urllib.parse.quote(message)}&parse_mode=Markdown".encode()
     try:
-        import urllib.parse
-
         data = f"chat_id={urllib.parse.quote(chat_id)}&text={urllib.parse.quote(message)}&parse_mode=Markdown".encode()
         req = urllib.request.Request(url, data=data, method="POST")  # noqa: S310
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
@@ -50,7 +48,7 @@ def check_stuck(
         logger.warning("ALERTA: {} itens presos em status '{}'", count, status)
 
     if bot_token and chat_id:
-        lines = [f"*Canal Soberania — Alerta de Pipeline*"]
+        lines = ["*Canal Soberania — Alerta de Pipeline*"]
         lines.append(f"Itens presos (threshold={threshold}):")
         for status, count in stuck:
             lines.append(f"  • `{status}`: {count} itens")

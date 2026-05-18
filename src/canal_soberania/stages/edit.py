@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import sqlite3
 import tempfile
@@ -11,13 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from canal_soberania.config import get_paths, load_settings
+from canal_soberania.db import connect as db_connect
 from canal_soberania.db import (
-    connect,
     get_clips_by_status,
     init_db,
     update_clip_status,
 )
-from canal_soberania.db import connect as db_connect
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip
 from canal_soberania.utils.ffmpeg import (
@@ -259,7 +257,7 @@ def edit_clip(  # noqa: C901
             logger.error("Falha ao cortar {}: {}", clip.clip_id, exc)
             return None, None
 
-        # 2–6. Versão vertical (9:16 → 1080x1920)
+        # 2-6. Versão vertical (9:16 -> 1080x1920)
         if render_vertical:
             # 2. Detectar face e calcular crop para 9:16
             try:

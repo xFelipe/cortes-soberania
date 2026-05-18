@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Type
+from typing import Any
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 def network_retry(
-    exceptions: tuple[Type[BaseException], ...],
+    exceptions: tuple[type[BaseException], ...],
     attempts: int = 5,
     min_wait: int = 4,
     max_wait: int = 60,

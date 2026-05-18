@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from canal_soberania.core.strategies import CropParams, ReframeStrategy
+from canal_soberania.core.strategies import CropParams
 from canal_soberania.logger import logger
 
 

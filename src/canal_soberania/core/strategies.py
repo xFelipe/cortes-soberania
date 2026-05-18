@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-
 # ---------------------------------------------------------------------------
 # ReframeStrategy — define como recortar o frame para 9:16
 # ---------------------------------------------------------------------------

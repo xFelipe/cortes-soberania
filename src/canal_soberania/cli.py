@@ -315,8 +315,8 @@ def export_training(
     output: Annotated[str, typer.Option("--output", help="Arquivo de saída (.jsonl)")] = "",
 ) -> None:
     """Exporta exemplos de treino em formato ChatML (JSONL) para fine-tuning."""
-    from canal_soberania.db import export_training_jsonl
     from canal_soberania.config import get_paths
+    from canal_soberania.db import export_training_jsonl
 
     paths = get_paths(ctx.obj["settings"])
     approved_only = not all_examples

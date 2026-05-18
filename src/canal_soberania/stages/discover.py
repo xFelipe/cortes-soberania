@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from googleapiclient.discovery import build  # type: ignore[import-untyped]
@@ -28,7 +28,7 @@ def _extract_handle(text: str) -> str | None:
 
 
 def _iso_cutoff(days_back: int) -> str:
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days_back)
+    cutoff = datetime.now(tz=UTC) - timedelta(days=days_back)
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 

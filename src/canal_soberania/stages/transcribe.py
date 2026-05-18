@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import json
 import os
@@ -13,6 +14,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from canal_soberania.config import get_paths, load_settings
+from canal_soberania.db import (
+    connect,
+    get_videos_by_statuses,
+    init_db,
+    update_video_paths,
+    update_video_status,
+)
+from canal_soberania.logger import logger
+from canal_soberania.models import Video
 
 
 def _preload_cuda_from_venv() -> None:
@@ -38,21 +50,8 @@ def _preload_cuda_from_venv() -> None:
     ]
     for lib in candidates:
         if lib.exists():
-            try:
+            with contextlib.suppress(OSError):
                 ctypes.CDLL(str(lib))
-            except OSError:
-                pass
-
-from canal_soberania.config import get_paths, load_settings
-from canal_soberania.db import (
-    connect,
-    get_videos_by_statuses,
-    init_db,
-    update_video_paths,
-    update_video_status,
-)
-from canal_soberania.logger import logger
-from canal_soberania.models import Video
 
 
 def _format_ts(seconds: float) -> str:

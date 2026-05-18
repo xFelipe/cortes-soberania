@@ -232,10 +232,7 @@ class SqliteClipRepository:
         self, clip_id: str, *, kind: Literal["vertical", "horizontal"]
     ) -> None:
         """Limpa youtube_id (vertical) ou youtube_id_horizontal após remoção remota."""
-        if kind == "vertical":
-            col = "youtube_id"
-        else:
-            col = "youtube_id_horizontal"
+        col = "youtube_id" if kind == "vertical" else "youtube_id_horizontal"
         self._conn.execute(
             f"UPDATE clips SET {col} = NULL, updated_at = datetime('now') WHERE clip_id = ?",  # noqa: S608
             (clip_id,),

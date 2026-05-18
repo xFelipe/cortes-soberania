@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import socket
-import ssl
 import sqlite3
+import ssl
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from canal_soberania.config import get_paths, load_settings
@@ -88,13 +88,13 @@ def _next_publish_slot(
                         and _slot_matches(row["youtube_publish_at"], candidate_day, hour, brt_offset)
                     )
                     if slots_at_hour == 0:
-                        return slot_brt.astimezone(timezone.utc)
+                        return slot_brt.astimezone(UTC)
         candidate_day = candidate_day + timedelta(days=1)
 
     # Fallback improvável: amanhã às 9h BRT
     tomorrow = today_brt + timedelta(days=1)
     return datetime(tomorrow.year, tomorrow.month, tomorrow.day, 9, tzinfo=brt_offset).astimezone(
-        timezone.utc
+        UTC
     )
 
 
@@ -106,7 +106,6 @@ def _slot_matches(
 ) -> bool:
     try:
         dt = datetime.fromisoformat(iso_str).astimezone(brt_offset)
-        from datetime import date as _date
 
         return dt.date() == target_day and dt.hour == target_hour
     except ValueError:
@@ -295,12 +294,10 @@ def upload_clip(  # noqa: C901
         elif not horizontal_done:
             logger.warning("upload_youtube: sem clip_path_horizontal para {}, pulando vídeo regular", clip.clip_id)
 
-        # Preserva scheduled_youtube se o clipe já estava nesse status (re-upload de formato)
-        final_status = "scheduled_youtube" if clip.status == "scheduled_youtube" else "scheduled_youtube"
         with conn:
             conn.execute(
                 "UPDATE clips SET status=? WHERE clip_id=?",
-                (final_status, clip.clip_id),
+                ("scheduled_youtube", clip.clip_id),
             )
 
         return youtube_id

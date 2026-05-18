@@ -53,7 +53,7 @@ class HeartbeatKeeper:
             except Exception as exc:
                 logger.debug("heartbeat: falha ao atualizar processing_since: {}", exc)
 
-    def __enter__(self) -> "HeartbeatKeeper":
+    def __enter__(self) -> HeartbeatKeeper:
         try:
             self._beat()
         except Exception as exc:

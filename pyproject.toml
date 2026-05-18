@@ -67,10 +67,26 @@ select = [
     "UP",           # pyupgrade
     "RUF",          # ruff-specific
     "SIM",          # flake8-simplify
+    "C90",          # McCabe complexity
+    "S",            # bandit (segurança)
+    "T20",          # print() avulso
+    "PL",           # pylint
 ]
 ignore = [
-    "E501",  # line length (gerenciado por format)
+    "E501",         # line length (gerenciado por format)
+    "PLC0415",      # import-outside-top-level (lazy imports intencionais no projeto)
+    "PLR0913",      # too-many-arguments (>8 é genuíno; aceitável com DI pattern)
+    "PLR0911",      # too-many-return-statements (guards em stages)
+    "PLR0912",      # too-many-branches
+    "PLR0915",      # too-many-statements (stages de orquestramento)
+    "PLR2004",      # magic-value (corrigido individualmente com constantes)
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 8
 
 [tool.ruff.format]
 quote-style = "double"
