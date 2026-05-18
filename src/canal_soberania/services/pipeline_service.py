@@ -641,7 +641,7 @@ class PipelineService:
         """
         from canal_soberania.config import load_canais, get_paths
         from canal_soberania.stages.discover import discover_canal_adhoc
-        from googleapiclient.discovery import build  # type: ignore[import-untyped]
+        from googleapiclient.discovery import build
 
         if not self._settings.youtube_api_key:
             raise ValueError("YOUTUBE_API_KEY não está configurada em .env")

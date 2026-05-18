@@ -97,11 +97,24 @@ def status(
 @app.command()  # type: ignore[untyped-decorator]
 def discover(
     ctx: typer.Context,
+    canal: Annotated[list[str] | None, typer.Option("--canal", help="ID do canal (pode repetir). Padrão: todos ativos.")] = None,
+    dias: Annotated[int | None, typer.Option("--dias", help="Janela de dias (override do YAML).")] = None,
+    max_videos: Annotated[int | None, typer.Option("--max", help="Máx. vídeos por canal (override do YAML).")] = None,
+    auto_triage: Annotated[bool, typer.Option("--auto-triage", help="Roda triagem metadata+caption logo após.")] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Busca vídeos novos nos canais monitorados."""
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
-    ctx.obj["service"].run_discover(dry_run=effective_dry_run)
+    service: PipelineService = ctx.obj["service"]
+    service.run_discover(
+        dry_run=effective_dry_run,
+        canal_ids=canal or None,
+        janela_dias=dias,
+        max_videos=max_videos,
+    )
+    if auto_triage and not effective_dry_run:
+        service.run_triage_metadata(dry_run=False)
+        service.run_triage_caption(dry_run=False)
 
 
 # ---------------------------------------------------------------------------

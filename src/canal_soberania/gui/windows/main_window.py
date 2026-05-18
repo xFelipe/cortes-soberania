@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._build_videos_tab(), "Vídeos")
         tabs.addTab(self._build_clips_tab(), "Clipes")
         tabs.addTab(self._build_pipeline_tab(), "Pipeline")
+        tabs.addTab(self._build_discover_tab(), "Discover")
         self.setCentralWidget(tabs)
         self._tabs = tabs
         self._tabs.currentChanged.connect(self._on_tab_changed)
@@ -190,6 +191,15 @@ class MainWindow(QMainWindow):
         self._pipeline_log = PipelineLog(run_stage_callback=self._run_stage)
         self._pipeline_log.connect_cancel(self._cancel_pipeline)
         return self._pipeline_log
+
+    def _build_discover_tab(self) -> QWidget:
+        from canal_soberania.gui.widgets.discover_panel import DiscoverPanel
+        self._discover_panel = DiscoverPanel(
+            service=self._service,
+            refresh_videos_cb=self._refresh,
+            parent=self,
+        )
+        return self._discover_panel
 
     # ------------------------------------------------------------------
     # Data loading
@@ -357,6 +367,8 @@ class MainWindow(QMainWindow):
             self._refresh()
         elif index == 1:
             self._refresh_clips()
+        elif index == 3:
+            self._discover_panel._load_canais()
 
     @Slot(str)
     def _on_video_added(self, video_id: str) -> None:

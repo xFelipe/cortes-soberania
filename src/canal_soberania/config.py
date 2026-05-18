@@ -85,6 +85,7 @@ class Canal(BaseModel):
     auto_publish: bool = False
     tolerancia_cortes: str = "desconhecida"
     nota: str = ""
+    ativo: bool = True
 
 
 class Parametros(BaseModel):

@@ -27,6 +27,35 @@ def init_db(db_path: Path, schema_path: Path) -> None:
     conn.close()
 
 
+def ensure_canais_seeded(conn: sqlite3.Connection, canais_path: Path) -> None:
+    """Popula tabela `canais` a partir do YAML se ainda estiver vazia (idempotente).
+
+    Chamado no boot da app (CLI e GUI) para que a tabela tenha os canais iniciais
+    após a primeira aplicação da migration 006.
+    """
+    count = conn.execute("SELECT COUNT(*) FROM canais").fetchone()[0]
+    if count > 0:
+        return
+
+    from canal_soberania.config import load_canais
+
+    canais_cfg = load_canais(canais_path)
+    with conn:
+        for canal in canais_cfg.canais:
+            conn.execute(
+                """INSERT OR IGNORE INTO canais
+                       (id, nome, handle, channel_url, tema_primario,
+                        peso, auto_publish, tolerancia_cortes, nota, ativo)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                (
+                    canal.id, canal.nome, canal.handle, canal.channel_url,
+                    canal.tema_primario, canal.peso,
+                    1 if canal.auto_publish else 0,
+                    canal.tolerancia_cortes, canal.nota,
+                ),
+            )
+
+
 # ---------------------------------------------------------------------------
 # Videos
 # ---------------------------------------------------------------------------
