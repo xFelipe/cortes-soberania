@@ -182,6 +182,11 @@ class PipelineService:
         from canal_soberania.stages.upload_tiktok import run
         self._run_stage("upload_tiktok", run, dry_run)
 
+    def run_sync_youtube(self, dry_run: bool = False) -> None:
+        """Sincroniza status e métricas dos clipes agendados/publicados no YouTube."""
+        from canal_soberania.stages.sync_youtube import run
+        self._run_stage("sync_youtube", run, dry_run)
+
     def reset_stuck_videos(self) -> int:
         """Reseta vídeos cujo heartbeat está ≥ 3 min atrasado (processo morreu mid-execução)."""
         _STUCK: list[tuple[str, str]] = [
@@ -272,9 +277,13 @@ class PipelineService:
         payoff: str | None,
         title: str | None,
         youtube_publish_at: str | None,
+        render_vertical: bool = True,
+        render_horizontal: bool = True,
     ) -> None:
-        """Persiste edições manuais de hook, payoff, título e agendamento do clipe."""
-        self._clip_repo.update_text(clip_id, hook, payoff, title, youtube_publish_at)
+        """Persiste edições manuais de hook, payoff, título, agendamento e formatos do clipe."""
+        self._clip_repo.update_text(
+            clip_id, hook, payoff, title, youtube_publish_at, render_vertical, render_horizontal
+        )
         self._bus.publish(PipelineEvent("clip_text_updated", {"clip_id": clip_id}))
 
     def approve_clip(self, clip_id: str) -> None:
@@ -337,6 +346,54 @@ class PipelineService:
             "video_id": video_id, "has_subs": has_subs, "clips_requeued": count,
         }))
         return count
+
+    def add_video_by_id(self, video_id: str) -> Video:
+        """Busca metadados do vídeo na YouTube API e insere no pipeline com status 'discovered'.
+
+        Usa canal_id='manual' para vídeos adicionados fora do discover automático.
+        Levanta ValueError se o vídeo não for encontrado ou a API key não estiver configurada.
+        """
+        from canal_soberania.db import insert_video
+        from canal_soberania.stages.discover import _parse_duration, fetch_video_details
+        from googleapiclient.discovery import build  # type: ignore[import-untyped]
+
+        if not self._settings.youtube_api_key:
+            raise ValueError("youtube_api_key não está configurada em .env")
+
+        youtube = build("youtube", "v3", developerKey=self._settings.youtube_api_key)
+        details = fetch_video_details(youtube, [video_id])
+        if not details:
+            raise ValueError(f"Vídeo '{video_id}' não encontrado ou inacessível no YouTube.")
+
+        item = details[0]
+        snippet: dict[str, Any] = item.get("snippet", {})
+        stats: dict[str, Any] = item.get("statistics", {})
+        content: dict[str, Any] = item.get("contentDetails", {})
+
+        video = Video(
+            video_id=video_id,
+            canal_id="manual",
+            title=snippet.get("title", ""),
+            description=snippet.get("description") or None,
+            tags=snippet.get("tags", []),
+            published_at=snippet.get("publishedAt", ""),
+            duration_s=_parse_duration(content.get("duration", "")) if content.get("duration") else None,
+            view_count=int(stats["viewCount"]) if "viewCount" in stats else None,
+            like_count=int(stats["likeCount"]) if "likeCount" in stats else None,
+            comment_count=int(stats["commentCount"]) if "commentCount" in stats else None,
+        )
+
+        already = self._conn.execute(
+            "SELECT 1 FROM videos WHERE video_id = ?", (video_id,)
+        ).fetchone()
+        if already:
+            raise ValueError(f"Vídeo '{video_id}' já está no banco de dados.")
+
+        with self._conn:
+            insert_video(self._conn, video)
+
+        self._bus.publish(PipelineEvent("video_added_manually", {"video_id": video_id, "title": video.title}))
+        return video
 
     def update_clip_trim(self, clip_id: str, start_s: float, end_s: float) -> None:
         """Atualiza os pontos de corte de um clipe (sem re-editar automaticamente)."""

@@ -123,9 +123,15 @@ class MainWindow(QMainWindow):
         w = QWidget()
         layout = QVBoxLayout(w)
 
+        toolbar = QHBoxLayout()
+        add_btn = QPushButton("+ Adicionar vídeo")
+        add_btn.clicked.connect(self._on_add_video)
+        toolbar.addWidget(add_btn)
+        toolbar.addStretch()
         refresh_btn = QPushButton("Atualizar lista")
         refresh_btn.clicked.connect(self._refresh)
-        layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        toolbar.addWidget(refresh_btn)
+        layout.addLayout(toolbar)
 
         canal_urls = self._load_canal_urls()
         self._video_table = VideoTable(canal_urls=canal_urls)
@@ -134,6 +140,13 @@ class MainWindow(QMainWindow):
         self._video_table.video_reject_requested.connect(self._on_video_reject)
         layout.addWidget(self._video_table)
         return w
+
+    def _on_add_video(self) -> None:
+        from canal_soberania.gui.windows.add_video_dialog import AddVideoDialog
+
+        dlg = AddVideoDialog(self._service, self)
+        dlg.video_added.connect(self._on_video_added)
+        dlg.exec()
 
     def _load_canal_urls(self) -> dict[str, str]:
         try:
@@ -341,6 +354,11 @@ class MainWindow(QMainWindow):
             self._refresh()
         elif index == 1:
             self._refresh_clips()
+
+    @Slot(str)
+    def _on_video_added(self, video_id: str) -> None:
+        self._refresh()
+        self._flash_status(f"✓ Vídeo {video_id} adicionado ao pipeline.", 4000)
 
     @Slot(str)
     def _on_video_approve(self, video_id: str) -> None:
