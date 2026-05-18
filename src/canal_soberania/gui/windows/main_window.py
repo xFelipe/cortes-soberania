@@ -124,10 +124,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(w)
 
         toolbar = QHBoxLayout()
+        toolbar.addStretch()
         add_btn = QPushButton("+ Adicionar vídeo")
         add_btn.clicked.connect(self._on_add_video)
         toolbar.addWidget(add_btn)
-        toolbar.addStretch()
         refresh_btn = QPushButton("Atualizar lista")
         refresh_btn.clicked.connect(self._refresh)
         toolbar.addWidget(refresh_btn)
