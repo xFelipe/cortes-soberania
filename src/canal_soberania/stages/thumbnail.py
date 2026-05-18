@@ -33,7 +33,7 @@ def _find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         if Path(path).exists():
             try:
                 return ImageFont.truetype(path, size)
-            except Exception:
+            except Exception:  # noqa: S112 — font candidates: silently skip corrupted/absent fonts
                 continue
     return ImageFont.load_default()
 

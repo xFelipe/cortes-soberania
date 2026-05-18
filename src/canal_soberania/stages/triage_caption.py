@@ -102,8 +102,8 @@ def parse_vtt(path: Path, max_chars: int = _CAPTION_MAX_CHARS) -> str:
     lines: list[str] = []
     seen: set[str] = set()
 
-    for line in raw.splitlines():
-        line = line.strip()
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
         # Pula cabeçalho, linhas de timing, metadata e vazias
         if not line:
             continue

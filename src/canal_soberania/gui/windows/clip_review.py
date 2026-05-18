@@ -340,7 +340,8 @@ class ClipReviewDialog(QDialog):
 
     def _run_boost(self, source: str) -> None:
         """Executa em thread de fundo — amplifica áudio via ffmpeg."""
-        tmp = Path(tempfile.mktemp(suffix="_preview.mp4"))
+        with tempfile.NamedTemporaryFile(suffix="_preview.mp4", delete=False) as _f:
+            tmp = Path(_f.name)
         try:
             subprocess.run(
                 ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)],
