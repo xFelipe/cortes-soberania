@@ -174,6 +174,17 @@ class ClipReviewDialog(QDialog):
 
         right.addWidget(edit_group)
 
+        # Formatos de saída
+        formats_group = QGroupBox("Formatos de saída")
+        formats_layout = QVBoxLayout(formats_group)
+        self._render_vertical_chk = QCheckBox("Vertical (9:16 — Shorts / TikTok)")
+        self._render_vertical_chk.setChecked(self._clip.render_vertical)
+        self._render_horizontal_chk = QCheckBox("Horizontal (16:9 — YouTube)")
+        self._render_horizontal_chk.setChecked(self._clip.render_horizontal)
+        formats_layout.addWidget(self._render_vertical_chk)
+        formats_layout.addWidget(self._render_horizontal_chk)
+        right.addWidget(formats_group)
+
         # Trim
         trim_group = QGroupBox("Editar trim")
         trim_layout = QFormLayout(trim_group)
@@ -360,10 +371,15 @@ class ClipReviewDialog(QDialog):
             if self._schedule_chk.isChecked()
             else None
         )
+        render_v = self._render_vertical_chk.isChecked()
+        render_h = self._render_horizontal_chk.isChecked()
         try:
-            self._service.update_clip_text(self._clip.clip_id, hook, payoff, title, schedule)
+            self._service.update_clip_text(
+                self._clip.clip_id, hook, payoff, title, schedule, render_v, render_h
+            )
             self._clip = self._clip.model_copy(update={
                 "hook": hook, "payoff": payoff, "title": title, "youtube_publish_at": schedule,
+                "render_vertical": render_v, "render_horizontal": render_h,
             })
             if not silent:
                 self._save_btn.setText("✓ Salvo")

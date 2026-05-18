@@ -115,6 +115,52 @@ def test_clip_all_statuses_have_transitions() -> None:
     assert not missing, f"Status sem transições definidas: {missing}"
 
 
+# novos status de sync YouTube
+def test_clip_scheduled_to_uploaded() -> None:
+    ClipStateMachine.transition("clip001", "scheduled_youtube", "uploaded_youtube")
+
+
+def test_clip_scheduled_to_rejected() -> None:
+    ClipStateMachine.transition("clip001", "scheduled_youtube", "rejected_youtube")
+
+
+def test_clip_scheduled_to_deleted() -> None:
+    ClipStateMachine.transition("clip001", "scheduled_youtube", "deleted_youtube")
+
+
+def test_clip_scheduled_to_unscheduled() -> None:
+    ClipStateMachine.transition("clip001", "scheduled_youtube", "unscheduled_youtube")
+
+
+def test_clip_uploaded_to_deleted() -> None:
+    ClipStateMachine.transition("clip001", "uploaded_youtube", "deleted_youtube")
+
+
+def test_clip_rejected_can_retry() -> None:
+    ClipStateMachine.transition("clip001", "rejected_youtube", "identified")
+
+
+def test_clip_deleted_can_restart() -> None:
+    ClipStateMachine.transition("clip001", "deleted_youtube", "identified")
+
+
+def test_clip_unscheduled_to_scheduled() -> None:
+    ClipStateMachine.transition("clip001", "unscheduled_youtube", "scheduled_youtube")
+
+
+def test_clip_unscheduled_to_metadata_ready() -> None:
+    ClipStateMachine.transition("clip001", "unscheduled_youtube", "metadata_ready")
+
+
+def test_clip_uploading_to_scheduled() -> None:
+    ClipStateMachine.transition("clip001", "uploading_youtube", "scheduled_youtube")
+
+
+def test_clip_invalid_uploaded_to_identified() -> None:
+    with pytest.raises(InvalidTransitionError):
+        ClipStateMachine.transition("clip001", "uploaded_youtube", "identified")
+
+
 # ---------------------------------------------------------------------------
 # PipelineService.transition_* (smoke)
 # ---------------------------------------------------------------------------

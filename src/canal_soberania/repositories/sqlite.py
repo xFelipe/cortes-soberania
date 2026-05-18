@@ -152,11 +152,16 @@ class SqliteClipRepository:
         payoff: str | None,
         title: str | None,
         youtube_publish_at: str | None,
+        render_vertical: bool = True,
+        render_horizontal: bool = True,
     ) -> None:
         cur = self._conn.execute(
             "UPDATE clips SET hook = ?, payoff = ?, title = ?, youtube_publish_at = ?, "
+            "render_vertical = ?, render_horizontal = ?, "
             "updated_at = datetime('now') WHERE clip_id = ?",
-            (hook, payoff, title, youtube_publish_at, clip_id),
+            (hook, payoff, title, youtube_publish_at,
+             1 if render_vertical else 0, 1 if render_horizontal else 0,
+             clip_id),
         )
         if cur.rowcount == 0:
             raise ValueError(f"Clip não encontrado no banco: {clip_id}")

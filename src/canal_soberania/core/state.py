@@ -39,9 +39,19 @@ CLIP_TRANSITIONS: dict[ClipStatus, list[ClipStatus]] = {
     "editing": ["edited", "identified", "processing_error"],  # identified = retry
     "edited": ["thumbnail_ready", "processing_error"],
     "thumbnail_ready": ["metadata_ready", "processing_error"],
-    "metadata_ready": ["scheduled_youtube", "pending_tiktok_manual", "processing_error"],
-    "scheduled_youtube": ["uploaded_youtube", "processing_error"],
-    "uploaded_youtube": ["pending_tiktok_manual"],
+    "metadata_ready": ["uploading_youtube", "scheduled_youtube", "pending_tiktok_manual", "processing_error"],
+    "uploading_youtube": ["scheduled_youtube", "metadata_ready", "processing_error"],
+    "scheduled_youtube": [
+        "uploaded_youtube",      # publicou de verdade
+        "rejected_youtube",      # YouTube rejeitou (copyright/spam/etc.)
+        "deleted_youtube",       # vídeo removido
+        "unscheduled_youtube",   # publishAt foi removido pelo dono
+        "processing_error",
+    ],
+    "uploaded_youtube": ["deleted_youtube", "pending_tiktok_manual"],
+    "rejected_youtube": ["identified", "processing_error"],   # re-editar ou descartar
+    "deleted_youtube": ["identified"],                        # re-fazer do zero
+    "unscheduled_youtube": ["scheduled_youtube", "metadata_ready"],  # reagendar ou rever
     "pending_tiktok_manual": ["uploaded_tiktok"],
     "uploaded_tiktok": [],
     "processing_error": ["identified"],  # reset manual

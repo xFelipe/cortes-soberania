@@ -259,6 +259,17 @@ def upload(
         service.run_upload_tiktok(dry_run=effective_dry_run)
 
 
+@app.command(name="sync-youtube")  # type: ignore[untyped-decorator]
+def sync_youtube(
+    ctx: typer.Context,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Sincroniza status e métricas dos clipes já enviados ao YouTube."""
+    effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    service: PipelineService = ctx.obj["service"]
+    service.run_sync_youtube(dry_run=effective_dry_run)
+
+
 # ---------------------------------------------------------------------------
 # training
 # ---------------------------------------------------------------------------

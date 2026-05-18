@@ -27,31 +27,8 @@ _MAX_UPLOADS_PER_DAY = 3
 
 
 def _get_youtube_service(client_secrets_path: Path, token_path: Path) -> object:
-    """
-    Retorna um serviço autenticado da YouTube Data API v3.
-    No primeiro uso abre o browser para autorização e salva o token.
-    """
-    from google.auth.transport.requests import Request  # type: ignore[import-untyped]
-    from google.oauth2.credentials import Credentials  # type: ignore[import-untyped]
-    from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-untyped]
-    from googleapiclient.discovery import build  # type: ignore[import-untyped]
-
-    scopes = ["https://www.googleapis.com/auth/youtube.upload"]
-    creds: Credentials | None = None
-
-    if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), scopes)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets_path), scopes)
-            creds = flow.run_local_server(port=0)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(creds.to_json(), encoding="utf-8")
-
-    return build("youtube", "v3", credentials=creds)
+    from canal_soberania.utils.youtube_auth import get_youtube_service
+    return get_youtube_service(client_secrets_path, token_path)
 
 
 def _next_publish_slot(

@@ -19,6 +19,7 @@ mkdir -p data/logs
     uv run cs discover
     uv run cs triage --stage metadata
     uv run cs triage --stage caption
+    uv run cs sync-youtube
 
     echo "==== $(date -Iseconds) run_discover.sh end ===="
 } >> "$LOG" 2>&1

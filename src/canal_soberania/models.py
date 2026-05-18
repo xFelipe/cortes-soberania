@@ -33,8 +33,12 @@ ClipStatus = Literal[
     "edited",
     "thumbnail_ready",
     "metadata_ready",
+    "uploading_youtube",
     "scheduled_youtube",
     "uploaded_youtube",
+    "rejected_youtube",
+    "deleted_youtube",
+    "unscheduled_youtube",
     "pending_tiktok_manual",
     "uploaded_tiktok",
     "processing_error",
@@ -88,6 +92,22 @@ class Clip(BaseModel):
     tiktok_id: str | None = None
     youtube_publish_at: str | None = None
     youtube_publish_at_horizontal: str | None = None
+    render_vertical: bool = True
+    render_horizontal: bool = True
+    # sync de status e métricas (migration 005)
+    youtube_privacy_status: str | None = None
+    youtube_upload_status: str | None = None
+    youtube_rejection_reason: str | None = None
+    youtube_actual_published_at: str | None = None
+    youtube_last_synced_at: str | None = None
+    youtube_view_count: int | None = None
+    youtube_like_count: int | None = None
+    youtube_comment_count: int | None = None
+    youtube_privacy_status_horizontal: str | None = None
+    youtube_upload_status_horizontal: str | None = None
+    youtube_view_count_horizontal: int | None = None
+    youtube_like_count_horizontal: int | None = None
+    youtube_comment_count_horizontal: int | None = None
     status: ClipStatus = "identified"
     error_message: str | None = None
     created_at: str | None = None

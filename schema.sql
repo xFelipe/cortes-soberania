@@ -98,6 +98,25 @@ CREATE TABLE IF NOT EXISTS clips (
     youtube_publish_at          TEXT,                    -- ISO 8601, agendado
     youtube_publish_at_horizontal TEXT,                  -- agendamento do vídeo horizontal
 
+    -- sync de status e métricas do YouTube (migration 005)
+    youtube_privacy_status          TEXT,                -- private | public | unlisted
+    youtube_upload_status           TEXT,                -- processed | uploaded | rejected | failed | deleted
+    youtube_rejection_reason        TEXT,                -- copyright | inappropriate | duplicate | termsOfUse | …
+    youtube_actual_published_at     TEXT,                -- timestamp real da publicação (ISO 8601)
+    youtube_last_synced_at          TEXT,                -- última verificação com o YouTube
+
+    -- métricas vertical (Short — fonte de verdade)
+    youtube_view_count              INTEGER,
+    youtube_like_count              INTEGER,
+    youtube_comment_count           INTEGER,
+
+    -- espelhos informativos do horizontal (não dirigem status)
+    youtube_privacy_status_horizontal   TEXT,
+    youtube_upload_status_horizontal    TEXT,
+    youtube_view_count_horizontal       INTEGER,
+    youtube_like_count_horizontal       INTEGER,
+    youtube_comment_count_horizontal    INTEGER,
+
     -- estado
     status              TEXT NOT NULL DEFAULT 'identified',
     error_message       TEXT,
@@ -109,6 +128,7 @@ CREATE TABLE IF NOT EXISTS clips (
 CREATE INDEX IF NOT EXISTS idx_clips_status ON clips(status);
 CREATE INDEX IF NOT EXISTS idx_clips_video ON clips(video_id);
 CREATE INDEX IF NOT EXISTS idx_clips_youtube_publish ON clips(youtube_publish_at);
+CREATE INDEX IF NOT EXISTS idx_clips_youtube_last_synced ON clips(youtube_last_synced_at);
 
 -- =========================================================================
 -- API_COSTS: acompanhamento de custo agregado por dia

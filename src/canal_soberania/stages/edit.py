@@ -210,13 +210,19 @@ def edit_clip(
     outro_path: Path | None = None,
     dry_run: bool = False,
     skip_subtitles: bool = False,
+    render_vertical: bool = True,
+    render_horizontal: bool = True,
 ) -> tuple[Path | None, Path | None]:
     """
     Edita um clipe. Retorna (vertical_path, horizontal_path).
-    Qualquer um pode ser None se falhar.
+    Qualquer um pode ser None se falhar ou se o formato foi desativado.
     """
     if dry_run:
         logger.info("[dry-run] edit_clip {}", clip.clip_id)
+        return None, None
+
+    if not render_vertical and not render_horizontal:
+        logger.warning("Clipe {} sem nenhum formato ativado — pulando", clip.clip_id)
         return None, None
 
     clips_dir.mkdir(parents=True, exist_ok=True)
@@ -224,9 +230,12 @@ def edit_clip(
     vertical_out = clips_dir / f"{clip.clip_id}_vertical.mp4"
     horizontal_out = clips_dir / f"{clip.clip_id}_horizontal.mp4"
 
-    if vertical_out.exists() and horizontal_out.exists():
+    v_done = not render_vertical or vertical_out.exists()
+    h_done = not render_horizontal or horizontal_out.exists()
+    if v_done and h_done:
         logger.debug("Clipes já existem: {}", clip.clip_id)
-        return vertical_out, horizontal_out
+        return (vertical_out if vertical_out.exists() else None,
+                horizontal_out if horizontal_out.exists() else None)
 
     # Carrega segmentos do transcript para gerar legendas
     segments: list[dict[str, Any]] = []
@@ -250,88 +259,93 @@ def edit_clip(
             logger.error("Falha ao cortar {}: {}", clip.clip_id, exc)
             return None, None
 
-        # 2. Detectar face e calcular crop para 9:16
-        try:
-            src_w, src_h = get_video_dimensions(cut_path)
-        except FFmpegError:
-            src_w, src_h = 1920, 1080
-
-        target_crop_w = src_h * 9 // 16
-        face_crop_x = detect_face_crop_x(cut_path)
-        crop_x = face_crop_x if face_crop_x is not None else (src_w - target_crop_w) // 2
-
-        # 3. Versão vertical: crop 9:16 → 1080x1920
-        cropped_path = tmp / "cropped.mp4"
-        try:
-            crop_and_scale(
-                cut_path, cropped_path,
-                crop_x=crop_x, crop_w=target_crop_w, crop_h=src_h,
-                out_w=_VERTICAL_W, out_h=_VERTICAL_H,
-            )
-        except FFmpegError as exc:
-            logger.error("Falha ao recortar {}: {}", clip.clip_id, exc)
-            return None, None
-
-        # 4. Gerar e queimar legendas ASS
-        ass_path = tmp / f"{clip.clip_id}.ass"
-        with_subs_path = tmp / "with_subs.mp4"
-        if segments and not skip_subtitles:
-            generate_ass(segments, clip.start_s, ass_path)
+        # 2–6. Versão vertical (9:16 → 1080x1920)
+        if render_vertical:
+            # 2. Detectar face e calcular crop para 9:16
             try:
-                add_subtitles(cropped_path, with_subs_path, ass_path)
+                src_w, src_h = get_video_dimensions(cut_path)
+            except FFmpegError:
+                src_w, src_h = 1920, 1080
+
+            target_crop_w = src_h * 9 // 16
+            face_crop_x = detect_face_crop_x(cut_path)
+            crop_x = face_crop_x if face_crop_x is not None else (src_w - target_crop_w) // 2
+
+            # 3. Crop 9:16
+            cropped_path = tmp / "cropped.mp4"
+            try:
+                crop_and_scale(
+                    cut_path, cropped_path,
+                    crop_x=crop_x, crop_w=target_crop_w, crop_h=src_h,
+                    out_w=_VERTICAL_W, out_h=_VERTICAL_H,
+                )
             except FFmpegError as exc:
-                logger.warning("Falha nas legendas para {} — prosseguindo sem: {}", clip.clip_id, exc)
+                logger.error("Falha ao recortar {}: {}", clip.clip_id, exc)
+                return None, None
+
+            # 4. Gerar e queimar legendas ASS
+            ass_path = tmp / f"{clip.clip_id}.ass"
+            with_subs_path = tmp / "with_subs.mp4"
+            if segments and not skip_subtitles:
+                generate_ass(segments, clip.start_s, ass_path)
+                try:
+                    add_subtitles(cropped_path, with_subs_path, ass_path)
+                except FFmpegError as exc:
+                    logger.warning("Falha nas legendas para {} — prosseguindo sem: {}", clip.clip_id, exc)
+                    shutil.copy2(cropped_path, with_subs_path)
+            else:
+                if skip_subtitles and segments:
+                    logger.info("Legendas queimadas no canal-fonte — pulando geração para {}", clip.clip_id)
                 shutil.copy2(cropped_path, with_subs_path)
-        else:
-            if skip_subtitles and segments:
-                logger.info("Legendas queimadas no canal-fonte — pulando geração para {}", clip.clip_id)
-            shutil.copy2(cropped_path, with_subs_path)
 
-        # 5. Montar lista de partes para concat (intro + conteúdo + outro)
-        parts: list[Path] = []
-        if intro_path and intro_path.exists():
-            parts.append(intro_path)
-        parts.append(with_subs_path)
-        if outro_path and outro_path.exists():
-            parts.append(outro_path)
+            # 5. Concat (intro + conteúdo + outro)
+            parts: list[Path] = []
+            if intro_path and intro_path.exists():
+                parts.append(intro_path)
+            parts.append(with_subs_path)
+            if outro_path and outro_path.exists():
+                parts.append(outro_path)
 
-        concat_path = tmp / "concat.mp4"
-        try:
-            concat_videos(parts, concat_path)
-        except FFmpegError as exc:
-            logger.error("Falha ao concatenar {}: {}", clip.clip_id, exc)
-            return None, None
-
-        # 6. Encode final vertical 1080x1920
-        try:
-            encode_final(concat_path, vertical_out, _VERTICAL_W, _VERTICAL_H, _FPS)
-        except FFmpegError as exc:
-            logger.error("Encode vertical falhou para {}: {}", clip.clip_id, exc)
-            return None, None
-
-        # 7. Versão horizontal 1920x1080 com legendas (escala proporcional ao vertical)
-        if segments and not skip_subtitles:
-            ass_h_path = tmp / f"{clip.clip_id}_h.ass"
-            cut_with_subs_path = tmp / "cut_with_subs.mp4"
-            # Fonte e margem escalados de 1920px → 1080px (fator 0.5625)
-            generate_ass(
-                segments, clip.start_s, ass_h_path,
-                play_w=_HORIZONTAL_W, play_h=_HORIZONTAL_H,
-                font_size=40, margin_v=157,
-            )
+            concat_path = tmp / "concat.mp4"
             try:
-                add_subtitles(cut_path, cut_with_subs_path, ass_h_path)
-                horizontal_src = cut_with_subs_path
+                concat_videos(parts, concat_path)
             except FFmpegError as exc:
-                logger.warning("Legendas horizontais falharam para {}: {}", clip.clip_id, exc)
-                horizontal_src = cut_path
+                logger.error("Falha ao concatenar {}: {}", clip.clip_id, exc)
+                return None, None
+
+            # 6. Encode final vertical
+            try:
+                encode_final(concat_path, vertical_out, _VERTICAL_W, _VERTICAL_H, _FPS)
+            except FFmpegError as exc:
+                logger.error("Encode vertical falhou para {}: {}", clip.clip_id, exc)
+                return None, None
         else:
-            horizontal_src = cut_path
-        try:
-            encode_final(horizontal_src, horizontal_out, _HORIZONTAL_W, _HORIZONTAL_H, _FPS)
-        except FFmpegError as exc:
-            logger.warning("Encode horizontal falhou para {} (não crítico): {}", clip.clip_id, exc)
-            # horizontal é opcional — não bloqueia
+            logger.info("Formato vertical desativado para {}", clip.clip_id)
+
+        # 7. Versão horizontal 1920x1080
+        if render_horizontal:
+            if segments and not skip_subtitles:
+                ass_h_path = tmp / f"{clip.clip_id}_h.ass"
+                cut_with_subs_path = tmp / "cut_with_subs.mp4"
+                generate_ass(
+                    segments, clip.start_s, ass_h_path,
+                    play_w=_HORIZONTAL_W, play_h=_HORIZONTAL_H,
+                    font_size=40, margin_v=157,
+                )
+                try:
+                    add_subtitles(cut_path, cut_with_subs_path, ass_h_path)
+                    horizontal_src = cut_with_subs_path
+                except FFmpegError as exc:
+                    logger.warning("Legendas horizontais falharam para {}: {}", clip.clip_id, exc)
+                    horizontal_src = cut_path
+            else:
+                horizontal_src = cut_path
+            try:
+                encode_final(horizontal_src, horizontal_out, _HORIZONTAL_W, _HORIZONTAL_H, _FPS)
+            except FFmpegError as exc:
+                logger.warning("Encode horizontal falhou para {} (não crítico): {}", clip.clip_id, exc)
+        else:
+            logger.info("Formato horizontal desativado para {}", clip.clip_id)
 
     logger.info("Clip editado: {} | vertical={}", clip.clip_id, vertical_out.exists())
     return (
@@ -403,9 +417,11 @@ def run(
                 outro_path=outro_path if outro_path.exists() else None,
                 dry_run=dry_run or settings.dry_run,
                 skip_subtitles=skip_subs,
+                render_vertical=clip.render_vertical,
+                render_horizontal=clip.render_horizontal,
             )
 
-        if vertical is None and not (dry_run or settings.dry_run):
+        if clip.render_vertical and vertical is None and not (dry_run or settings.dry_run):
             with conn:
                 update_clip_status(conn, clip.clip_id, "processing_error", "encode_failed")
             failed += 1
