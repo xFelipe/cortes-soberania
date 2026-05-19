@@ -1,298 +1,298 @@
 # Próximas Tarefas
 
-> Regra TDAH: **uma caixinha por vez.** Não pule fases. Tarefa "doing" no máximo 1.
-> Sempre que terminar, marque `[x]` e commite. Dopamina visível é dopamina conquistada.
+> Regra TDAH: **uma caixinha por vez.** Não pule ondas. Cada onda termina com commit + `git tag onda-N-done` + smoke de 5 min.
+> Rollback sempre disponível: `git reset --hard onda-{N-1}-done`
 
-Status global do projeto: 🟢 Código completo + resiliente a falhas de rede — aguardando setup operacional
-
----
-
-## Fase 0 — Setup do ambiente (1 dia)
-
-- [x] Instalar `uv` (https://docs.astral.sh/uv/) e Python 3.11+
-- [ ] **PRÓXIMO** Instalar `ffmpeg` no sistema (`apt install ffmpeg` ou `brew install ffmpeg`)
-- [x] Clonar/inicializar repo e rodar `uv sync`
-- [ ] **PRÓXIMO** Criar `.env` a partir de `.env.example` e preencher:
-  - [x] `ANTHROPIC_API_KEY` — testada e funcionando
-  - [x] `YOUTUBE_API_KEY` — testada e funcionando
-  - [x] `OPENROUTER_API_KEY` — testada e funcionando
-  - [ ] `YOUTUBE_OAUTH_CLIENT_SECRETS_PATH` (para upload, OAuth 2.0 — baixar JSON no Google Cloud Console)
-- [ ] **PRÓXIMO** Rodar `sqlite3 data/canal.db < schema.sql` (ou `uv run python -c "from canal_soberania.db import *; init_db(...)"`)
-- [ ] **PRÓXIMO** Validar setup: `cs discover --dry-run` deve listar vídeos sem erro
-- [ ] Criar conta no canal do YouTube (definir nome, foto, banner, descrição) — *ver Decisões pendentes*
-- [ ] Criar conta no TikTok com mesmo nome/visual
+**Stack decidida:** Tauri + React + shadcn/ui + TanStack + FastAPI + Ollama (full-local AI)
+**Referência completa:** ver plano em `/home/felipe/.claude/plans/me-ajude-a-pensar-serene-sunset.md`
 
 ---
 
-## Fase 1 — MVP manual (semana 1–2)
+## Status geral
 
-> Objetivo: validar nicho e qualidade dos cortes antes de automatizar. Sobe 20 vídeos manualmente para o YouTube.
-
-### Backend (essencial)
-- [x] `src/canal_soberania/db.py` — connect, init_db, helpers básicos
-- [x] `src/canal_soberania/models.py` — `Video`, `Clip`, `TriageResult`
-- [x] `src/canal_soberania/logger.py` — setup loguru com rotação em `data/logs/`
-- [x] `src/canal_soberania/config.py` — load `.env` e `config/canais.yaml`
-- [x] `src/canal_soberania/llm.py` — wrapper Anthropic (direto) + OpenRouter (demais modelos); factory `get_llm_client()` roteia por prefixo
-- [x] `src/canal_soberania/cli.py` — esqueleto Typer com subcomandos
-
-### Stage 1 — discover
-- [x] `stages/discover.py` — para cada canal em `canais.yaml`, busca uploads dos últimos N dias via YouTube Data API
-- [x] Inserir vídeos novos em `videos` com `status='discovered'`
-- [x] Teste: roda 1x, verifica banco (14 testes com YouTube API mockada)
-- [x] Criar skill com técnicas de edição usadas por donos de canais de cortes para conseguir monetizar
-
-### Stage 2 — triage_metadata
-- [x] `stages/triage_metadata.py` — pega `status='discovered'`, monta payload (título + descrição + tags + top 20 comentários)
-- [x] Chama Claude Haiku com `prompts/triagem_metadata.txt`
-- [x] Salva resultado em `triage_results` (score 0-10 + justificativa)
-- [x] Avança para `status='triage_metadata_passed'` se score >= 5, senão `triage_metadata_rejected`
-
-### Stage 3 — triage_caption
-- [x] `stages/triage_caption.py` — baixa auto-captions via yt-dlp (`--write-auto-sub`)
-- [x] Se houver caption, analisa com Claude Haiku usando `prompts/triagem_caption.txt`
-- [x] Avança para `status='triage_caption_passed'` ou `rejected` (sem caption → `skipped`)
-
-### MVP manual (sem automação completa ainda)
-- [ ] Rodar discover + triage_metadata + triage_caption nos 6 canais
-- [ ] Inspecionar os aprovados manualmente — ajustar `criterios_relevancia.md` e o prompt até o filtro acertar 80%+
-- [ ] Para 20 vídeos aprovados: baixar, abrir no CapCut, cortar 3 momentos cada, subir manualmente
-- [ ] Medir: tempo médio por vídeo, taxa de aprovação no YouTube (sem strike?), CTR primeiras 48h
-
-### Checkpoint Fase 1
-- [ ] 20 vídeos no ar
-- [ ] Zero strikes
-- [ ] Critério de relevância está afinado (anotar falsos positivos/negativos)
-- [ ] Pelo menos 3 cortes com >1k views (sinal de nicho funcionando)
+| Fase | Ondas | Status |
+|---|---|---|
+| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Onda 0 ✅) |
+| **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
+| **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
 ---
 
-## Fase 2 — Automação de edição (semana 3–4)
+## FASE A — MVP completo e bonito (~25 dias)
 
-### Stage 4 — download
-- [x] `stages/download.py` — yt-dlp baixa áudio (mp3) sempre, vídeo (mp4 1080p) só se aprovado em todas triagens
-- [x] Salva em `data/audio/{video_id}.mp3` e `data/video/{video_id}.mp4`
-- [x] Atualiza `videos.audio_path` e `videos.video_path`
+### ✅ Onda 0 — Mitigação de risco (`git tag onda-0-done`)
 
-### Stage 5 — transcribe
-- [x] `stages/transcribe.py` — faster-whisper large-v3, PT-BR
-- [x] Salva JSON com segments+timestamps em `data/transcripts/{video_id}.json`
-- [x] Status → `transcribed`
-
-### Stage 6 — triage_transcript
-- [x] `stages/triage_transcript.py` — análise final do transcript completo com Claude Sonnet usando `prompts/triagem_transcript.txt`
-- [x] Output: score final + lista de temas detectados
-- [x] Status → `triage_transcript_passed` ou `triage_transcript_rejected`
-
-### Stage 7 — find_clips
-- [x] `stages/find_clips.py` — manda transcript + timestamps para Claude Sonnet com `prompts/identificar_cortes.txt`
-- [x] Output: 3–8 candidatos com `start_s`, `end_s`, `hook`, `payoff`, `score_viral`, `tema_soberania`
-- [x] Insere em `clips` com `status='identified'`
-
-### Stage 8 — edit
-- [x] `utils/ffmpeg.py` — helpers (cut, concat, crop_and_scale, add_subtitles, encode_final)
-- [x] `stages/edit.py` — para cada clip:
-  - [x] Cortar vídeo bruto entre `start_s` e `end_s`
-  - [x] Detectar rosto principal com mediapipe, gerar crop dinâmico 9:16 (fallback: crop central)
-  - [x] Gerar `.ass` com legendas palavra-por-palavra (estilo CapCut, distribuição uniforme)
-  - [x] Adicionar intro 3s (logo do canal) e outro 3s (CTA inscrever) se arquivos existirem
-  - [x] Render final 1080x1920 30fps H.264 + AAC
-  - [x] Versão 16:9 1920x1080 (para Shorts horizontais opcionais)
-- [x] Salva em `data/clips/{clip_id}_vertical.mp4` e `data/clips/{clip_id}_horizontal.mp4`
-- [ ] Nota: legendas usam timestamps de segmento (distribuição uniforme). Para precisão palavra-por-palavra real, adicionar `word_timestamps=True` ao Whisper (subtarefa futura)
-
-### Stage 9 — thumbnail
-- [x] `stages/thumbnail.py` — Pillow: pega frame do `start_s + 2`, aplica template (gradiente + texto grande + logo)
-- [x] Salva `data/thumbs/{clip_id}.jpg` (1280x720)
-
-### Stage 10 — metadata
-- [x] `stages/metadata.py` — Claude Sonnet com `prompts/gerar_metadata_clip.txt`
-- [x] Gera: título (<60 chars, hook claro), descrição (com link do vídeo original + CTAs), 15 tags
-
-### Hardening — resiliência de rede
-
-> Objetivo: qualquer comando pode ser interrompido e re-executado sem duplicação, custo extra ou estado travado.
-
-**P0 — Crítico (feito)**
-- [x] `upload_youtube.py` — guard de `youtube_id` (sem upload duplicado), retry exponencial no `next_chunk()` para HTTP 5xx/socket, recovery do status `uploading_youtube`
-- [x] `download.py` — yt-dlp com `retries=10`/`fragment_retries=10`, tenacity para `DownloadError`, validação de tamanho mínimo (10 KB), recovery de `"downloading"` em reruns
-- [x] `llm.py` — `LLMClient` cobre `APIConnectionError` + `InternalServerError`; `OpenRouterClient` reescrito com tenacity (cobre `URLError`, timeout, 5xx, `JSONDecodeError`)
-
-**P1 — Alto (feito)**
-- [x] `triage_metadata/caption/transcript.py` — guard SQL antes do LLM: rerun não gera chamada duplicada nem gasto extra
-- [x] `find_clips.py` — guard por contagem de clips existentes + recovery de `"finding_clips"`
-- [x] `metadata.py` — pula LLM se título e descrição já preenchidos
-
-**P2 — Médio (feito)**
-- [x] `transcribe.py` — write atômico via `tempfile` + `os.replace` (sem JSON corrompido em crash)
-- [x] `triage_caption.py` — retries no yt-dlp de captions + validação de VTT não-vazio
-- [x] `edit.py` — recovery de status `"editing"` em reruns
-
-**P3 — Baixo (feito)**
-- [x] `discover.py` — `.execute(num_retries=3)` em todas as chamadas YouTube Data API
-- [x] `utils/retry.py` — novo decorator `network_retry` centralizado para reuso futuro
-- [x] Testes de regressão corrigidos (datas hardcoded, status `transcribe_error`, tamanho de arquivo mock)
-
-### Checkpoint Fase 2
-- [x] Pipeline `discover → ... → edit → thumbnail → metadata` rodando ponta a ponta (código completo, 159 testes)
-- [x] Pipeline resiliente a falhas de rede: retry, idempotência e recovery de orphans em todos os stages
-- [ ] 10 clipes gerados automaticamente e revisados manualmente para qualidade
-- [ ] Tempo total por vídeo de 1h: < 15 min de wall-clock (Whisper é o gargalo)
+- [x] `git tag pre-refactor` — ponto de rollback antes de qualquer mudança
+- [x] Pacote `alerts/`: `TelegramChannel`, `SmtpChannel`, `AlertRouter` plugável via `ALERT_CHANNELS`
+- [x] `health/check.py` — verifica DB, disco livre, itens presos, heartbeat do loop
+- [x] `scripts/healthcheck.sh` — cron 15min com `cs health-check --notify`
+- [x] `scripts/restart_pipeline.sh` — detecta loop parado >2h e reinicia automaticamente
+- [x] Comandos CLI `cs health-check` e `cs alert-test`
+- [x] `pipeline-loop` escreve `data/.pipeline_heartbeat` a cada iteração
+- [x] `Settings`: campos `LLM_BACKEND`, `WHISPER_BACKEND`, SMTP, `ALERT_CHANNELS` (base para Onda 1)
+- [x] `.env.example` atualizado com todas as novas variáveis documentadas
+- [x] 25 novos testes (suite total: 415 passando, 0 falhas)
+- [x] `mypy --strict` zero erros nos novos módulos
+- **Smoke OK:** `cs health-check` retorna `[OK] Disco livre: 184.4 GB`
 
 ---
 
-## Fase 3 — Upload e cron (semana 5–6)
+### ⬜ Onda 1 — Infra de execução plugável (4 dias)
 
-### Stage 11 — upload_youtube
-- [x] `stages/upload_youtube.py` — OAuth flow no primeiro uso, depois token salvo
-- [x] Upload com `privacyStatus='private'` e `publishAt` agendado
-- [x] Política de agendamento: máx 3 uploads/dia, espaçados em horários 9h / 14h / 19h
-- [x] Atualiza `clips.youtube_id` e `clips.status='scheduled_youtube'`
+> Objetivo: substituir Haiku por Qwen 14B local na triagem, manter Sonnet nas análises pesadas.
 
-### Stage 12 — upload_tiktok (fila manual primeiro)
-- [x] `stages/upload_tiktok.py` — copia `.mp4` para `data/clips/pending_tiktok/` com nome legível + arquivo `.txt` ao lado contendo título/descrição
-- [x] Notifica via log: "X vídeos prontos para TikTok"
-- [x] Status → `pending_tiktok_manual`
+#### transcribers/
+- [ ] `transcribers/base.py` — protocolo `Transcriber` com `transcribe(audio_path) → list[Segment]`
+- [ ] `transcribers/faster_whisper_local.py` — CUDA (WHISPER_BACKEND=local_cuda) e CPU (local_cpu)
+- [ ] `transcribers/groq_whisper.py` — opt-in nuvem grátis (escape hatch)
+- [ ] `transcribers/openai_whisper.py` — opt-in nuvem pago
+- [ ] Refatorar `stages/transcribe.py` para usar interface plugável
 
-### Cron e operação
-- [x] `scripts/run_discover.sh` — chama `cs discover && cs triage --stage metadata && cs triage --stage caption`
-- [x] `scripts/run_pipeline.sh` — full pipeline discover → upload; usa flock para evitar paralelas
-- [x] `scripts/backup_db.sh` — sqlite3 .backup + purge > 30 dias
-- [ ] **PRÓXIMO (após Fase 1)** Configurar crontab na VPS:
-  ```
-  0 8,20 * * *  /path/scripts/run_discover.sh
-  */30 * * * *  /path/scripts/run_pipeline.sh
-  0 3 * * *     /path/scripts/backup_db.sh
-  ```
-- [x] Configurar alertas: `cs alert --threshold 50` + `scripts/check_stuck.sh` — Telegram se configurado
+#### llm_backends/
+- [ ] `llm_backends/base.py` — protocolo `LLMClient` com `complete(prompt, system) → str`
+- [ ] `llm_backends/anthropic.py` — wraps `llm.py` existente (Haiku + Sonnet)
+- [ ] `llm_backends/ollama.py` — Qwen 2.5 14B Q4 (triagem) e 32B Q4 (full-local opt-in)
+- [ ] `llm_backends/openai.py` — escape hatch
+- [ ] Factory `get_llm_client(backend, model)` roteada por `LLM_BACKEND` env var
 
-### Checkpoint Fase 3
-- [ ] 5 dias consecutivos de operação automática sem intervenção
-- [ ] 3 vídeos/dia subindo no YouTube
-- [ ] Backlog TikTok < 10 vídeos (você consegue subir manualmente em < 10 min/dia)
+#### Hybrid default
+- [ ] `LLM_BACKEND=hybrid`: Ollama Qwen 14B em `triage_metadata`/`triage_caption`; Sonnet em `triage_transcript`/`find_clips`/`metadata`
+- [ ] Refatorar todos os stages para receber `LLMClient` por DI
 
----
+#### Setup Ollama
+- [ ] Instalar Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`
+- [ ] `ollama pull qwen2.5:14b-instruct-q4_K_M` (~9 GB)
+- [ ] `ollama pull qwen2.5:32b-instruct-q4_K_M` (~20 GB — para `LLM_BACKEND=ollama` full-local)
+- [ ] Verificar VRAM com `nvidia-smi` (Qwen 14B ~5GB + Whisper large-v3 ~3GB = 8GB OK)
 
-## Fase 4 — Arquitetura Desktop & Frontend PySide6
+#### Validação de qualidade
+- [ ] Rodar triagem nos vídeos do banco com `LLM_BACKEND=hybrid`
+- [ ] Comparar precision/recall Qwen 14B vs Haiku — **só promover se diferença < 10%**
+- [ ] Se diferença > 10%: manter `LLM_BACKEND=anthropic` como default até ajustar prompts
 
-> Objetivo: transformar o pipeline CLI num OpusClip simplificado com UI desktop. Refatorar o core antes de construir qualquer tela.
+#### Testes
+- [ ] `tests/test_transcribers.py` — mocks dos backends; interface compliance
+- [ ] `tests/test_llm_backends.py` — mocks + factory routing
 
-### 4.1 — Service Layer
-- [x] Criar `src/canal_soberania/services/pipeline_service.py` — classe `PipelineService` com métodos públicos que a UI vai chamar (`get_videos`, `get_clips`, `get_video`, `get_status_summary`, `get_monthly_cost`, `run_*`)
-- [x] CLI (`cli.py`) passa a chamar `PipelineService` em vez de `stages/` diretamente
-- [x] Testes unitários em `tests/test_pipeline_service.py` (22 testes — queries + delegation mocks)
-
-### 4.2 — Repository
-- [x] Definir protocolos (interfaces) em `core/repositories.py`: `VideoRepository`, `ClipRepository`
-- [x] Implementar `SqliteVideoRepository` e `SqliteClipRepository` em `repositories/sqlite.py`
-- [x] `PipelineService` recebe repositórios via injeção de dependência (construtor)
-- [x] Criar `InMemoryVideoRepository` e `InMemoryClipRepository` em `tests/fakes.py`
-- [x] Testes em `tests/test_repositories.py` (19 testes) + testes InMemory no `test_pipeline_service.py`
-
-### 4.3 — State Machine
-- [x] Criar `core/state.py` com `VideoStateMachine` e `ClipStateMachine`
-- [x] Definir `VIDEO_TRANSITIONS` e `CLIP_TRANSITIONS` cobrindo todos os estados
-- [x] `transition()` valida e lança `InvalidTransitionError` em transição inválida; `can_transition()` para queries
-- [x] `PipelineService.transition_video/clip()` expõe as máquinas para a UI
-- [x] Testes em `tests/test_state.py` (22 testes — válidas, inválidas, cobertura de todos os estados)
-
-### 4.4 — Observer / Event Bus
-- [x] Criar `core/events.py` — `EventBus` (subscribe/unsubscribe/publish/wildcard) + `PipelineEvent`
-- [x] `PipelineService` publica `stage_started`, `stage_completed`, `stage_error` em cada `run_*`
-- [x] Recebe `EventBus` por DI; `event_bus` property exposto para a UI conectar handlers
-- [x] Testes em `tests/test_events.py` (13 testes — bus isolado + integração com PipelineService)
-- [ ] Adaptar para PySide6: bridge `EventBus → Qt Signal` em `gui/bridge.py` *(na Fase 4.8)*
-
-### 4.5 — Command (stages cancellável e retriável)
-- [x] Definir protocolo `Stage` em `core/stage.py`: `execute(ctx)`, `can_retry(error)`, `rollback(ctx)` + `JobContext`, `StageResult`
-- [x] Wrappers em `stages/wrappers.py` adaptam os stages existentes ao protocolo sem modificar módulos originais
-- [x] `PipelineService._run_stage()` usa Stage protocol: respeita `can_retry`, chama `rollback` em falha não-retriável
-- [x] `cancel()` / `reset_cancel()` / `is_cancelled` no PipelineService — estágio é pulado se sinalizado
-- [x] Testes em `tests/test_stage.py` (14 testes — protocol, execute, retry, cancel, registry)
-
-### 4.6 — Strategy (pontos variáveis)
-- [x] Definir protocolos em `core/strategies.py`: `ReframeStrategy`, `TranscriptionBackend`, `UploadAdapter` + `CropParams`, `TranscriptionSegment`
-- [x] Implementar `CenterCropReframe`, `FaceDetectionReframe` em `strategies/reframe.py`
-- [x] Implementar `FasterWhisperBackend` em `strategies/transcription.py`
-- [x] Implementar `ManualQueueAdapter`, `YouTubeUploadAdapter` em `strategies/upload.py`
-- [x] Testes em `tests/test_strategies.py` (14 testes — protocol compliance + comportamento)
-
-### 4.7 — Cobertura de testes ≥ 75% ✅
-- [x] Configurar `pytest-cov` no `pyproject.toml` com threshold de 75% (`fail_under = 75` em `[tool.coverage.report]`)
-- [x] Adicionar testes unitários do `PipelineService` usando `InMemoryVideoRepository`
-- [x] Adicionar testes da `StateMachine` (transições válidas e inválidas)
-- [x] Adicionar testes do `EventBus` (subscribe + publish)
-- [x] 316 testes passando, cobertura 75.03% (2523 linhas, 630 descobertas)
-- [x] `schema.sql` atualizado com tabela `training_examples` (era usada em `db.py` mas faltava no schema)
-
-### 4.8 — Frontend PySide6
-- [x] Criar `src/canal_soberania/gui/` com estrutura básica: `main.py`, `windows/`, `widgets/`, `bridge.py`
-- [x] Tela principal: lista de vídeos com status + ações (rodar stage, ver detalhes)
-- [x] Tela de review de clipes: player de preview + botões Aprovar / Rejeitar / Editar trim
-- [x] Tela de status do pipeline em tempo real (via `EventBus → Qt Signal`)
-- [x] Empacotamento: launcher script `run_gui.sh` + documentar dependências Qt no `pyproject.toml`
-
-### Checkpoint Fase 4
-- [x] `PipelineService` existe e CLI + GUI o usam (zero lógica de negócio fora do core)
-- [x] State machine valida toda transição de status
-- [x] Cobertura ≥ 75% passando no CI
-- [ ] GUI abre, lista vídeos, permite review de clipes e dispara pipeline com feedback em tempo real
+- **Smoke:** `LLM_BACKEND=hybrid cs triage --stage metadata` em 1 vídeo; logs mostram Ollama sendo chamado; `LLM_BACKEND=anthropic` usa Haiku normalmente
 
 ---
 
-## Fase 5 — Escala e segundo canal (mês 2+)
+### ⬜ Onda 2 — API REST FastAPI (4 dias)
 
-- [ ] Aplicar para YouTube Partner Program quando atingir tier inicial (500 inscritos + 3M views/90d *ou* 3.000h watch time/ano)
-- [ ] Iterar prompts baseado em performance (clipes com >10k views: o que eles têm em comum?)
-- [ ] Considerar segundo canal (mesmo tema, ângulo diferente; ex: focado em geopolítica vs. focado em economia)
-- [ ] Avaliar TikTok Content Posting API quando tiver tração
-- [ ] Considerar diversificação: monetização via afiliados (livros sobre os temas), curso, comunidade paga
+> Objetivo: expor o PipelineService via HTTP+SSE para o frontend Tauri consumir.
 
----
+#### Endpoints principais
+- [ ] `api/main.py` — app FastAPI com CORS e auth por token local
+- [ ] `GET /videos` + `POST /videos` (adicionar por ID)
+- [ ] `GET /clips` + `GET /clips/{id}` + `GET /clips/{id}/face-crop`
+- [ ] `POST /clips/{id}/approve` | `reject` | `trim` | `discard`
+- [ ] `GET /canais` + `POST /canais` + `PUT /canais/{id}` + `DELETE /canais/{id}`
+- [ ] `POST /stages/{name}/run` + `POST /pipeline/cancel` + `POST /pipeline/pause`
+- [ ] `GET /stats/summary` + `GET /stats/cost` + `GET /stats/throughput`
+- [ ] `GET /inbox` — lista priorizada: METADATA_READY → erros → triagem pendente → agendados 24h
+- [ ] `GET /events` — SSE stream do EventBus
 
-## Backlog (sem prazo)
+#### Auth
+- [ ] Token local gerado em `~/.config/canal-soberania/token` na primeira execução
+- [ ] Middleware valida `Authorization: Bearer <token>` em todos os endpoints
 
-- [x] Pesquisa: estratégias de ganchos (hooks) eficazes em vídeos curtos — o que prende nos primeiros 3s, padrões de abertura viral, referências de canais de cortes BR bem-sucedidos → ver `docs/hooks_videos_curtos.md`
-- [ ] Dashboard simples (Streamlit) para métricas por canal/clip
-- [ ] A/B test de thumbnails (2 variantes, pick winner pelo CTR)
-- [ ] Detecção automática de "trecho viral" via análise de prosódia (energia da voz, picos)
-- [ ] Remix automático: pegar 3 clipes curtos do mesmo tema e juntar em um Short de 60s
-- [ ] Tradução automática para outras línguas (mercado lusófono em Portugal, depois ES)
-- [ ] **Emoji contextual acima das legendas** (estilo OpusClip) — detalhes abaixo
+#### CLI
+- [ ] `cs serve` — levanta FastAPI em `:8000` (+ flag `--with-tauri` futura)
+- [ ] `GET /openapi.json` disponível para geração de cliente TypeScript
 
-### Emoji contextual acima das legendas
+#### Testes
+- [ ] `tests/api/test_videos.py`, `test_clips.py`, `test_stages.py`, `test_sse.py`
+- [ ] Todos com `httpx.AsyncClient` contra app real em memória
 
-> Referência: OpusClip exibe um emoji relevante ao tema acima do bloco de legenda, trocando conforme o assunto muda.
-
-**Onde fica:** `stages/edit.py` — `generate_ass()` + `edit_clip()` + campo novo em `find_clips`/`metadata`.
-
-**Abordagem técnica (ASS):**
-- Adicionar segundo `Style` no header ASS: `EmojiStyle,Segoe UI Emoji,{emoji_size},&H00FFFFFF,...,Alignment=8` (Alignment 8 = topo centralizado)
-- Cada grupo de legendas recebe um evento `EmojiStyle` sincronizado com o início do chunk
-- O emoji fica numa linha independente — não afeta o layout das legendas
-- `MarginV` do emoji: ~200px do topo (PlayRes 1920px)
-
-**Como escolher o emoji:**
-- `find_clips.py`: LLM já analisa o trecho — adicionar campo `"emoji": "<emoji>"` no JSON de saída (1–2 emojis, ex: `"🛢️🇧🇷"` para Petrobras)
-- O emoji fica gravado na tabela `clips.emoji` (nova coluna, nullable)
-- `edit_clip()` recebe `emoji: str | None`; se `None`, não gera o estilo
-
-**Flag opcional:** parâmetro `show_emoji: bool = True` em `edit_clip()` para desligar por canal (canais mais sóbrios).
-
-**Schema:** `ALTER TABLE clips ADD COLUMN emoji TEXT;` → criar `migrations/003_clips_emoji.sql`
-
-**Dependências:**
-1. Fonte com suporte a emoji disponível no sistema (testar `Noto Color Emoji` ou `Segoe UI Emoji` com ffmpeg `subtitles` filter — pode precisar de fallback para `drawtext`)
-2. Prompt `identificar_cortes.txt` precisa incluir o campo `emoji` no JSON de saída
-3. Testes: mockar `edit_clip` com `emoji="🛢️"` e verificar que o ASS gerado contém `EmojiStyle`
-
-**Prioridade:** baixa — só faz diferença visual após o canal ter 50+ cortes publicados e começar a testar retenção.
+- **Smoke:** `cs serve` → `curl http://localhost:8000/videos` retorna JSON; `curl -N http://localhost:8000/events` recebe stream SSE ao rodar um stage
 
 ---
 
-## Decisões pendentes (decidir antes de começar fase correspondente)
+### ⬜ Onda 3 — Tauri + React fundação (5 dias)
 
-- [ ] **Nome do canal** (sugestões: "Brasil Soberano", "Quinto Império Cortes", "Visão Soberana", "Pátria em Cortes") — _decidir antes da Fase 1 publicar_
-- [ ] **Identidade visual** (cor primária, fonte, logo simples 1024x1024) — _antes da Fase 2_
-- [ ] **Intro/outro** (3s cada, com logo + sting de áudio livre) — _antes da Fase 2_
-- [ ] **Comprar domínio?** (Ex: `brasilsoberano.com.br` para link na bio) — _antes da Fase 3_
+> Objetivo: shell desktop funcionando com layout completo e remove PySide6.
+
+#### Scaffold
+- [ ] `pnpm create tauri-app ui --template react-ts` na raiz do repo
+- [ ] Instalar: `tailwindcss` + `shadcn/ui` + `@tanstack/react-query` + `@tanstack/router` + `zod` + `cmdk` + `sonner`
+- [ ] `src-tauri/`: comandos Tauri mínimos (open external URL, file dialog, system tray)
+
+#### Fundação React
+- [ ] `lib/api.ts` — cliente gerado de `/openapi.json` via `openapi-typescript`
+- [ ] `lib/sse.ts` — hook `useSSE()` que conecta ao EventBus e invalida queries TanStack
+- [ ] `lib/status-labels.ts` — `STATUS_META[status] = { label_pt, color, icon }` central
+- [ ] `lib/theme.ts` — auto OS (prefers-color-scheme) + override salvo em localStorage
+- [ ] `lib/shortcuts.ts` — registro global de hotkeys (Ctrl+1..6, J/K, A/R, etc.)
+- [ ] `components/layout/Sidebar.tsx` — 60px, ícones + tooltip + badge de contagem
+- [ ] `components/layout/StatusFooter.tsx` — 28px: stage atual · cancel · pause loop · custo mês
+- [ ] `App.tsx` com router + QueryClientProvider + ThemeProvider + Toaster
+
+#### Remoção PySide6
+- [ ] Deletar `src/canal_soberania/gui/` inteira
+- [ ] Remover dependências PySide6 do `pyproject.toml`
+
+- **Smoke:** `pnpm tauri dev` abre janela; tema segue OS; troca entre 6 rotas funciona; Ctrl+K abre placeholder de palette; StatusFooter exibe custo mensal real
+
+---
+
+### ⬜ Onda 4 — Inbox + Biblioteca (4 dias)
+
+> Objetivo: as duas rotas de uso diário funcionando completamente.
+
+#### Inbox
+- [ ] `routes/inbox.tsx` — query `GET /inbox`; cards shadcn com STATUS_META; J/K nav; A aprova inline; empty state com mensagem positiva
+- [ ] Cards de vídeo pendente (triagem) e clipe (METADATA_READY) com ações contextuais
+- [ ] Badge de contagem na sidebar atualiza via SSE
+
+#### Biblioteca
+- [ ] `routes/biblioteca.tsx` — `<Tabs>` Vídeos / Clipes
+- [ ] `<DataTable>` (TanStack Table) com: busca global, chips de filtro por status, ordenação por coluna, paginação virtual
+- [ ] `<Toggle>` tabela ↔ grid; grid de clipes com thumbnail + status badge
+- [ ] Bulk select via checkbox na coluna 0; sticky toolbar quando ≥ 1 selecionado (approve, reject, discard)
+- [ ] `<ContextMenu>` rico em cada linha (approve, reject, review, open YouTube, copy ID)
+
+- **Smoke:** Inbox lista corretamente priorizado; J/K navega; A aprova sem recarregar; Biblioteca filtra por status; selecionar 3 → bulk toolbar aparece; grid mostra thumbnails
+
+---
+
+### ⬜ Onda 5 — ClipReview Tauri (5 dias)
+
+> Objetivo: o fluxo principal de aprovação de clipe end-to-end, substituindo o PySide6 dialog.
+
+#### Layout
+- [ ] `routes/clip-review/$id.tsx` — 2 colunas: Player (esquerda) + Form+Actions (direita)
+- [ ] Player HTML5 com controles padrão + overlay Canvas para máscara 9:16
+- [ ] Preview do crop: `GET /clips/{id}/face-crop` retorna frame PNG; Canvas renderiza sobreposição
+
+#### Timeline e hotkeys
+- [ ] `<Slider>` shadcn customizado com marcas in/out (duplo thumb via Radix)
+- [ ] Loop A↔B com debounce 200ms (igual ao PySide6 atual)
+- [ ] Hotkeys: `[` in, `]` out, `Space` play/pause, `A` aprovar, `R` rejeitar — via `lib/shortcuts.ts`
+
+#### Form e autosave
+- [ ] Campos: hook (textarea), score viral (1-10), in/out timestamps, notas
+- [ ] Zod schema + TanStack `useMutation` + debounce 500ms → autosave sem botão "Salvar"
+- [ ] Toast de confirmação: "Salvo automaticamente"
+
+#### Navegação e ações
+- [ ] "Aprovar e próximo" → muta `POST /clips/{id}/approve` + navega para próximo da Inbox
+- [ ] "Rejeitar" — inline sem confirmação
+- [ ] "Deletar do YouTube" — `shadcn AlertDialog` (única ação destrutiva irreversível)
+- [ ] Breadcrumb: Inbox → Clipe
+
+- **Smoke:** abrir review; ajustar in/out; autosave funciona sem tocar em botão; aprovar navega para próximo clipe; deletar pede confirmação; player sincroniza com slider
+
+---
+
+## FASE B — Robustez + features power (~10 dias)
+
+### ⬜ Onda 6 — Operação + Stats + Settings (3 dias)
+
+- [ ] `routes/operacao/pipeline.tsx` — 12 stages em 4 grupos; contagem de pendentes por stage; log virtualizado com filtro/busca/clear
+- [ ] `routes/operacao/discover.tsx` — form simplificado de discover ad-hoc; histórico de runs
+- [ ] `routes/operacao/canais.tsx` — CRUD via `<Sheet>` (edição inline, sem página separada)
+- [ ] `routes/stats.tsx` — 4 cards (custo+projeção, throughput, publicados, taxa aprovação) + `recharts` bar chart 4 semanas + tabela por canal
+- [ ] `routes/settings.tsx` — tema, loop interval, LLM_BACKEND, WHISPER_BACKEND, destinos de alerta, cheatsheet de atalhos
+
+---
+
+### ⬜ Onda 7 — Command palette + bulk operations (2 dias)
+
+- [ ] `cmdk` integrado em `Ctrl+K`; índice in-memory de vídeos, clipes, canais e ações nomeadas
+- [ ] SSE atualiza índice incrementalmente (sem refetch total)
+- [ ] Ações nomeadas: "Aprovar clipe X", "Ir para Stats", "Pausar pipeline loop", "Abrir Settings"
+- [ ] Bulk toolbar sticky na Biblioteca com ações: approve, reject, discard, export list
+
+---
+
+### ⬜ Onda 8 — Cobertura testes + E2E (3 dias)
+
+- [ ] Backend `pytest --cov` ≥ 90% (api/, transcribers/, llm_backends/, alerts/, health/)
+- [ ] Frontend Vitest + React Testing Library para components críticos; cobertura ≥ 80%
+- [ ] E2E Playwright headless contra `cs serve` real:
+  - [ ] Cenário 1: aprovar clipe end-to-end
+  - [ ] Cenário 2: bulk approve 3 clipes
+  - [ ] Cenário 3: rejeitar + restaurar via palette
+- [ ] Pre-commit hook: lint + coverage gate
+
+---
+
+### ⬜ Onda 9 — Eval pipeline de prompts (3 dias)
+
+- [ ] `evals/dataset.jsonl` — 50 vídeos rotulados (extraídos do banco + correção manual em sessão única)
+- [ ] `evals/runner.py` — roda prompt vN contra 4 backends; mede precision/recall/cost por vídeo
+- [ ] `evals/compare.py` — diff entre 2 versões; gera `report.html` com gráficos + exemplos divergentes
+- [ ] `cs eval run --prompt triagem_metadata --backend ollama-14b --version v1`
+
+---
+
+## FASE C — Extras (~7 dias)
+
+### ⬜ Onda 10 — Multi-canal genérico (4 dias)
+
+- [ ] `config/canais/{slug}.yaml` — migrar de `canais.yaml` flat para um arquivo por canal
+- [ ] Schema migration: `videos.target_canal_id` + `clips.target_canal_id`
+- [ ] Prompts por canal: `prompts/{slug}/...`; critérios: `config/criterios_relevancia/{slug}.md`
+- [ ] Branding por canal: `branding/{slug}/intro.mp4`, `outro.mp4`, `logo.png`, `thumb_template.png`
+- [ ] UI: chip de canal na Biblioteca; filtro persistente
+
+---
+
+### ⬜ Onda 11 — TikTok Caminho 3 (2 dias) ⚠️ RISCO ALTO
+
+> Conta dedicada de testes. Rate limit hard: 3 uploads/dia. Opt-in via `TIKTOK_BOT_ENABLED=false`.
+
+- [ ] `stages/upload_tiktok_bot.py` usando `tiktok-uploader`
+- [ ] `docker/tiktok-bot/Dockerfile` — Chrome headless + xvfb; volume `cookies/` persistente
+- [ ] `docs/operacao/tiktok-bot.md` — recomendações operacionais de risco
+
+---
+
+### ⬜ Onda 12 — Empacotamento + auto-update (1–2 dias)
+
+- [ ] `pnpm tauri build` → Linux `.AppImage` + `.deb`; Windows `.msi`
+- [ ] `tauri-plugin-updater` apontando para GitHub Releases
+- [ ] GitHub Actions release workflow (publica binários; não CI/CD de deploy)
+- [ ] `docs/install.md`
+
+---
+
+## Smoke checklist padrão (< 5 min, rodar ao fechar cada onda)
+
+```bash
+uv run pytest --tb=no -q          # todos passando
+uv run mypy src/ --strict          # zero erros
+uv run cs health-check             # [OK]
+git tag onda-N-done                # marcar conclusão
+```
+
+---
+
+## Caminho crítico — métricas alvo
+
+| Fluxo | Hoje (PySide6) | Meta (Tauri) |
+|---|---|---|
+| Aprovar 1 clipe METADATA_READY | ~7 cliques | ≤ 3 |
+| Bulk approve 5 clipes | ~35 cliques | ~4 |
+| Encontrar clipe específico | filtro + scroll | Ctrl+K + Enter |
+| Pipeline travou → saber | só abrindo app | Telegram ≤ 15 min |
+
+---
+
+## Histórico — fases anteriores concluídas
+
+<details>
+<summary>Fases 0–4 (backend + PySide6 — concluídas)</summary>
+
+**Fase 0 — Setup:** repo, uv, .env, schema.sql
+**Fase 1 — MVP manual:** discover + triage_metadata + triage_caption
+**Fase 2 — Automação:** download, transcribe, triage_transcript, find_clips, edit, thumbnail, metadata + hardening de rede
+**Fase 3 — Upload e cron:** upload_youtube, upload_tiktok (fila manual), run_pipeline.sh, backup_db.sh
+**Fase 4 — Service Layer + PySide6:**
+- PipelineService, repositories (SQLite + InMemory), StateMachine, EventBus, Stage protocol, Strategy pattern
+- GUI PySide6: MainWindow (vídeos + clipes + pipeline + discover), ClipReviewDialog (player, overlay 9:16, in/out markers, face crop, loop A↔B), VideoTable com spinner, DiscoverPanel
+- 390 testes passando; cobertura ≥ 75%; mypy --strict zero erros
+- `git tag gui-v1` — snapshot da GUI PySide6 antes da migração para Tauri
+
+</details>
