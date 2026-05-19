@@ -130,23 +130,25 @@
 
 ---
 
-### T3 — Corrigir erros mypy (101 erros → 0)
+### T3 — Corrigir erros mypy (101 erros → 0) ✅ CONCLUÍDO
 
 **Por quê:** 101 erros mypy significa que o type checker está desabilitado na prática. Bugs de tipagem (retorno `Any`, `None` não verificado) não são capturados antes do runtime. Alguns erros escondem bugs reais.
 
 **Arquivos afetados:** `stages/thumbnail.py`, `stages/edit.py`, `stages/triage_metadata.py`, `stages/triage_transcript.py`, `llm.py`, `gui/windows/clip_review.py`, `gui/windows/main_window.py`
 
 **Subtarefas:**
-- [ ] **`stages/thumbnail.py:111,152`** — substituir `Image.LANCZOS` por `Image.Resampling.LANCZOS` (removido no Pillow 10+; causa `AttributeError` em runtime)
-- [ ] **`llm.py:216–218`** — tipar dicionário de resposta com `TypedDict` em vez de `dict[str, Any]`; remover `# type: ignore` obsoletos
-- [ ] **`stages/edit.py:201`** — ajustar tipo de retorno declarado (ou o retorno real) para `int | None`
-- [ ] **`stages/triage_metadata.py:79–81`** e **`stages/triage_transcript.py:55–57`** — adicionar asserções de tipo antes de `int(obj)` / iteração em objetos do LLM
-- [ ] **`gui/windows/clip_review.py:150`** — adicionar guard `if self._clip.youtube_publish_at:` antes de `[:16]`
-- [ ] **`gui/windows/clip_review.py:423–424`** — verificar `clip_path_vertical is not None` antes de `.unlink()`
-- [ ] **`gui/windows/main_window.py:201–202`** — checar `layout.itemAt()` retorna `None` (tipo `QLayoutItem | None`)
-- [ ] **`strategies/transcription.py:30,44`** — anotar corretamente o decorator do tenacity para não gerar `unused-ignore`
-- [ ] Remover todos os `# type: ignore` que o mypy reporta como `[unused-ignore]` (~30 instâncias)
-- [ ] Rodar `mypy src/ --strict` e confirmar zero erros
+- [x] **`stages/thumbnail.py:111,152`** — substituir `Image.LANCZOS` por `Image.Resampling.LANCZOS` (removido no Pillow 10+; causa `AttributeError` em runtime)
+- [x] **`llm.py:216–218`** — tipar dicionário de resposta com `TypedDict` em vez de `dict[str, Any]`; remover `# type: ignore` obsoletos
+- [x] **`stages/edit.py:201`** — ajustar tipo de retorno declarado (ou o retorno real) para `int | None`
+- [x] **`stages/triage_metadata.py:79–81`** e **`stages/triage_transcript.py:55–57`** — adicionar asserções de tipo antes de `int(obj)` / iteração em objetos do LLM
+- [x] **`gui/windows/clip_review.py:150`** — adicionar guard `if self._clip.youtube_publish_at:` antes de `[:16]`
+- [x] **`gui/windows/clip_review.py:423–424`** — verificar `clip_path_vertical is not None` antes de `.unlink()`
+- [x] **`gui/windows/main_window.py:201–202`** — checar `layout.itemAt()` retorna `None` (tipo `QLayoutItem | None`)
+- [x] **`strategies/transcription.py:30,44`** — anotar corretamente o decorator do tenacity para não gerar `unused-ignore`
+- [x] Remover todos os `# type: ignore` que o mypy reporta como `[unused-ignore]` (~30 instâncias)
+- [x] Rodar `mypy src/ --strict` e confirmar zero erros
+
+**Resultado:** `uv run mypy src/` → "Success: no issues found in 58 source files". Também habilitadas regras ruff `C90`, `S`, `T20`, `PL`, `PLR`, `RUF`, `SIM` com ~30 violações corrigidas e restantes suprimidas com `noqa` justificados.
 
 **Esforço estimado:** 1 dia
 
@@ -154,21 +156,27 @@
 
 ## P1 — Alto (qualidade e manutenibilidade do core)
 
-### T4 — Converter `Literal` para `StrEnum` em VideoStatus e ClipStatus
+### T4 — Converter `Literal` para `StrEnum` em VideoStatus e ClipStatus ✅ CONCLUÍDO
 
 **Por quê:** `VideoStatus` e `ClipStatus` como `Literal` não são refatoráveis com segurança: um typo numa string (`"uploaded_youtbe"`) passa pelo type checker, o IDE não autocompleta, e renomear um status exige grep manual. `StrEnum` resolve tudo isso mantendo compatibilidade com SQLite (serializa como string).
 
-**Arquivos afetados:** `src/canal_soberania/models.py`, todos os `stages/`, `repositories/sqlite.py`, `gui/`, `tests/`
+**Arquivos afetados:** `src/canal_soberania/models.py`, todos os `stages/`, `repositories/sqlite.py`, `gui/`, `tests/` (~40 arquivos no total)
 
 **Subtarefas:**
-- [ ] Em `models.py`: substituir `VideoStatus = Literal[...]` por `class VideoStatus(StrEnum)` com membros em UPPER_SNAKE
-- [ ] Em `models.py`: idem para `ClipStatus` e `TriageStage`
-- [ ] Atualizar `Video.status` e `Clip.status` para usar o enum como default: `status: VideoStatus = VideoStatus.DISCOVERED`
-- [ ] Substituir todas as strings hardcoded de status nos stages (ex: `"pending_tiktok_manual"` → `ClipStatus.PENDING_TIKTOK_MANUAL`)
-- [ ] Atualizar `_STATUS_COLOR` em `gui/widgets/video_table.py` para usar `VideoStatus.XXX.value` como chave
-- [ ] Atualizar `_sort_priority` em `video_table.py` idem
-- [ ] Garantir que `SqliteVideoRepository.get_by_status()` continua funcionando (StrEnum serializa como string — deve ser transparente)
-- [ ] Rodar testes e confirmar zero regressões
+- [x] Em `models.py`: substituir `VideoStatus = Literal[...]` por `class VideoStatus(StrEnum)` com membros em UPPER_SNAKE
+- [x] Em `models.py`: idem para `ClipStatus` e `TriageStage`
+- [x] Atualizar `Video.status` e `Clip.status` para usar o enum como default: `status: VideoStatus = VideoStatus.DISCOVERED`
+- [x] Substituir todas as strings hardcoded de status nos stages (ex: `"pending_tiktok_manual"` → `ClipStatus.PENDING_TIKTOK_MANUAL`)
+- [x] Atualizar `_STATUS_COLOR` em `gui/widgets/video_table.py` para usar `VideoStatus` enum como chave
+- [x] Atualizar `_sort_priority` em `video_table.py` idem; iterar `for s in VideoStatus` no combobox
+- [x] Garantir que `SqliteVideoRepository.get_by_status()` continua funcionando (StrEnum serializa como string — transparente)
+- [x] Apagar `class TriageStage(StrEnum)` local de `cli.py` e importar de `models`
+- [x] Converter todos os testes (~21 arquivos) para usar membros de enum em vez de strings literais
+- [x] Corrigir `test_state.py`: `typing.get_args(VideoStatus)` → `set(VideoStatus)` (StrEnum não é genérico parametrizado)
+- [x] Remover 6 `# type: ignore[arg-type]` herdados de T3 (narrowing de ternários com StrEnum funciona sem ignore)
+- [x] Rodar testes e confirmar zero regressões
+
+**Resultado:** `uv run mypy src/` → 0 erros. `uv run pytest tests/ -q` → 389 passed (1 falha pré-existente não relacionada em `test_edit.py`). `uv run ruff check src/ tests/` → 0 violações novas introduzidas por T4.
 
 **Esforço estimado:** 3–4 horas
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,7 +17,7 @@ from canal_soberania.db import (
     insert_video,
 )
 from canal_soberania.llm import LLMResponse
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 from canal_soberania.stages.triage_metadata import (
     _build_prompt,
     _fetch_top_comments,
@@ -184,7 +184,7 @@ def test_triage_video_metadata_passed(
     assert result.score == 7
     assert result.is_relevant is True
 
-    passed = get_videos_by_status(db, "triage_metadata_passed")
+    passed = get_videos_by_status(db, VideoStatus.TRIAGE_METADATA_PASSED)
     assert len(passed) == 1
     assert passed[0].video_id == "dQw4w9WgXcQ"
 
@@ -215,7 +215,7 @@ def test_triage_video_metadata_rejected(
     assert result.score == 3
     assert result.is_relevant is False
 
-    rejected = get_videos_by_status(db, "triage_metadata_rejected")
+    rejected = get_videos_by_status(db, VideoStatus.TRIAGE_METADATA_REJECTED)
     assert len(rejected) == 1
 
 
@@ -244,7 +244,7 @@ def test_triage_video_metadata_dry_run_no_db_changes(
     assert result is None
     llm.complete.assert_not_called()
     # vídeo deve continuar em 'discovered'
-    assert len(get_videos_by_status(db, "discovered")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.DISCOVERED)) == 1
 
 
 def test_triage_video_metadata_llm_error_sets_processing_error(
@@ -271,7 +271,7 @@ def test_triage_video_metadata_llm_error_sets_processing_error(
     )
 
     assert result is None
-    error_videos = get_videos_by_status(db, "processing_error")
+    error_videos = get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)
     assert len(error_videos) == 1
 
 

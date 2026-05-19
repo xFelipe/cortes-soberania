@@ -9,10 +9,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from canal_soberania.config import Canal, CanaisConfig, Parametros
-from canal_soberania.db import connect, get_videos_by_status, init_db, insert_video, update_video_paths
+from canal_soberania.config import CanaisConfig, Canal, Parametros
+from canal_soberania.db import (
+    connect,
+    get_videos_by_status,
+    init_db,
+    insert_video,
+)
 from canal_soberania.llm import LLMResponse
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 from canal_soberania.stages.triage_transcript import (
     _build_transcript_prompt,
     _load_transcript_segments,
@@ -58,7 +63,7 @@ def video(transcript_file: Path) -> Video:
         title="Brasil e BRICS",
         published_at="2026-05-10T12:00:00Z",
         duration_s=3600,
-        status="transcribed",
+        status=VideoStatus.TRANSCRIBED,
         transcript_path=str(transcript_file),
     )
 
@@ -168,7 +173,7 @@ def test_triage_video_transcript_passed(
 
     assert result is not None
     assert result.is_relevant is True
-    assert len(get_videos_by_status(db, "triage_transcript_passed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_TRANSCRIPT_PASSED)) == 1
 
 
 def test_triage_video_transcript_rejected(
@@ -187,7 +192,7 @@ def test_triage_video_transcript_rejected(
 
     assert result is not None
     assert result.is_relevant is False
-    assert len(get_videos_by_status(db, "triage_transcript_rejected")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_TRANSCRIPT_REJECTED)) == 1
 
 
 def test_triage_video_transcript_dry_run(
@@ -206,7 +211,7 @@ def test_triage_video_transcript_dry_run(
 
     assert result is None
     llm.complete.assert_not_called()
-    assert len(get_videos_by_status(db, "transcribed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRANSCRIBED)) == 1
 
 
 def test_triage_video_transcript_missing_path(
@@ -218,7 +223,7 @@ def test_triage_video_transcript_missing_path(
         canal_id="arte_da_guerra",
         title="Teste",
         published_at="2026-05-10T12:00:00Z",
-        status="transcribed",
+        status=VideoStatus.TRANSCRIBED,
         transcript_path=None,
     )
     with db:
@@ -248,7 +253,7 @@ def test_triage_video_transcript_llm_error(
         canais_cfg=canais_cfg,
     )
     assert result is None
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)) == 1
 
 
 def test_triage_video_transcript_records_cost(

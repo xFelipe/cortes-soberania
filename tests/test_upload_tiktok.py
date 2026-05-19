@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video
 from canal_soberania.stages.upload_tiktok import _safe_filename, queue_clip_for_tiktok
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
@@ -125,7 +125,7 @@ def test_queue_clip_updates_status(
     row = db.execute(
         "SELECT status FROM clips WHERE clip_id=?", (clip_in_db.clip_id,)
     ).fetchone()
-    assert row["status"] == "pending_tiktok_manual"
+    assert row["status"] == ClipStatus.PENDING_TIKTOK_MANUAL
 
 
 def test_queue_clip_logs_to_uploads_log(

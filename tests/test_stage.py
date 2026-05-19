@@ -7,9 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from canal_soberania.core.stage import JobContext, Stage, StageResult
+from canal_soberania.core.stage import JobContext, Stage
 from canal_soberania.stages.wrappers import _FuncStage, get_stage
-
 
 # ---------------------------------------------------------------------------
 # Protocolo Stage
@@ -28,6 +27,7 @@ def test_func_stage_name() -> None:
 
 def test_func_stage_execute_success(tmp_path: Path) -> None:
     import sqlite3
+
     from canal_soberania.config import Settings
     called = []
     stage = _FuncStage("test", lambda **kw: called.append(True))
@@ -45,6 +45,7 @@ def test_func_stage_execute_success(tmp_path: Path) -> None:
 
 def test_func_stage_execute_failure(tmp_path: Path) -> None:
     import sqlite3
+
     from canal_soberania.config import Settings
     exc = RuntimeError("boom")
     stage = _FuncStage("test", lambda **kw: (_ for _ in ()).throw(exc))
@@ -71,6 +72,7 @@ def test_func_stage_not_retryable() -> None:
 
 def test_func_stage_rollback_is_noop(tmp_path: Path) -> None:
     import sqlite3
+
     from canal_soberania.config import Settings
     stage = _FuncStage("test", lambda **kw: None)
     ctx = JobContext(conn=sqlite3.connect(":memory:"), settings=Settings(), paths={})
@@ -110,7 +112,6 @@ def test_get_stage_unknown_raises() -> None:
 
 @pytest.fixture
 def svc(tmp_path: Path) -> object:
-    import sqlite3
     from canal_soberania.config import Settings
     from canal_soberania.db import connect, init_db
     from canal_soberania.services.pipeline_service import PipelineService

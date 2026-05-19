@@ -9,52 +9,56 @@ from canal_soberania.models import ClipStatus, VideoStatus
 # Transições válidas de Video
 # ---------------------------------------------------------------------------
 
+VS = VideoStatus
+
 VIDEO_TRANSITIONS: dict[VideoStatus, list[VideoStatus]] = {
-    "discovered": ["triage_metadata_passed", "triage_metadata_rejected", "on_hold_metadata_passed", "processing_error"],
-    "triage_metadata_passed": ["triage_caption_passed", "triage_caption_rejected", "triage_caption_skipped", "on_hold_metadata_passed", "processing_error"],
-    "on_hold_metadata_passed": ["triage_caption_passed", "processing_error"],
-    "triage_metadata_rejected": [],
-    "triage_caption_passed": ["downloading", "processing_error"],
-    "triage_caption_rejected": [],
-    "triage_caption_skipped": ["downloading", "processing_error"],
-    "downloading": ["downloaded", "discovered", "processing_error"],  # discovered = retry
-    "downloaded": ["transcribing", "processing_error"],
-    "transcribing": ["transcribed", "transcribe_error", "processing_error"],
-    "transcribe_error": ["transcribing"],  # permite retry
-    "transcribed": ["triage_transcript_passed", "triage_transcript_rejected", "processing_error"],
-    "triage_transcript_passed": ["approved_for_clips", "processing_error"],
-    "triage_transcript_rejected": ["approved_for_clips"],  # override manual da rejeição
-    "approved_for_clips": ["finding_clips", "processing_error"],
-    "finding_clips": ["clips_found", "processing_error"],
-    "clips_found": [],
-    "processing_error": ["discovered"],  # reset manual para reprocessar
+    VS.DISCOVERED: [VS.TRIAGE_METADATA_PASSED, VS.TRIAGE_METADATA_REJECTED, VS.ON_HOLD_METADATA_PASSED, VS.PROCESSING_ERROR],
+    VS.TRIAGE_METADATA_PASSED: [VS.TRIAGE_CAPTION_PASSED, VS.TRIAGE_CAPTION_REJECTED, VS.TRIAGE_CAPTION_SKIPPED, VS.ON_HOLD_METADATA_PASSED, VS.PROCESSING_ERROR],
+    VS.ON_HOLD_METADATA_PASSED: [VS.TRIAGE_CAPTION_PASSED, VS.PROCESSING_ERROR],
+    VS.TRIAGE_METADATA_REJECTED: [],
+    VS.TRIAGE_CAPTION_PASSED: [VS.DOWNLOADING, VS.PROCESSING_ERROR],
+    VS.TRIAGE_CAPTION_REJECTED: [],
+    VS.TRIAGE_CAPTION_SKIPPED: [VS.DOWNLOADING, VS.PROCESSING_ERROR],
+    VS.DOWNLOADING: [VS.DOWNLOADED, VS.DISCOVERED, VS.PROCESSING_ERROR],  # discovered = retry
+    VS.DOWNLOADED: [VS.TRANSCRIBING, VS.PROCESSING_ERROR],
+    VS.TRANSCRIBING: [VS.TRANSCRIBED, VS.TRANSCRIBE_ERROR, VS.PROCESSING_ERROR],
+    VS.TRANSCRIBE_ERROR: [VS.TRANSCRIBING],  # permite retry
+    VS.TRANSCRIBED: [VS.TRIAGE_TRANSCRIPT_PASSED, VS.TRIAGE_TRANSCRIPT_REJECTED, VS.PROCESSING_ERROR],
+    VS.TRIAGE_TRANSCRIPT_PASSED: [VS.APPROVED_FOR_CLIPS, VS.PROCESSING_ERROR],
+    VS.TRIAGE_TRANSCRIPT_REJECTED: [VS.APPROVED_FOR_CLIPS],  # override manual da rejeição
+    VS.APPROVED_FOR_CLIPS: [VS.FINDING_CLIPS, VS.PROCESSING_ERROR],
+    VS.FINDING_CLIPS: [VS.CLIPS_FOUND, VS.PROCESSING_ERROR],
+    VS.CLIPS_FOUND: [],
+    VS.PROCESSING_ERROR: [VS.DISCOVERED],  # reset manual para reprocessar
 }
 
 # ---------------------------------------------------------------------------
 # Transições válidas de Clip
 # ---------------------------------------------------------------------------
 
+CS = ClipStatus
+
 CLIP_TRANSITIONS: dict[ClipStatus, list[ClipStatus]] = {
-    "identified": ["editing", "processing_error"],
-    "editing": ["edited", "identified", "processing_error"],  # identified = retry
-    "edited": ["thumbnail_ready", "processing_error"],
-    "thumbnail_ready": ["metadata_ready", "processing_error"],
-    "metadata_ready": ["uploading_youtube", "scheduled_youtube", "pending_tiktok_manual", "processing_error"],
-    "uploading_youtube": ["scheduled_youtube", "metadata_ready", "processing_error"],
-    "scheduled_youtube": [
-        "uploaded_youtube",      # publicou de verdade
-        "rejected_youtube",      # YouTube rejeitou (copyright/spam/etc.)
-        "deleted_youtube",       # vídeo removido
-        "unscheduled_youtube",   # publishAt foi removido pelo dono
-        "processing_error",
+    CS.IDENTIFIED: [CS.EDITING, CS.PROCESSING_ERROR],
+    CS.EDITING: [CS.EDITED, CS.IDENTIFIED, CS.PROCESSING_ERROR],  # identified = retry
+    CS.EDITED: [CS.THUMBNAIL_READY, CS.PROCESSING_ERROR],
+    CS.THUMBNAIL_READY: [CS.METADATA_READY, CS.PROCESSING_ERROR],
+    CS.METADATA_READY: [CS.UPLOADING_YOUTUBE, CS.SCHEDULED_YOUTUBE, CS.PENDING_TIKTOK_MANUAL, CS.PROCESSING_ERROR],
+    CS.UPLOADING_YOUTUBE: [CS.SCHEDULED_YOUTUBE, CS.METADATA_READY, CS.PROCESSING_ERROR],
+    CS.SCHEDULED_YOUTUBE: [
+        CS.UPLOADED_YOUTUBE,      # publicou de verdade
+        CS.REJECTED_YOUTUBE,      # YouTube rejeitou (copyright/spam/etc.)
+        CS.DELETED_YOUTUBE,       # vídeo removido
+        CS.UNSCHEDULED_YOUTUBE,   # publishAt foi removido pelo dono
+        CS.PROCESSING_ERROR,
     ],
-    "uploaded_youtube": ["deleted_youtube", "pending_tiktok_manual"],
-    "rejected_youtube": ["identified", "processing_error"],   # re-editar ou descartar
-    "deleted_youtube": ["identified"],                        # re-fazer do zero
-    "unscheduled_youtube": ["scheduled_youtube", "metadata_ready"],  # reagendar ou rever
-    "pending_tiktok_manual": ["uploaded_tiktok"],
-    "uploaded_tiktok": [],
-    "processing_error": ["identified"],  # reset manual
+    CS.UPLOADED_YOUTUBE: [CS.DELETED_YOUTUBE, CS.PENDING_TIKTOK_MANUAL],
+    CS.REJECTED_YOUTUBE: [CS.IDENTIFIED, CS.PROCESSING_ERROR],   # re-editar ou descartar
+    CS.DELETED_YOUTUBE: [CS.IDENTIFIED],                         # re-fazer do zero
+    CS.UNSCHEDULED_YOUTUBE: [CS.SCHEDULED_YOUTUBE, CS.METADATA_READY],  # reagendar ou rever
+    CS.PENDING_TIKTOK_MANUAL: [CS.UPLOADED_TIKTOK],
+    CS.UPLOADED_TIKTOK: [],
+    CS.PROCESSING_ERROR: [CS.IDENTIFIED],  # reset manual
 }
 
 

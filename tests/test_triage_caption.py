@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from canal_soberania.config import Canal, CanaisConfig, Parametros
+from canal_soberania.config import CanaisConfig, Canal, Parametros
 from canal_soberania.db import connect, get_videos_by_status, init_db, insert_video
 from canal_soberania.llm import LLMResponse
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 from canal_soberania.stages.triage_caption import (
     _build_caption_prompt,
     _parse_caption_response,
@@ -61,7 +61,7 @@ def video() -> Video:
         tags=["soberania", "industria", "embraer"],
         published_at="2026-05-10T12:00:00Z",
         duration_s=3600,
-        status="triage_metadata_passed",
+        status=VideoStatus.TRIAGE_METADATA_PASSED,
     )
 
 
@@ -261,7 +261,7 @@ def test_triage_video_caption_passed(
     assert result is not None
     assert result.score == 7
     assert result.is_relevant is True
-    assert len(get_videos_by_status(db, "triage_caption_passed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_CAPTION_PASSED)) == 1
 
 
 def test_triage_video_caption_rejected(
@@ -286,7 +286,7 @@ def test_triage_video_caption_rejected(
 
     assert result is not None
     assert result.is_relevant is False
-    assert len(get_videos_by_status(db, "triage_caption_rejected")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_CAPTION_REJECTED)) == 1
 
 
 def test_triage_video_caption_skipped_when_no_caption(
@@ -315,7 +315,7 @@ def test_triage_video_caption_skipped_when_no_caption(
 
     assert result is None
     llm.complete.assert_not_called()
-    assert len(get_videos_by_status(db, "triage_caption_skipped")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_CAPTION_SKIPPED)) == 1
 
 
 def test_triage_video_caption_dry_run(
@@ -341,7 +341,7 @@ def test_triage_video_caption_dry_run(
     assert result is None
     llm.complete.assert_not_called()
     # Status deve permanecer inalterado (triage_metadata_passed)
-    assert len(get_videos_by_status(db, "triage_metadata_passed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_METADATA_PASSED)) == 1
 
 
 def test_triage_video_caption_llm_error(
@@ -366,7 +366,7 @@ def test_triage_video_caption_llm_error(
     )
 
     assert result is None
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)) == 1
 
 
 def test_triage_video_caption_saves_caption_path(

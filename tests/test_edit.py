@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from canal_soberania.db import connect, get_clips_by_status, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.db import connect, init_db
+from canal_soberania.models import Clip
 from canal_soberania.stages.edit import (
     _ts_to_ass,
     _words_from_segment,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from typing import Literal
 
@@ -33,7 +32,7 @@ class InMemoryVideoRepository:
             self._videos[video_id] = self._videos[video_id].model_copy(update={"status": new_status})
 
     def reject(self, video_id: str) -> None:
-        self.update_status(video_id, "triage_metadata_rejected")
+        self.update_status(video_id, VideoStatus.TRIAGE_METADATA_REJECTED)
 
     def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int:
         return 0
@@ -126,13 +125,13 @@ class InMemoryClipRepository:
     def reject(self, clip_id: str, reason: str) -> None:
         if clip_id in self._clips:
             self._clips[clip_id] = self._clips[clip_id].model_copy(
-                update={"status": "processing_error", "error_message": reason}
+                update={"status": ClipStatus.PROCESSING_ERROR, "error_message": reason}
             )
 
     def restore(self, clip_id: str) -> None:
-        if clip_id in self._clips and self._clips[clip_id].status == "processing_error":
+        if clip_id in self._clips and self._clips[clip_id].status == ClipStatus.PROCESSING_ERROR:
             self._clips[clip_id] = self._clips[clip_id].model_copy(
-                update={"status": "identified", "error_message": None}
+                update={"status": ClipStatus.IDENTIFIED, "error_message": None}
             )
 
     def update_trim(self, clip_id: str, start_s: float, end_s: float) -> None:

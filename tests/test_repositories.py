@@ -9,7 +9,7 @@ import pytest
 
 from canal_soberania.core.repositories import ClipRepository, VideoRepository
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 from canal_soberania.repositories.sqlite import SqliteClipRepository, SqliteVideoRepository
 from tests.fakes import InMemoryClipRepository, InMemoryVideoRepository
 
@@ -97,16 +97,16 @@ def test_sqlite_video_get_all(db: sqlite3.Connection) -> None:
 
 def test_sqlite_video_get_by_status(db: sqlite3.Connection) -> None:
     insert_video(db, _video(video_id="aaaaaaaaa11"))
-    insert_video(db, _video(video_id="bbbbbbbbb22", status="triage_metadata_passed"))
+    insert_video(db, _video(video_id="bbbbbbbbb22", status=VideoStatus.TRIAGE_METADATA_PASSED))
     repo = SqliteVideoRepository(db)
-    assert len(repo.get_by_status("discovered")) == 1
+    assert len(repo.get_by_status(VideoStatus.DISCOVERED)) == 1
 
 
 def test_sqlite_video_status_summary(db: sqlite3.Connection) -> None:
     insert_video(db, _video(video_id="aaaaaaaaa11"))
     repo = SqliteVideoRepository(db)
     summary = repo.status_summary()
-    assert summary.get("discovered", 0) == 1
+    assert summary.get(VideoStatus.DISCOVERED, 0) == 1
 
 
 def test_sqlite_video_monthly_cost_zero(db: sqlite3.Connection) -> None:
@@ -143,10 +143,10 @@ def test_sqlite_clip_get_all(db: sqlite3.Connection) -> None:
 def test_sqlite_clip_get_by_status(db: sqlite3.Connection) -> None:
     insert_video(db, _video())
     insert_clip(db, _clip(clip_id="dQw4w9WgXcQ_10_40"))
-    insert_clip(db, _clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"))
+    insert_clip(db, _clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status=ClipStatus.EDITED))
     repo = SqliteClipRepository(db)
-    assert len(repo.get_by_status("identified")) == 1
-    assert len(repo.get_by_status("edited")) == 1
+    assert len(repo.get_by_status(ClipStatus.IDENTIFIED)) == 1
+    assert len(repo.get_by_status(ClipStatus.EDITED)) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -172,18 +172,18 @@ def test_inmemory_video_get_all() -> None:
 
 def test_inmemory_video_get_by_status() -> None:
     repo = InMemoryVideoRepository([
-        _video(video_id="aaaaaaaaa11", status="discovered"),
-        _video(video_id="bbbbbbbbb22", status="triage_metadata_passed"),
+        _video(video_id="aaaaaaaaa11", status=VideoStatus.DISCOVERED),
+        _video(video_id="bbbbbbbbb22", status=VideoStatus.TRIAGE_METADATA_PASSED),
     ])
-    assert len(repo.get_by_status("discovered")) == 1
+    assert len(repo.get_by_status(VideoStatus.DISCOVERED)) == 1
 
 
 def test_inmemory_video_status_summary() -> None:
     repo = InMemoryVideoRepository([
-        _video(video_id="aaaaaaaaa11", status="discovered"),
-        _video(video_id="bbbbbbbbb22", status="discovered"),
+        _video(video_id="aaaaaaaaa11", status=VideoStatus.DISCOVERED),
+        _video(video_id="bbbbbbbbb22", status=VideoStatus.DISCOVERED),
     ])
-    assert repo.status_summary()["discovered"] == 2
+    assert repo.status_summary()[VideoStatus.DISCOVERED] == 2
 
 
 def test_inmemory_video_add() -> None:
@@ -215,10 +215,10 @@ def test_inmemory_clip_get_all() -> None:
 
 def test_inmemory_clip_get_by_status() -> None:
     repo = InMemoryClipRepository([
-        _clip(clip_id="dQw4w9WgXcQ_10_40", status="identified"),
-        _clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"),
+        _clip(clip_id="dQw4w9WgXcQ_10_40", status=ClipStatus.IDENTIFIED),
+        _clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status=ClipStatus.EDITED),
     ])
-    assert len(repo.get_by_status("identified")) == 1
+    assert len(repo.get_by_status(ClipStatus.IDENTIFIED)) == 1
 
 
 def test_inmemory_clip_add() -> None:

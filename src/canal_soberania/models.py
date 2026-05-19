@@ -2,49 +2,53 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-VideoStatus = Literal[
-    "discovered",
-    "triage_metadata_passed",
-    "triage_metadata_rejected",
-    "on_hold_metadata_passed",
-    "triage_caption_passed",
-    "triage_caption_rejected",
-    "triage_caption_skipped",
-    "downloading",
-    "downloaded",
-    "transcribing",
-    "transcribed",
-    "transcribe_error",
-    "triage_transcript_passed",
-    "triage_transcript_rejected",
-    "approved_for_clips",
-    "finding_clips",
-    "clips_found",
-    "processing_error",
-]
 
-ClipStatus = Literal[
-    "identified",
-    "editing",
-    "edited",
-    "thumbnail_ready",
-    "metadata_ready",
-    "uploading_youtube",
-    "scheduled_youtube",
-    "uploaded_youtube",
-    "rejected_youtube",
-    "deleted_youtube",
-    "unscheduled_youtube",
-    "pending_tiktok_manual",
-    "uploaded_tiktok",
-    "processing_error",
-]
+class VideoStatus(StrEnum):
+    DISCOVERED = "discovered"
+    TRIAGE_METADATA_PASSED = "triage_metadata_passed"
+    TRIAGE_METADATA_REJECTED = "triage_metadata_rejected"
+    ON_HOLD_METADATA_PASSED = "on_hold_metadata_passed"
+    TRIAGE_CAPTION_PASSED = "triage_caption_passed"
+    TRIAGE_CAPTION_REJECTED = "triage_caption_rejected"
+    TRIAGE_CAPTION_SKIPPED = "triage_caption_skipped"
+    DOWNLOADING = "downloading"
+    DOWNLOADED = "downloaded"
+    TRANSCRIBING = "transcribing"
+    TRANSCRIBED = "transcribed"
+    TRANSCRIBE_ERROR = "transcribe_error"
+    TRIAGE_TRANSCRIPT_PASSED = "triage_transcript_passed"
+    TRIAGE_TRANSCRIPT_REJECTED = "triage_transcript_rejected"
+    APPROVED_FOR_CLIPS = "approved_for_clips"
+    FINDING_CLIPS = "finding_clips"
+    CLIPS_FOUND = "clips_found"
+    PROCESSING_ERROR = "processing_error"
 
-TriageStage = Literal["metadata", "caption", "transcript"]
+
+class ClipStatus(StrEnum):
+    IDENTIFIED = "identified"
+    EDITING = "editing"
+    EDITED = "edited"
+    THUMBNAIL_READY = "thumbnail_ready"
+    METADATA_READY = "metadata_ready"
+    UPLOADING_YOUTUBE = "uploading_youtube"
+    SCHEDULED_YOUTUBE = "scheduled_youtube"
+    UPLOADED_YOUTUBE = "uploaded_youtube"
+    REJECTED_YOUTUBE = "rejected_youtube"
+    DELETED_YOUTUBE = "deleted_youtube"
+    UNSCHEDULED_YOUTUBE = "unscheduled_youtube"
+    PENDING_TIKTOK_MANUAL = "pending_tiktok_manual"
+    UPLOADED_TIKTOK = "uploaded_tiktok"
+    PROCESSING_ERROR = "processing_error"
+
+
+class TriageStage(StrEnum):
+    METADATA = "metadata"
+    CAPTION = "caption"
+    TRANSCRIPT = "transcript"
 
 
 class Video(BaseModel):
@@ -63,7 +67,7 @@ class Video(BaseModel):
     caption_path: str | None = None
     transcript_path: str | None = None
     legendas_queimadas: bool | None = None
-    status: VideoStatus = "discovered"
+    status: VideoStatus = VideoStatus.DISCOVERED
     error_message: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -108,7 +112,7 @@ class Clip(BaseModel):
     youtube_view_count_horizontal: int | None = None
     youtube_like_count_horizontal: int | None = None
     youtube_comment_count_horizontal: int | None = None
-    status: ClipStatus = "identified"
+    status: ClipStatus = ClipStatus.IDENTIFIED
     error_message: str | None = None
     created_at: str | None = None
     updated_at: str | None = None

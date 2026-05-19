@@ -20,14 +20,15 @@ from pathlib import Path
 from typing import Any
 
 from canal_soberania.logger import logger
+from canal_soberania.models import ClipStatus
 from canal_soberania.utils.youtube_auth import get_youtube_service
 
 # Status cujos clipes devem ser incluídos na sync
 _SYNC_STATUSES = (
-    "scheduled_youtube",
-    "uploading_youtube",
-    "uploaded_youtube",
-    "unscheduled_youtube",
+    ClipStatus.SCHEDULED_YOUTUBE,
+    ClipStatus.UPLOADING_YOUTUBE,
+    ClipStatus.UPLOADED_YOUTUBE,
+    ClipStatus.UNSCHEDULED_YOUTUBE,
 )
 
 _BATCH_SIZE = 50
@@ -128,7 +129,7 @@ def _process_batch(  # noqa: C901
                 logger.warning("sync_youtube: {} | {} não encontrado — marcando deleted_youtube",
                                clip_id, yt_id)
                 if not dry_run:
-                    _transition(conn, clip_id, clip_status, "deleted_youtube")
+                    _transition(conn, clip_id, clip_status, ClipStatus.DELETED_YOUTUBE)
                     _update_cols(conn, clip_id, {
                         "youtube_upload_status": "deleted",
                         "youtube_last_synced_at": now_iso,
@@ -199,20 +200,20 @@ def _apply_item(
     new_status: str | None = None
 
     if upload_status == "rejected":
-        new_status = "rejected_youtube"
+        new_status = ClipStatus.REJECTED_YOUTUBE
         cols["youtube_rejection_reason"] = rejection_reason
         logger.warning("sync_youtube: {} rejeitado pelo YouTube | motivo={}", clip_id, rejection_reason)
 
     elif privacy == "public" and not publish_at_yt:
         # Publicou de verdade
-        if clip_status != "uploaded_youtube":
-            new_status = "uploaded_youtube"
+        if clip_status != ClipStatus.UPLOADED_YOUTUBE:
+            new_status = ClipStatus.UPLOADED_YOUTUBE
         cols["youtube_actual_published_at"] = actual_published_at
         logger.info("sync_youtube: {} publicado | views={}", clip_id, view_count)
 
-    elif privacy == "private" and not publish_at_yt and clip_status in ("scheduled_youtube", "uploading_youtube"):
+    elif privacy == "private" and not publish_at_yt and clip_status in (ClipStatus.SCHEDULED_YOUTUBE, ClipStatus.UPLOADING_YOUTUBE):
         # Era agendado mas publishAt sumiu sem virar público = desagendado
-        new_status = "unscheduled_youtube"
+        new_status = ClipStatus.UNSCHEDULED_YOUTUBE
         logger.warning("sync_youtube: {} desagendado (publishAt removido)", clip_id)
 
     elif privacy == "private" and publish_at_yt and publish_at_yt != scheduled_publish_at:

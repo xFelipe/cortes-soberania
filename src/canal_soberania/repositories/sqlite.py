@@ -46,7 +46,7 @@ class SqliteVideoRepository:
             try:
                 result.append(Video.model_validate(d))
             except ValidationError:
-                d["status"] = "processing_error"
+                d["status"] = VideoStatus.PROCESSING_ERROR
                 result.append(Video.model_validate(d))
         return result
 
@@ -81,10 +81,10 @@ class SqliteVideoRepository:
 
     def reject(self, video_id: str) -> None:
         self._conn.execute(
-            "UPDATE videos SET status = 'triage_metadata_rejected', "
+            "UPDATE videos SET status = ?, "
             "error_message = 'Rejeitado manualmente', updated_at = datetime('now') "
             "WHERE video_id = ?",
-            (video_id,),
+            (VideoStatus.TRIAGE_METADATA_REJECTED, video_id),
         )
         self._conn.commit()
 
@@ -177,18 +177,18 @@ class SqliteClipRepository:
 
     def reject(self, clip_id: str, reason: str) -> None:
         self._conn.execute(
-            "UPDATE clips SET status = 'processing_error', error_message = ?, "
+            "UPDATE clips SET status = ?, error_message = ?, "
             "updated_at = datetime('now') WHERE clip_id = ?",
-            (reason, clip_id),
+            (ClipStatus.PROCESSING_ERROR, reason, clip_id),
         )
         self._conn.commit()
 
     def restore(self, clip_id: str) -> None:
         """Restaura clipe de processing_error → identified (desfaz rejeição manual)."""
         self._conn.execute(
-            "UPDATE clips SET status = 'identified', error_message = NULL, "
-            "updated_at = datetime('now') WHERE clip_id = ? AND status = 'processing_error'",
-            (clip_id,),
+            "UPDATE clips SET status = ?, error_message = NULL, "
+            "updated_at = datetime('now') WHERE clip_id = ? AND status = ?",
+            (ClipStatus.IDENTIFIED, clip_id, ClipStatus.PROCESSING_ERROR),
         )
         self._conn.commit()
 

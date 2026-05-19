@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
-from canal_soberania.core.strategies import CropParams, ReframeStrategy, TranscriptionBackend
+from canal_soberania.core.strategies import CropParams, ReframeStrategy
 from canal_soberania.strategies.reframe import CenterCropReframe, FaceDetectionReframe
-
 
 # ---------------------------------------------------------------------------
 # Protocol compliance

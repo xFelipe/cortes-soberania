@@ -12,6 +12,7 @@ import pytest
 
 from canal_soberania.config import Canal, Parametros
 from canal_soberania.db import connect, get_videos_by_status, init_db
+from canal_soberania.models import VideoStatus
 from canal_soberania.stages.discover import (
     _iso_cutoff,
     _parse_duration,
@@ -198,7 +199,7 @@ def test_discover_canal_inserts_videos(
     inserted, skipped = discover_canal(yt, canal, params, db)
     assert inserted == 2
     assert skipped == 0
-    videos = get_videos_by_status(db, "discovered")
+    videos = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert len(videos) == 2
     assert {v.video_id for v in videos} == {"dQw4w9WgXcQ", "abc12345678"}
 
@@ -211,7 +212,7 @@ def test_discover_canal_idempotent(
     inserted, skipped = discover_canal(yt, canal, params, db)
     assert inserted == 0
     assert skipped == 1
-    videos = get_videos_by_status(db, "discovered")
+    videos = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert len(videos) == 1
 
 
@@ -221,7 +222,7 @@ def test_discover_canal_dry_run_does_not_insert(
     yt = _make_youtube_mock(video_ids=["dQw4w9WgXcQ"])
     inserted, _ = discover_canal(yt, canal, params, db, dry_run=True)
     assert inserted == 1  # contado mas não persistido
-    videos = get_videos_by_status(db, "discovered")
+    videos = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert len(videos) == 0
 
 
@@ -230,7 +231,7 @@ def test_discover_canal_parses_metadata(
 ) -> None:
     yt = _make_youtube_mock(video_ids=["dQw4w9WgXcQ"])
     discover_canal(yt, canal, params, db)
-    videos = get_videos_by_status(db, "discovered")
+    videos = get_videos_by_status(db, VideoStatus.DISCOVERED)
     v = videos[0]
     assert v.duration_s == 3750  # PT1H2M30S
     assert v.view_count == 1000

@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from canal_soberania.cli import app
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 
 runner = CliRunner()
 
@@ -20,7 +20,7 @@ runner = CliRunner()
 @pytest.fixture
 def svc() -> MagicMock:
     m = MagicMock()
-    m.get_status_summary.return_value = {"discovered": 3, "downloaded": 1}
+    m.get_status_summary.return_value = {VideoStatus.DISCOVERED: 3, VideoStatus.DOWNLOADED: 1}
     m.get_monthly_cost.return_value = 0.42
     m.get_video.return_value = None
     m.reset_stuck_videos.return_value = 0

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video
 from canal_soberania.stages.upload_youtube import (
     _next_publish_slot,
     upload_clip,
@@ -127,7 +126,7 @@ def test_upload_clip_dry_run(clip_in_db: Clip, db: sqlite3.Connection, tmp_path:
     )
     assert result is None
     row = db.execute("SELECT status FROM clips WHERE clip_id=?", (clip_in_db.clip_id,)).fetchone()
-    assert row["status"] != "scheduled_youtube"
+    assert row["status"] != ClipStatus.SCHEDULED_YOUTUBE
 
 
 def test_upload_clip_no_vertical_path(db: sqlite3.Connection, tmp_path: Path) -> None:
@@ -213,7 +212,7 @@ def test_upload_clip_success(clip_in_db: Clip, db: sqlite3.Connection, tmp_path:
     row = db.execute(
         "SELECT status, youtube_id FROM clips WHERE clip_id=?", (clip_in_db.clip_id,)
     ).fetchone()
-    assert row["status"] == "scheduled_youtube"
+    assert row["status"] == ClipStatus.SCHEDULED_YOUTUBE
     assert row["youtube_id"] == "YT_VIDEO_ID_123"
 
 

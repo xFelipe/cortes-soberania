@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 from canal_soberania.services.pipeline_service import PipelineService
 
 _DESC_PREVIEW_LEN = 300
@@ -186,8 +186,8 @@ class ClipReviewDialog(QDialog):
         right.addWidget(edit_group)
 
         # Formatos de saída
-        is_scheduled = self._clip.status in {"scheduled_youtube", "uploaded_youtube",
-                                             "uploading_youtube"}
+        is_scheduled = self._clip.status in {ClipStatus.SCHEDULED_YOUTUBE, ClipStatus.UPLOADED_YOUTUBE,
+                                             ClipStatus.UPLOADING_YOUTUBE}
         formats_group = QGroupBox("Formatos de saída")
         formats_layout = QVBoxLayout(formats_group)
         self._render_vertical_chk = QCheckBox("Vertical (9:16 — Shorts / TikTok)")
@@ -239,7 +239,7 @@ class ClipReviewDialog(QDialog):
         # Botões — layout condicional por status
         btn_box = QDialogButtonBox()
         approve_label = (
-            "Liberar para publicação" if self._clip.status == "metadata_ready" else "Aprovar etapa"
+            "Liberar para publicação" if self._clip.status == ClipStatus.METADATA_READY else "Aprovar etapa"
         )
         self._approve_btn = btn_box.addButton(approve_label, QDialogButtonBox.ButtonRole.AcceptRole)
         self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
@@ -248,7 +248,7 @@ class ClipReviewDialog(QDialog):
         self._unschedule_btn: QPushButton | None = None
         self._discard_btn: QPushButton | None = None
 
-        if self._clip.status in {"scheduled_youtube", "uploaded_youtube", "uploading_youtube"}:
+        if self._clip.status in {ClipStatus.SCHEDULED_YOUTUBE, ClipStatus.UPLOADED_YOUTUBE, ClipStatus.UPLOADING_YOUTUBE}:
             # Dois botões de remoção para clipes já no YouTube
             self._unschedule_btn = btn_box.addButton(
                 "Cancelar agendamento", QDialogButtonBox.ButtonRole.ActionRole
@@ -275,9 +275,9 @@ class ClipReviewDialog(QDialog):
         right.addWidget(btn_box)
 
         # Inicializa estado dos botões conforme status atual do clipe
-        if self._clip.status == "processing_error":
+        if self._clip.status == ClipStatus.PROCESSING_ERROR:
             self._set_rejected_ui(True)
-        elif self._clip.status in {"unscheduled_youtube", "deleted_youtube"}:
+        elif self._clip.status in {ClipStatus.UNSCHEDULED_YOUTUBE, ClipStatus.DELETED_YOUTUBE}:
             self._approve_btn.setEnabled(False)
             self._approve_btn.setStyleSheet("background-color: #444444; color: #888888;")
 
@@ -482,7 +482,7 @@ class ClipReviewDialog(QDialog):
 
     def _approve(self) -> None:
         self._save_changes(silent=True)
-        if self._clip.status == "metadata_ready":
+        if self._clip.status == ClipStatus.METADATA_READY:
             self._confirm_and_publish()
         else:
             try:
@@ -528,7 +528,7 @@ class ClipReviewDialog(QDialog):
         try:
             self._service.unschedule_clip(self._clip.clip_id)
             self._clip = self._clip.model_copy(update={
-                "status": "unscheduled_youtube", "youtube_publish_at": None,
+                "status": ClipStatus.UNSCHEDULED_YOUTUBE, "youtube_publish_at": None,
             })
         except Exception as exc:
             QMessageBox.critical(self, "Erro ao cancelar agendamento", str(exc))
@@ -564,7 +564,7 @@ class ClipReviewDialog(QDialog):
         try:
             self._service.discard_clip(self._clip.clip_id)
             self._clip = self._clip.model_copy(update={
-                "status": "deleted_youtube", "youtube_id": None, "youtube_id_horizontal": None,
+                "status": ClipStatus.DELETED_YOUTUBE, "youtube_id": None, "youtube_id_horizontal": None,
             })
         except Exception as exc:
             QMessageBox.critical(self, "Erro ao descartar", str(exc))
@@ -575,17 +575,17 @@ class ClipReviewDialog(QDialog):
 
     def _toggle_reject(self) -> None:
         """Alterna entre rejeitado e aguardando aprovação (sem fechar o diálogo)."""
-        if self._clip.status == "processing_error":
+        if self._clip.status == ClipStatus.PROCESSING_ERROR:
             try:
                 self._service.restore_clip(self._clip.clip_id)
-                self._clip = self._clip.model_copy(update={"status": "identified"})
+                self._clip = self._clip.model_copy(update={"status": ClipStatus.IDENTIFIED})
                 self._set_rejected_ui(False)
             except Exception as exc:
                 QMessageBox.critical(self, "Erro ao restaurar", str(exc))
         else:
             try:
                 self._service.reject_clip(self._clip.clip_id, "Rejeitado manualmente via GUI")
-                self._clip = self._clip.model_copy(update={"status": "processing_error"})
+                self._clip = self._clip.model_copy(update={"status": ClipStatus.PROCESSING_ERROR})
                 self._set_rejected_ui(True)
             except Exception as exc:
                 QMessageBox.critical(self, "Erro ao rejeitar", str(exc))

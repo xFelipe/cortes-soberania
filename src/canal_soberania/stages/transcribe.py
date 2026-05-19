@@ -24,7 +24,7 @@ from canal_soberania.db import (
     update_video_status,
 )
 from canal_soberania.logger import logger
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 
 
 def _preload_cuda_from_venv() -> None:
@@ -184,7 +184,7 @@ def transcribe_video(
         logger.error("Arquivo de áudio não encontrado: {}", audio_path)
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", "audio_file_missing"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, "audio_file_missing"
             )
         return None
 
@@ -196,7 +196,7 @@ def transcribe_video(
                 update_video_paths(
                     conn, video.video_id, transcript_path=str(transcript_path)
                 )
-                update_video_status(conn, video.video_id, "transcribed")
+                update_video_status(conn, video.video_id, VideoStatus.TRANSCRIBED)
         return transcript_path
 
     if dry_run:
@@ -204,7 +204,7 @@ def transcribe_video(
         return None
 
     with conn:
-        update_video_status(conn, video.video_id, "transcribing")
+        update_video_status(conn, video.video_id, VideoStatus.TRANSCRIBING)
 
     from canal_soberania.utils.heartbeat import HeartbeatKeeper
 
@@ -215,7 +215,7 @@ def transcribe_video(
         logger.error("Whisper error para {}: {}", video.video_id, exc)
         with conn:
             update_video_status(
-                conn, video.video_id, "transcribe_error", f"whisper_error: {exc}"
+                conn, video.video_id, VideoStatus.TRANSCRIBE_ERROR, f"whisper_error: {exc}"
             )
         return None
 
@@ -223,7 +223,7 @@ def transcribe_video(
 
     with conn:
         update_video_paths(conn, video.video_id, transcript_path=str(transcript_path))
-        update_video_status(conn, video.video_id, "transcribed")
+        update_video_status(conn, video.video_id, VideoStatus.TRANSCRIBED)
 
     logger.info(
         "Transcrição concluída: {} | segmentos={}", video.video_id, len(segments)
@@ -244,7 +244,7 @@ def run(
             init_db(paths["db_path"], paths["schema_path"])
         conn = connect(paths["db_path"])
 
-    videos = get_videos_by_statuses(conn, ["downloaded", "transcribing", "transcribe_error"])
+    videos = get_videos_by_statuses(conn, [VideoStatus.DOWNLOADED, VideoStatus.TRANSCRIBING, VideoStatus.TRANSCRIBE_ERROR])
     logger.info("transcribe: {} vídeos para processar", len(videos))
     if not videos:
         return

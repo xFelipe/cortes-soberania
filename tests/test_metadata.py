@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video
 from canal_soberania.stages.metadata import (
     _build_metadata_prompt,
     _load_clip_transcript,
@@ -275,7 +275,7 @@ def test_generate_metadata_success(
         "SELECT title, description, tags, status FROM clips WHERE clip_id = ?",
         (clip.clip_id,),
     ).fetchone()
-    assert row["status"] == "metadata_ready"
+    assert row["status"] == ClipStatus.METADATA_READY
     assert row["title"] == "Brasil perde soberania industrial"
     assert "Análise" in row["description"]
     tags = json.loads(row["tags"])
@@ -337,7 +337,7 @@ def test_generate_metadata_invalid_json_returns_false(
     )
     assert result is False
     row = db.execute("SELECT status FROM clips WHERE clip_id = ?", (clip.clip_id,)).fetchone()
-    assert row["status"] != "metadata_ready"
+    assert row["status"] != ClipStatus.METADATA_READY
 
 
 def test_generate_metadata_empty_title_returns_false(
@@ -389,4 +389,4 @@ def test_generate_metadata_unknown_canal(
     # Should still succeed (falls back to canal_id as nome)
     assert result is True
     row = db.execute("SELECT status FROM clips WHERE clip_id = ?", (clip.clip_id,)).fetchone()
-    assert row["status"] == "metadata_ready"
+    assert row["status"] == ClipStatus.METADATA_READY

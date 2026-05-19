@@ -25,40 +25,41 @@ from canal_soberania.gui.bridge import EventBridge
 from canal_soberania.gui.widgets.pipeline_log import PipelineLog
 from canal_soberania.gui.widgets.video_table import VideoTable
 from canal_soberania.gui.workers import PipelineLoopWorker, StageWorker
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 from canal_soberania.services.pipeline_service import PipelineService
 
 _HOOK_DISPLAY_LEN = 90
 _TAB_INDEX_PIPELINE = 2
 
-_CLIP_STATUS_COLOR: dict[str, str] = {
-    "identified": "#555555",
-    "editing": "#f57f17",
-    "edited": "#33691e",
-    "thumbnail_ready": "#1565c0",
-    "metadata_ready": "#e65100",   # âmbar — aguarda aprovação manual
-    "scheduled_youtube": "#004d40",
-    "uploaded_youtube": "#1b5e20",
-    "pending_tiktok_manual": "#e65100",
-    "uploaded_tiktok": "#880e4f",
-    "processing_error": "#d50000",
+CS = ClipStatus
+_CLIP_STATUS_COLOR: dict[ClipStatus, str] = {
+    CS.IDENTIFIED: "#555555",
+    CS.EDITING: "#f57f17",
+    CS.EDITED: "#33691e",
+    CS.THUMBNAIL_READY: "#1565c0",
+    CS.METADATA_READY: "#e65100",   # âmbar — aguarda aprovação manual
+    CS.SCHEDULED_YOUTUBE: "#004d40",
+    CS.UPLOADED_YOUTUBE: "#1b5e20",
+    CS.PENDING_TIKTOK_MANUAL: "#e65100",
+    CS.UPLOADED_TIKTOK: "#880e4f",
+    CS.PROCESSING_ERROR: "#d50000",
 }
 
-_CLIP_STATUS_LABELS: list[str] = [
-    "metadata_ready",
-    "edited",
-    "thumbnail_ready",
-    "identified",
-    "editing",
-    "pending_tiktok_manual",
-    "scheduled_youtube",
-    "uploaded_youtube",
-    "uploaded_tiktok",
-    "processing_error",
+_CLIP_STATUS_LABELS: list[ClipStatus] = [
+    CS.METADATA_READY,
+    CS.EDITED,
+    CS.THUMBNAIL_READY,
+    CS.IDENTIFIED,
+    CS.EDITING,
+    CS.PENDING_TIKTOK_MANUAL,
+    CS.SCHEDULED_YOUTUBE,
+    CS.UPLOADED_YOUTUBE,
+    CS.UPLOADED_TIKTOK,
+    CS.PROCESSING_ERROR,
 ]
 
 
-def _clip_sort_priority(status: str) -> int:
+def _clip_sort_priority(status: ClipStatus) -> int:
     try:
         return _CLIP_STATUS_LABELS.index(status)
     except ValueError:

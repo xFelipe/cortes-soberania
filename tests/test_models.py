@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 
 def test_video_valid() -> None:
@@ -13,7 +13,7 @@ def test_video_valid() -> None:
         title="Título do vídeo",
         published_at="2024-01-01T00:00:00Z",
     )
-    assert v.status == "discovered"
+    assert v.status == VideoStatus.DISCOVERED
     assert v.tags == []
 
 
@@ -54,4 +54,4 @@ def test_clip_default_status() -> None:
         start_s=0.0,
         end_s=60.0,
     )
-    assert c.status == "identified"
+    assert c.status == ClipStatus.IDENTIFIED

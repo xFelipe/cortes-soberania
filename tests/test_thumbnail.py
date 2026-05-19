@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video
 from canal_soberania.stages.thumbnail import (
     _wrap_text,
     extract_frame,
@@ -230,7 +230,7 @@ def test_make_thumbnail_returns_existing(
     row = db.execute(
         "SELECT status FROM clips WHERE clip_id = ?", (clip_in_db.clip_id,)
     ).fetchone()
-    assert row["status"] == "thumbnail_ready"
+    assert row["status"] == ClipStatus.THUMBNAIL_READY
 
 
 def test_make_thumbnail_fallback_no_video(
@@ -248,7 +248,7 @@ def test_make_thumbnail_fallback_no_video(
     row = db.execute(
         "SELECT status, thumb_path FROM clips WHERE clip_id = ?", (clip_in_db.clip_id,)
     ).fetchone()
-    assert row["status"] == "thumbnail_ready"
+    assert row["status"] == ClipStatus.THUMBNAIL_READY
     assert row["thumb_path"] is not None
 
 

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from canal_soberania.alert import check_stuck, _send_telegram
+from canal_soberania.alert import _send_telegram, check_stuck
 from canal_soberania.db import connect, init_db
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"

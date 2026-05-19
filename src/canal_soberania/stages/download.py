@@ -19,10 +19,10 @@ from canal_soberania.db import (
     update_video_status,
 )
 from canal_soberania.logger import logger
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 
-# Statuses que entram no stage de download (inclui "downloading" para recovery de orphans)
-_INPUT_STATUSES = ("triage_caption_passed", "triage_caption_skipped", "downloading")
+# Statuses que entram no stage de download (inclui DOWNLOADING para recovery de orphans)
+_INPUT_STATUSES = (VideoStatus.TRIAGE_CAPTION_PASSED, VideoStatus.TRIAGE_CAPTION_SKIPPED, VideoStatus.DOWNLOADING)
 
 _MIN_VALID_BYTES = 10_240  # 10 KB — arquivos menores são provavelmente parciais
 
@@ -158,7 +158,7 @@ def download_video_assets(
 
     if not dry_run:
         with conn:
-            update_video_status(conn, video.video_id, "downloading")
+            update_video_status(conn, video.video_id, VideoStatus.DOWNLOADING)
 
     with HeartbeatKeeper(conn, "videos", "video_id", video.video_id):
         audio_path = download_audio(video.video_id, audio_dir, dry_run=dry_run)
@@ -171,7 +171,7 @@ def download_video_assets(
         logger.error("Falha no download de áudio para {}", video.video_id)
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", "audio_download_failed"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, "audio_download_failed"
             )
         return False
 
@@ -182,7 +182,7 @@ def download_video_assets(
             audio_path=str(audio_path),
             video_path=str(video_path) if video_path else None,
         )
-        update_video_status(conn, video.video_id, "downloaded")
+        update_video_status(conn, video.video_id, VideoStatus.DOWNLOADED)
 
     if video_path is None:
         logger.warning(
@@ -213,7 +213,7 @@ def run(
 
     videos: list[Video] = []
     for status in _INPUT_STATUSES:
-        videos.extend(get_videos_by_status(conn, status))  # type: ignore[arg-type]
+        videos.extend(get_videos_by_status(conn, status))
 
     logger.info("download: {} vídeos para baixar", len(videos))
     if not videos:

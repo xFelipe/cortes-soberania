@@ -16,7 +16,7 @@ from canal_soberania.db import (
 )
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
-from canal_soberania.models import TriageResult, Video
+from canal_soberania.models import TriageResult, TriageStage, Video, VideoStatus
 
 _MIN_RELEVANCE_SCORE = 5
 
@@ -82,7 +82,7 @@ def _parse_triage_response(
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
-        stage="metadata",
+        stage=TriageStage.METADATA,
         score=score,
         is_relevant=is_relevant,
         themes_detected=themes,
@@ -133,13 +133,13 @@ def triage_video_metadata(
         (video.video_id,),
     ).fetchone()
     if existing is not None:
-        new_status = "triage_metadata_passed" if existing["is_relevant"] else "triage_metadata_rejected"
+        new_status = VideoStatus.TRIAGE_METADATA_PASSED if existing["is_relevant"] else VideoStatus.TRIAGE_METADATA_REJECTED
         logger.info(
             "triage_metadata {} já feita (score={}), pulando LLM → {}",
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+            update_video_status(conn, video.video_id, new_status)
         return None
 
     try:
@@ -147,7 +147,7 @@ def triage_video_metadata(
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
-            update_video_status(conn, video.video_id, "processing_error", str(exc))
+            update_video_status(conn, video.video_id, VideoStatus.PROCESSING_ERROR, str(exc))
         return None
 
     try:
@@ -157,13 +157,13 @@ def triage_video_metadata(
     except Exception as exc:
         logger.error("Parse error para {}: {} | resposta: {!r}", video.video_id, exc, resp.text[:200])
         with conn:
-            update_video_status(conn, video.video_id, "processing_error", f"parse_error: {exc}")
+            update_video_status(conn, video.video_id, VideoStatus.PROCESSING_ERROR, f"parse_error: {exc}")
         return None
 
-    new_status = "triage_metadata_passed" if result.score >= threshold else "triage_metadata_rejected"
+    new_status = VideoStatus.TRIAGE_METADATA_PASSED if result.score >= threshold else VideoStatus.TRIAGE_METADATA_REJECTED
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+        update_video_status(conn, video.video_id, new_status)
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",
@@ -228,7 +228,7 @@ def run(  # noqa: C901
         except Exception as exc:
             logger.warning("Não foi possível inicializar YouTube API: {}", exc)
 
-    videos = get_videos_by_status(conn, "discovered")
+    videos = get_videos_by_status(conn, VideoStatus.DISCOVERED)
     logger.info("triage_metadata: {} vídeos para processar", len(videos))
 
     passed = rejected = errors = 0

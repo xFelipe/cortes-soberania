@@ -15,10 +15,10 @@ from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS: ClipStatus = "metadata_ready"
-_UPLOADING_STATUS: ClipStatus = "uploading_youtube"
+_INPUT_STATUS: ClipStatus = ClipStatus.METADATA_READY
+_UPLOADING_STATUS: ClipStatus = ClipStatus.UPLOADING_YOUTUBE
 # Clipes em scheduled_youtube com render_flag=True mas sem ID → novo formato a enviar
-_REUPLOAD_STATUS: ClipStatus = "scheduled_youtube"
+_REUPLOAD_STATUS: ClipStatus = ClipStatus.SCHEDULED_YOUTUBE
 
 _RETRIABLE_HTTP_STATUS = {500, 502, 503, 504}
 _RETRIABLE_EXCEPTIONS = (socket.error, ssl.SSLError, ConnectionError, TimeoutError)
@@ -297,7 +297,7 @@ def upload_clip(  # noqa: C901
         with conn:
             conn.execute(
                 "UPDATE clips SET status=? WHERE clip_id=?",
-                ("scheduled_youtube", clip.clip_id),
+                (ClipStatus.SCHEDULED_YOUTUBE, clip.clip_id),
             )
 
         return youtube_id
@@ -305,7 +305,7 @@ def upload_clip(  # noqa: C901
     except Exception as exc:
         logger.error("upload_youtube: erro no upload de {}: {}", clip.clip_id, exc)
         # Se estava em scheduled_youtube (re-upload), volta para scheduled (não perde status)
-        rollback_status = "scheduled_youtube" if clip.status == "scheduled_youtube" else "metadata_ready"
+        rollback_status = ClipStatus.SCHEDULED_YOUTUBE if clip.status == ClipStatus.SCHEDULED_YOUTUBE else ClipStatus.METADATA_READY
         with conn:
             conn.execute(
                 "UPDATE clips SET status=?, error_message=? WHERE clip_id=?",

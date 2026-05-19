@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from canal_soberania.db import connect, get_videos_by_status, init_db, insert_video
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 from canal_soberania.stages.download import (
     download_audio,
     download_video,
@@ -33,7 +33,7 @@ def video() -> Video:
         canal_id="flow_podcast",
         title="Soberania nacional em debate",
         published_at="2026-05-10T12:00:00Z",
-        status="triage_caption_passed",
+        status=VideoStatus.TRIAGE_CAPTION_PASSED,
     )
 
 
@@ -143,7 +143,7 @@ def test_download_video_assets_success(
         ok = download_video_assets(video, db, audio_dir, video_dir)
 
     assert ok is True
-    downloaded = get_videos_by_status(db, "downloaded")
+    downloaded = get_videos_by_status(db, VideoStatus.DOWNLOADED)
     assert len(downloaded) == 1
     assert downloaded[0].audio_path is not None
     assert downloaded[0].video_path is not None
@@ -163,7 +163,7 @@ def test_download_video_assets_audio_fail_sets_error(
         ok = download_video_assets(video, db, audio_dir, video_dir)
 
     assert ok is False
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)) == 1
 
 
 def test_download_video_assets_dry_run(
@@ -179,7 +179,7 @@ def test_download_video_assets_dry_run(
 
     assert ok is True
     # Status deve permanecer inalterado
-    assert len(get_videos_by_status(db, "triage_caption_passed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRIAGE_CAPTION_PASSED)) == 1
 
 
 def test_download_video_assets_video_fail_still_succeeds(
@@ -200,7 +200,7 @@ def test_download_video_assets_video_fail_still_succeeds(
         ok = download_video_assets(video, db, audio_dir, video_dir)
 
     assert ok is True
-    downloaded = get_videos_by_status(db, "downloaded")
+    downloaded = get_videos_by_status(db, VideoStatus.DOWNLOADED)
     assert len(downloaded) == 1
     assert downloaded[0].audio_path is not None
     assert downloaded[0].video_path is None

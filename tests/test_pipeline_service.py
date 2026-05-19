@@ -10,7 +10,7 @@ import pytest
 
 from canal_soberania.config import Settings
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 from canal_soberania.services.pipeline_service import PipelineService
 from tests.fakes import InMemoryClipRepository, InMemoryVideoRepository
 
@@ -135,8 +135,8 @@ def test_get_videos_all(service: PipelineService, db: sqlite3.Connection) -> Non
 
 def test_get_videos_by_status(service: PipelineService, db: sqlite3.Connection) -> None:
     insert_video(db, _make_video(video_id="aaaaaaaaa11"))
-    insert_video(db, _make_video(video_id="bbbbbbbbb22", status="triage_metadata_passed"))
-    discovered = service.get_videos(status="discovered")
+    insert_video(db, _make_video(video_id="bbbbbbbbb22", status=VideoStatus.TRIAGE_METADATA_PASSED))
+    discovered = service.get_videos(status=VideoStatus.DISCOVERED)
     assert len(discovered) == 1
     assert discovered[0].video_id == "aaaaaaaaa11"
 
@@ -156,8 +156,8 @@ def test_get_clips_all(service: PipelineService, db: sqlite3.Connection) -> None
 def test_get_clips_by_status(service: PipelineService, db: sqlite3.Connection) -> None:
     insert_video(db, _make_video())
     insert_clip(db, _make_clip(clip_id="dQw4w9WgXcQ_10_40"))
-    insert_clip(db, _make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"))
-    identified = service.get_clips(status="identified")
+    insert_clip(db, _make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status=ClipStatus.EDITED))
+    identified = service.get_clips(status=ClipStatus.IDENTIFIED)
     assert len(identified) == 1
     assert identified[0].clip_id == "dQw4w9WgXcQ_10_40"
 
@@ -274,21 +274,21 @@ def test_inmemory_get_videos_by_status(
     service_mem: PipelineService,
     video_repo: InMemoryVideoRepository,
 ) -> None:
-    video_repo.add(_make_video(video_id="aaaaaaaaa11", status="discovered"))
-    video_repo.add(_make_video(video_id="bbbbbbbbb22", status="triage_metadata_passed"))
-    assert len(service_mem.get_videos(status="discovered")) == 1
+    video_repo.add(_make_video(video_id="aaaaaaaaa11", status=VideoStatus.DISCOVERED))
+    video_repo.add(_make_video(video_id="bbbbbbbbb22", status=VideoStatus.TRIAGE_METADATA_PASSED))
+    assert len(service_mem.get_videos(status=VideoStatus.DISCOVERED)) == 1
 
 
 def test_inmemory_status_summary(
     service_mem: PipelineService,
     video_repo: InMemoryVideoRepository,
 ) -> None:
-    video_repo.add(_make_video(video_id="aaaaaaaaa11", status="discovered"))
-    video_repo.add(_make_video(video_id="bbbbbbbbb22", status="discovered"))
-    video_repo.add(_make_video(video_id="ccccccccc33", status="triage_metadata_passed"))
+    video_repo.add(_make_video(video_id="aaaaaaaaa11", status=VideoStatus.DISCOVERED))
+    video_repo.add(_make_video(video_id="bbbbbbbbb22", status=VideoStatus.DISCOVERED))
+    video_repo.add(_make_video(video_id="ccccccccc33", status=VideoStatus.TRIAGE_METADATA_PASSED))
     summary = service_mem.get_status_summary()
-    assert summary["discovered"] == 2
-    assert summary["triage_metadata_passed"] == 1
+    assert summary[VideoStatus.DISCOVERED] == 2
+    assert summary[VideoStatus.TRIAGE_METADATA_PASSED] == 1
 
 
 def test_inmemory_get_clips_all(
@@ -303,10 +303,10 @@ def test_inmemory_get_clips_by_status(
     service_mem: PipelineService,
     clip_repo: InMemoryClipRepository,
 ) -> None:
-    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_10_40", status="identified"))
-    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status="edited"))
-    assert len(service_mem.get_clips(status="identified")) == 1
-    assert len(service_mem.get_clips(status="edited")) == 1
+    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_10_40", status=ClipStatus.IDENTIFIED))
+    clip_repo.add(_make_clip(clip_id="dQw4w9WgXcQ_50_80", start_s=50.0, end_s=80.0, status=ClipStatus.EDITED))
+    assert len(service_mem.get_clips(status=ClipStatus.IDENTIFIED)) == 1
+    assert len(service_mem.get_clips(status=ClipStatus.EDITED)) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +345,7 @@ def test_update_clip_text_propagates_to_youtube_when_scheduled(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="scheduled_youtube",
+        status=ClipStatus.SCHEDULED_YOUTUBE,
         title="Título antigo",
         youtube_id="YT_001",
     ))
@@ -373,7 +373,7 @@ def test_update_clip_text_no_propagation_pre_upload(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="metadata_ready",
+        status=ClipStatus.METADATA_READY,
         title="Título antigo",
     ))
     svc, yt = _make_service_with_mock_yt(tmp_path, db, clip_repo)
@@ -395,7 +395,7 @@ def test_unschedule_clip_calls_platform_and_transitions(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="scheduled_youtube",
+        status=ClipStatus.SCHEDULED_YOUTUBE,
         youtube_id="YT_002",
         youtube_id_horizontal="YT_002H",
     ))
@@ -406,7 +406,7 @@ def test_unschedule_clip_calls_platform_and_transitions(
     assert yt.unschedule.call_count == 2  # vertical + horizontal
     clip = clip_repo.get("dQw4w9WgXcQ_10_40")
     assert clip is not None
-    assert clip.status == "unscheduled_youtube"
+    assert clip.status == ClipStatus.UNSCHEDULED_YOUTUBE
 
 
 def test_discard_clip_deletes_and_transitions(
@@ -416,7 +416,7 @@ def test_discard_clip_deletes_and_transitions(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="scheduled_youtube",
+        status=ClipStatus.SCHEDULED_YOUTUBE,
         youtube_id="YT_003",
         youtube_id_horizontal="YT_003H",
     ))
@@ -427,7 +427,7 @@ def test_discard_clip_deletes_and_transitions(
     assert yt.delete.call_count == 2
     clip = clip_repo.get("dQw4w9WgXcQ_10_40")
     assert clip is not None
-    assert clip.status == "deleted_youtube"
+    assert clip.status == ClipStatus.DELETED_YOUTUBE
     assert clip.youtube_id is None
     assert clip.youtube_id_horizontal is None
 
@@ -439,7 +439,7 @@ def test_format_unchecked_deletes_upload(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="scheduled_youtube",
+        status=ClipStatus.SCHEDULED_YOUTUBE,
         youtube_id="YT_004",
         youtube_id_horizontal="YT_004H",
         render_vertical=True,
@@ -460,7 +460,7 @@ def test_format_unchecked_deletes_upload(
     assert clip is not None
     assert clip.youtube_id_horizontal is None
     # status deve ser scheduled_youtube (vertical ainda existe)
-    assert clip.status == "scheduled_youtube"
+    assert clip.status == ClipStatus.SCHEDULED_YOUTUBE
 
 
 def test_format_checked_marks_pending_reupload(
@@ -470,7 +470,7 @@ def test_format_checked_marks_pending_reupload(
     clip_repo = InMemoryClipRepository()
     clip_repo.add(_make_clip(
         clip_id="dQw4w9WgXcQ_10_40",
-        status="scheduled_youtube",
+        status=ClipStatus.SCHEDULED_YOUTUBE,
         youtube_id="YT_005",
         youtube_id_horizontal=None,
         render_vertical=True,

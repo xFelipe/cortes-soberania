@@ -15,7 +15,7 @@ import pytest
 from canal_soberania.config import CanaisConfig, Canal, Parametros
 from canal_soberania.db import connect, init_db, insert_video
 from canal_soberania.llm import LLMResponse
-from canal_soberania.models import Video
+from canal_soberania.models import ClipStatus, TriageStage, Video, VideoStatus
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 PROMPTS = Path(__file__).parent.parent / "prompts"
@@ -35,7 +35,7 @@ def _video(**kw: object) -> Video:
         "canal_id": "flow_podcast",
         "title": "Test",
         "published_at": "2024-01-01T00:00:00Z",
-        "status": "triage_transcript_passed",
+        "status": VideoStatus.TRIAGE_TRANSCRIPT_PASSED,
     }
     defaults.update(kw)
     return Video.model_validate(defaults)
@@ -91,8 +91,9 @@ def test_network_retry_retries_on_error() -> None:
 
 
 def test_network_retry_reraises_after_exhausting() -> None:
-    from canal_soberania.utils.retry import network_retry
     import pytest
+
+    from canal_soberania.utils.retry import network_retry
 
     @network_retry((RuntimeError,), attempts=2, min_wait=0, max_wait=0)
     def always_fails() -> None:
@@ -115,7 +116,7 @@ def test_setup_logger_creates_log_dir(tmp_path: Path) -> None:
 
 
 def test_setup_logger_creates_file_handler(tmp_path: Path) -> None:
-    from canal_soberania.logger import setup_logger, logger
+    from canal_soberania.logger import logger, setup_logger
     log_dir = tmp_path / "logs"
     setup_logger(log_dir, level="INFO")
     logger.info("test log entry")
@@ -187,12 +188,12 @@ def test_triage_metadata_idempotency_guard(db: sqlite3.Connection) -> None:
     from canal_soberania.models import TriageResult
     from canal_soberania.stages.triage_metadata import triage_video_metadata
 
-    video = _video(status="discovered")
+    video = _video(status=VideoStatus.DISCOVERED)
     insert_video(db, video)
 
     existing = TriageResult(
         video_id="dQw4w9WgXcQ",
-        stage="metadata",
+        stage=TriageStage.METADATA,
         score=8,
         is_relevant=True,
         model_used="claude-haiku-4-5-20251001",
@@ -223,7 +224,7 @@ def test_triage_metadata_idempotency_guard(db: sqlite3.Connection) -> None:
 def test_triage_metadata_parse_error(db: sqlite3.Connection) -> None:
     from canal_soberania.stages.triage_metadata import triage_video_metadata
 
-    video = _video(status="discovered")
+    video = _video(status=VideoStatus.DISCOVERED)
     insert_video(db, video)
 
     prompt_template = (PROMPTS / "triagem_metadata.txt").read_text()
@@ -266,7 +267,7 @@ def test_triage_metadata_run_empty_db(db: sqlite3.Connection) -> None:
 def test_triage_metadata_run_dry_run_with_video(db: sqlite3.Connection) -> None:
     from canal_soberania.stages.triage_metadata import run
 
-    insert_video(db, _video(status="discovered"))
+    insert_video(db, _video(status=VideoStatus.DISCOVERED))
     mock_llm = MagicMock()
     run(conn=db, llm=mock_llm, dry_run=True)
     mock_llm.complete.assert_not_called()
@@ -323,7 +324,7 @@ def test_triage_transcript_idempotency_guard(db: sqlite3.Connection, tmp_path: P
 
     existing = TriageResult(
         video_id="dQw4w9WgXcQ",
-        stage="transcript",
+        stage=TriageStage.TRANSCRIPT,
         score=8,
         is_relevant=True,
         model_used="claude-haiku-4-5-20251001",
@@ -359,7 +360,7 @@ def test_find_clips_transcript_file_missing(db: sqlite3.Connection) -> None:
     from canal_soberania.stages.find_clips import find_clips_for_video
 
     video = _video(
-        status="triage_transcript_passed",
+        status=VideoStatus.TRIAGE_TRANSCRIPT_PASSED,
         transcript_path="/nonexistent/transcript.json",
     )
     insert_video(db, video)
@@ -382,7 +383,7 @@ def test_find_clips_transcript_file_missing(db: sqlite3.Connection) -> None:
 def test_find_clips_empty_transcript_path(db: sqlite3.Connection) -> None:
     from canal_soberania.stages.find_clips import find_clips_for_video
 
-    video = _video(status="triage_transcript_passed", transcript_path=None)
+    video = _video(status=VideoStatus.TRIAGE_TRANSCRIPT_PASSED, transcript_path=None)
     insert_video(db, video)
 
     mock_llm = MagicMock()
@@ -501,28 +502,28 @@ def test_upload_tiktok_run_empty_db(db: sqlite3.Connection, tmp_path: Path) -> N
 def test_get_videos_by_statuses(db: sqlite3.Connection) -> None:
     from canal_soberania.db import get_videos_by_statuses
 
-    insert_video(db, _video(video_id="aaaaaaaaa11", status="discovered"))
-    insert_video(db, _video(video_id="bbbbbbbbb22", status="triage_metadata_passed"))
-    insert_video(db, _video(video_id="ccccccccc33", status="downloaded"))
+    insert_video(db, _video(video_id="aaaaaaaaa11", status=VideoStatus.DISCOVERED))
+    insert_video(db, _video(video_id="bbbbbbbbb22", status=VideoStatus.TRIAGE_METADATA_PASSED))
+    insert_video(db, _video(video_id="ccccccccc33", status=VideoStatus.DOWNLOADED))
 
-    results = get_videos_by_statuses(db, ["discovered", "downloaded"])
+    results = get_videos_by_statuses(db, [VideoStatus.DISCOVERED, VideoStatus.DOWNLOADED])
     assert len(results) == 2
     statuses = {v.status for v in results}
-    assert statuses == {"discovered", "downloaded"}
+    assert statuses == {VideoStatus.DISCOVERED, VideoStatus.DOWNLOADED}
 
 
 def test_update_clip_status_with_error(db: sqlite3.Connection) -> None:
-    from canal_soberania.db import get_clips_by_status, insert_clip, update_clip_status
+    from canal_soberania.db import insert_clip, update_clip_status
     from canal_soberania.models import Clip
 
     insert_video(db, _video())
     clip = Clip(clip_id="dQw4w9WgXcQ_0_30", video_id="dQw4w9WgXcQ", start_s=0.0, end_s=30.0)
     insert_clip(db, clip)
-    update_clip_status(db, "dQw4w9WgXcQ_0_30", "processing_error", "test error")
+    update_clip_status(db, "dQw4w9WgXcQ_0_30", ClipStatus.PROCESSING_ERROR, "test error")
     db.commit()
 
     row = db.execute("SELECT status, error_message FROM clips WHERE clip_id=?", ("dQw4w9WgXcQ_0_30",)).fetchone()
-    assert row["status"] == "processing_error"
+    assert row["status"] == ClipStatus.PROCESSING_ERROR
     assert row["error_message"] == "test error"
 
 
@@ -615,17 +616,17 @@ def test_update_video_paths_no_valid_keys(db: sqlite3.Connection) -> None:
 
 def test_pipeline_service_transition_clip(db: sqlite3.Connection) -> None:
     """Covers pipeline_service.py line 100 — transition_clip."""
-    from canal_soberania.services.pipeline_service import PipelineService
     from canal_soberania.config import Settings
+    from canal_soberania.services.pipeline_service import PipelineService
     svc = PipelineService(conn=db, settings=Settings(), paths={})
     # Valid transition: identified → editing (no exception expected)
-    svc.transition_clip("clip_abc", "identified", "editing")
+    svc.transition_clip("clip_abc", ClipStatus.IDENTIFIED, ClipStatus.EDITING)
 
 
 def test_pipeline_service_run_stage_fallback_fn(db: sqlite3.Connection) -> None:
     """Covers pipeline_service.py lines 114-115, 130 — fallback stage_fn when stage not in registry."""
-    from canal_soberania.services.pipeline_service import PipelineService
     from canal_soberania.config import Settings
+    from canal_soberania.services.pipeline_service import PipelineService
 
     called: list[bool] = []
 
@@ -644,10 +645,10 @@ def test_pipeline_service_run_stage_fallback_fn(db: sqlite3.Connection) -> None:
 
 def test_pipeline_service_stage_will_retry_event(db: sqlite3.Connection) -> None:
     """Covers pipeline_service.py line 125 — stage_will_retry event."""
-    from canal_soberania.services.pipeline_service import PipelineService
     from canal_soberania.config import Settings
-    from canal_soberania.core.events import EventBus, PipelineEvent
+    from canal_soberania.core.events import EventBus
     from canal_soberania.core.stage import StageResult
+    from canal_soberania.services.pipeline_service import PipelineService
 
     events: list[str] = []
     bus = EventBus()
@@ -676,6 +677,7 @@ def test_pipeline_service_stage_will_retry_event(db: sqlite3.Connection) -> None
 def test_face_detection_with_mocked_mediapipe() -> None:
     """Covers reframe.py lines 57-65 — cv2/mediapipe code path via mocks."""
     import numpy as np
+
     from canal_soberania.strategies.reframe import FaceDetectionReframe
 
     fake_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)

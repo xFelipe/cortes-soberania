@@ -13,7 +13,7 @@ from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS: ClipStatus = "scheduled_youtube"
+_INPUT_STATUS: ClipStatus = ClipStatus.SCHEDULED_YOUTUBE
 _PENDING_DIR_NAME = "pending_tiktok"
 
 
@@ -72,8 +72,8 @@ def queue_clip_for_tiktok(
 
     with conn:
         conn.execute(
-            "UPDATE clips SET status='pending_tiktok_manual' WHERE clip_id=?",
-            (clip.clip_id,),
+            "UPDATE clips SET status=? WHERE clip_id=?",
+            (ClipStatus.PENDING_TIKTOK_MANUAL, clip.clip_id),
         )
         conn.execute(
             "INSERT INTO uploads_log (clip_id, platform, status) VALUES (?, 'tiktok', 'manual_pending')",

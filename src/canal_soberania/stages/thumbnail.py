@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 
 # Dimensões do thumbnail do YouTube
 _THUMB_W = 1280
@@ -244,7 +244,7 @@ def run(
     logo_path = paths["data_dir"] / "logo.png"
     thumbs_dir = paths["thumbs_dir"]
 
-    clips = get_clips_by_status(conn, "edited")
+    clips = get_clips_by_status(conn, ClipStatus.EDITED)
     logger.info("thumbnail: {} clipes para processar", len(clips))
 
     success = failed = 0

@@ -17,33 +17,34 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from canal_soberania.models import Video
+from canal_soberania.models import Video, VideoStatus
 
-_STATUS_COLOR: dict[str, str] = {
-    "discovered": "#555555",
-    "triage_metadata_passed": "#2e7d32",
-    "triage_metadata_rejected": "#b71c1c",
-    "on_hold_metadata_passed": "#6a1e8a",
-    "triage_caption_passed": "#1b5e20",
-    "triage_caption_rejected": "#c62828",
-    "triage_caption_skipped": "#4e342e",
-    "downloading": "#f57f17",
-    "downloaded": "#33691e",
-    "transcribing": "#e65100",
-    "transcribed": "#1a237e",
-    "transcribe_error": "#b71c1c",
-    "triage_transcript_passed": "#e65100",   # âmbar — aguarda aprovação manual
-    "triage_transcript_rejected": "#880e4f",
-    "approved_for_clips": "#004d40",          # verde escuro — aprovado, pipeline vai rodar
-    "finding_clips": "#4a148c",
-    "clips_found": "#1565c0",
-    "processing_error": "#d50000",
+VS = VideoStatus
+_STATUS_COLOR: dict[VideoStatus, str] = {
+    VS.DISCOVERED: "#555555",
+    VS.TRIAGE_METADATA_PASSED: "#2e7d32",
+    VS.TRIAGE_METADATA_REJECTED: "#b71c1c",
+    VS.ON_HOLD_METADATA_PASSED: "#6a1e8a",
+    VS.TRIAGE_CAPTION_PASSED: "#1b5e20",
+    VS.TRIAGE_CAPTION_REJECTED: "#c62828",
+    VS.TRIAGE_CAPTION_SKIPPED: "#4e342e",
+    VS.DOWNLOADING: "#f57f17",
+    VS.DOWNLOADED: "#33691e",
+    VS.TRANSCRIBING: "#e65100",
+    VS.TRANSCRIBED: "#1a237e",
+    VS.TRANSCRIBE_ERROR: "#b71c1c",
+    VS.TRIAGE_TRANSCRIPT_PASSED: "#e65100",   # âmbar — aguarda aprovação manual
+    VS.TRIAGE_TRANSCRIPT_REJECTED: "#880e4f",
+    VS.APPROVED_FOR_CLIPS: "#004d40",          # verde escuro — aprovado, pipeline vai rodar
+    VS.FINDING_CLIPS: "#4a148c",
+    VS.CLIPS_FOUND: "#1565c0",
+    VS.PROCESSING_ERROR: "#d50000",
 }
 
-def _sort_priority(status: str) -> int:
-    if status == "triage_metadata_rejected":
+def _sort_priority(status: VideoStatus) -> int:
+    if status == VS.TRIAGE_METADATA_REJECTED:
         return 2
-    if status in ("triage_caption_rejected", "triage_transcript_rejected", "transcribe_error", "processing_error"):
+    if status in (VS.TRIAGE_CAPTION_REJECTED, VS.TRIAGE_TRANSCRIPT_REJECTED, VS.TRANSCRIBE_ERROR, VS.PROCESSING_ERROR):
         return 1
     return 0
 
@@ -86,7 +87,7 @@ _URL_ROLE = Qt.ItemDataRole.UserRole + 1   # armazena URL clicável
 _STATUS_ROLE = Qt.ItemDataRole.UserRole + 2  # armazena status bruto (sem spinner)
 
 _SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-_ACTIVE_STATUSES: frozenset[str] = frozenset({"downloading", "transcribing", "finding_clips"})
+_ACTIVE_STATUSES: frozenset[VideoStatus] = frozenset({VS.DOWNLOADING, VS.TRANSCRIBING, VS.FINDING_CLIPS})
 
 
 class VideoTable(QWidget):

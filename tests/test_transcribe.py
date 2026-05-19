@@ -10,8 +10,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from canal_soberania.db import connect, get_videos_by_status, init_db, insert_video, update_video_paths
-from canal_soberania.models import Video
+from canal_soberania.db import (
+    connect,
+    get_videos_by_status,
+    init_db,
+    insert_video,
+)
+from canal_soberania.models import Video, VideoStatus
 from canal_soberania.stages.transcribe import (
     _format_ts,
     format_segments_for_prompt,
@@ -50,7 +55,7 @@ def video(audio_file: Path) -> Video:
         canal_id="flow_podcast",
         title="Soberania industrial",
         published_at="2026-05-10T12:00:00Z",
-        status="downloaded",
+        status=VideoStatus.DOWNLOADED,
         audio_path=str(audio_file),
     )
 
@@ -155,7 +160,7 @@ def test_transcribe_video_success(
     data = json.loads(result.read_text())
     assert len(data["segments"]) == 3
 
-    transcribed = get_videos_by_status(db, "transcribed")
+    transcribed = get_videos_by_status(db, VideoStatus.TRANSCRIBED)
     assert len(transcribed) == 1
     assert transcribed[0].transcript_path is not None
 
@@ -180,7 +185,7 @@ def test_transcribe_video_idempotent(
         mock_wm.assert_not_called()  # Não deve carregar Whisper novamente
 
     assert result == existing
-    assert len(get_videos_by_status(db, "transcribed")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRANSCRIBED)) == 1
 
 
 def test_transcribe_video_dry_run(
@@ -196,7 +201,7 @@ def test_transcribe_video_dry_run(
         mock_wm.assert_not_called()
 
     assert result is None
-    assert len(get_videos_by_status(db, "downloaded")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.DOWNLOADED)) == 1
 
 
 def test_transcribe_video_missing_audio_path(
@@ -207,7 +212,7 @@ def test_transcribe_video_missing_audio_path(
         canal_id="flow_podcast",
         title="Teste",
         published_at="2026-05-10T12:00:00Z",
-        status="downloaded",
+        status=VideoStatus.DOWNLOADED,
         audio_path=None,
     )
     with db:
@@ -226,7 +231,7 @@ def test_transcribe_video_missing_audio_file(
         canal_id="flow_podcast",
         title="Teste",
         published_at="2026-05-10T12:00:00Z",
-        status="downloaded",
+        status=VideoStatus.DOWNLOADED,
         audio_path=str(tmp_path / "nonexistent.mp3"),
     )
     with db:
@@ -234,7 +239,7 @@ def test_transcribe_video_missing_audio_file(
 
     result = transcribe_video(v, db, tmp_path / "transcripts")
     assert result is None
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)) == 1
 
 
 def test_transcribe_video_whisper_error(
@@ -250,4 +255,4 @@ def test_transcribe_video_whisper_error(
         result = transcribe_video(video, db, transcripts_dir)
 
     assert result is None
-    assert len(get_videos_by_status(db, "transcribe_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.TRANSCRIBE_ERROR)) == 1

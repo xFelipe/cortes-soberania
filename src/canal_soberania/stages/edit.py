@@ -17,7 +17,7 @@ from canal_soberania.db import (
     update_clip_status,
 )
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 from canal_soberania.utils.ffmpeg import (
     FFmpegError,
     add_subtitles,
@@ -383,7 +383,7 @@ def run(
     outro_path = data_dir / "outro.mp4"
 
     # Inclui "editing" para recuperar orphans de crash mid-encode
-    clips = get_clips_by_status(conn, "identified") + get_clips_by_status(conn, "editing")
+    clips = get_clips_by_status(conn, ClipStatus.IDENTIFIED) + get_clips_by_status(conn, ClipStatus.EDITING)
     logger.info("edit: {} clipes para processar", len(clips))
 
     success = failed = 0
@@ -397,7 +397,7 @@ def run(
         if not row or not row["video_path"]:
             logger.error("video_path não encontrado para clipe {}", clip.clip_id)
             with conn:
-                update_clip_status(conn, clip.clip_id, "processing_error", "video_path_missing")
+                update_clip_status(conn, clip.clip_id, ClipStatus.PROCESSING_ERROR, "video_path_missing")
             failed += 1
             continue
 
@@ -408,12 +408,12 @@ def run(
         if not source_video.exists():
             logger.error("Arquivo de vídeo não encontrado: {}", source_video)
             with conn:
-                update_clip_status(conn, clip.clip_id, "processing_error", "video_file_missing")
+                update_clip_status(conn, clip.clip_id, ClipStatus.PROCESSING_ERROR, "video_file_missing")
             failed += 1
             continue
 
         with conn:
-            update_clip_status(conn, clip.clip_id, "editing")
+            update_clip_status(conn, clip.clip_id, ClipStatus.EDITING)
 
         from canal_soberania.utils.heartbeat import HeartbeatKeeper
 
@@ -433,7 +433,7 @@ def run(
 
         if clip.render_vertical and vertical is None and not (dry_run or settings.dry_run):
             with conn:
-                update_clip_status(conn, clip.clip_id, "processing_error", "encode_failed")
+                update_clip_status(conn, clip.clip_id, ClipStatus.PROCESSING_ERROR, "encode_failed")
             failed += 1
             continue
 

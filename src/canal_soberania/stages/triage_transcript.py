@@ -18,7 +18,7 @@ from canal_soberania.db import (
 )
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
-from canal_soberania.models import TriageResult, Video
+from canal_soberania.models import TriageResult, TriageStage, Video, VideoStatus
 from canal_soberania.stages.transcribe import format_segments_for_prompt
 
 _MIN_RELEVANCE_SCORE = 7
@@ -61,7 +61,7 @@ def _parse_transcript_response(
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
-        stage="transcript",
+        stage=TriageStage.TRANSCRIPT,
         score=score,
         is_relevant=is_relevant,
         themes_detected=themes,
@@ -99,7 +99,7 @@ def triage_video_transcript(
         logger.error("Arquivo de transcript não encontrado: {}", video.transcript_path)
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", "transcript_file_missing"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, "transcript_file_missing"
             )
         return None
 
@@ -129,13 +129,13 @@ def triage_video_transcript(
         (video.video_id,),
     ).fetchone()
     if existing is not None:
-        new_status = "triage_transcript_passed" if existing["is_relevant"] else "triage_transcript_rejected"
+        new_status = VideoStatus.TRIAGE_TRANSCRIPT_PASSED if existing["is_relevant"] else VideoStatus.TRIAGE_TRANSCRIPT_REJECTED
         logger.info(
             "triage_transcript {} já feita (score={}), pulando LLM → {}",
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+            update_video_status(conn, video.video_id, new_status)
         return None
 
     try:
@@ -143,7 +143,7 @@ def triage_video_transcript(
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
-            update_video_status(conn, video.video_id, "processing_error", str(exc))
+            update_video_status(conn, video.video_id, VideoStatus.PROCESSING_ERROR, str(exc))
         return None
 
     try:
@@ -157,14 +157,14 @@ def triage_video_transcript(
         )
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", f"parse_error: {exc}"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, f"parse_error: {exc}"
             )
         return None
 
-    new_status = "triage_transcript_passed" if result.score >= threshold else "triage_transcript_rejected"
+    new_status = VideoStatus.TRIAGE_TRANSCRIPT_PASSED if result.score >= threshold else VideoStatus.TRIAGE_TRANSCRIPT_REJECTED
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+        update_video_status(conn, video.video_id, new_status)
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",
@@ -220,7 +220,7 @@ def run(
     prompt_template = prompt_path.read_text(encoding="utf-8")
     criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
 
-    videos = get_videos_by_status(conn, "transcribed")
+    videos = get_videos_by_status(conn, VideoStatus.TRANSCRIBED)
     logger.info("triage_transcript: {} vídeos para processar", len(videos))
 
     passed = rejected = errors = 0

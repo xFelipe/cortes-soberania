@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from canal_soberania.core.platforms import (
+    PlatformClient,
+    PlatformOperationNotSupported,
+    get_platform,
+)
 from canal_soberania.platforms.youtube import YouTubePlatformClient, _parse_platform_status
-from canal_soberania.core.platforms import PlatformClient, PlatformOperationNotSupported, PlatformStatus, get_platform
 
 
 def _make_client() -> tuple[YouTubePlatformClient, MagicMock]:

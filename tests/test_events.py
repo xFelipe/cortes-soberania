@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from canal_soberania.core.events import EventBus, PipelineEvent
-
 
 # ---------------------------------------------------------------------------
 # EventBus
@@ -92,7 +91,6 @@ def test_event_type_constants() -> None:
 
 @pytest.fixture
 def service_with_bus(tmp_path: Path) -> tuple[object, EventBus]:
-    import sqlite3
     from canal_soberania.config import Settings
     from canal_soberania.db import connect, init_db
     from canal_soberania.services.pipeline_service import PipelineService

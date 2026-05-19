@@ -11,6 +11,7 @@ import typer
 from canal_soberania.config import ensure_data_dirs, get_paths, load_settings
 from canal_soberania.db import init_db
 from canal_soberania.logger import logger, setup_logger
+from canal_soberania.models import TriageStage
 from canal_soberania.services.pipeline_service import PipelineService
 
 app = typer.Typer(
@@ -123,12 +124,6 @@ def discover(
 # ---------------------------------------------------------------------------
 
 
-class TriageStage(StrEnum):
-    metadata = "metadata"
-    caption = "caption"
-    transcript = "transcript"
-
-
 @app.command()
 def triage(
     ctx: typer.Context,
@@ -139,11 +134,11 @@ def triage(
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
     service: PipelineService = ctx.obj["service"]
 
-    if stage == TriageStage.metadata:
+    if stage == TriageStage.METADATA:
         service.run_triage_metadata(dry_run=effective_dry_run)
-    elif stage == TriageStage.caption:
+    elif stage == TriageStage.CAPTION:
         service.run_triage_caption(dry_run=effective_dry_run)
-    elif stage == TriageStage.transcript:
+    elif stage == TriageStage.TRANSCRIPT:
         service.run_triage_transcript(dry_run=effective_dry_run)
     else:
         logger.info("TODO: triage stage={}", stage.value)

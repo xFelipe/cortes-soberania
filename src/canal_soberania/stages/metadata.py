@@ -13,7 +13,7 @@ from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_l
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS: ClipStatus = "thumbnail_ready"
+_INPUT_STATUS: ClipStatus = ClipStatus.THUMBNAIL_READY
 
 
 def _load_clip_transcript(
@@ -115,7 +115,7 @@ def generate_metadata_for_clip(
         logger.info("metadata: clip {} já tem título/descrição, pulando LLM", clip.clip_id)
         with conn:
             conn.execute(
-                "UPDATE clips SET status='metadata_ready' WHERE clip_id=? AND status != 'metadata_ready'",
+                f"UPDATE clips SET status='{ClipStatus.METADATA_READY}' WHERE clip_id=? AND status != '{ClipStatus.METADATA_READY}'",  # noqa: S608
                 (clip.clip_id,),
             )
         return True

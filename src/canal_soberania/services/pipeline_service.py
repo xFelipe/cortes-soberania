@@ -18,10 +18,10 @@ from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 # Status em que o clipe já foi enviado a pelo menos uma plataforma
 _PLATFORM_STATUSES: frozenset[ClipStatus] = frozenset({
-    "scheduled_youtube",
-    "uploading_youtube",
-    "uploaded_youtube",
-    "unscheduled_youtube",
+    ClipStatus.SCHEDULED_YOUTUBE,
+    ClipStatus.UPLOADING_YOUTUBE,
+    ClipStatus.UPLOADED_YOUTUBE,
+    ClipStatus.UNSCHEDULED_YOUTUBE,
 })
 
 
@@ -215,16 +215,16 @@ class PipelineService:
     def reset_stuck_videos(self) -> int:
         """Reseta vídeos cujo heartbeat está ≥ 3 min atrasado (processo morreu mid-execução)."""
         _STUCK: list[tuple[str, str]] = [
-            ("downloading",   "triage_caption_passed"),
-            ("transcribing",  "downloaded"),
-            ("finding_clips", "triage_transcript_passed"),
+            (VideoStatus.DOWNLOADING,   VideoStatus.TRIAGE_CAPTION_PASSED),
+            (VideoStatus.TRANSCRIBING,  VideoStatus.DOWNLOADED),
+            (VideoStatus.FINDING_CLIPS, VideoStatus.TRIAGE_TRANSCRIPT_PASSED),
         ]
         return self._video_repo.reset_stuck(_STUCK)
 
     def reset_stuck_clips(self) -> int:
         """Reseta clipes cujo heartbeat está ≥ 3 min atrasado (processo morreu mid-execução)."""
         _STUCK_CLIPS: list[tuple[str, str]] = [
-            ("editing", "identified"),
+            (ClipStatus.EDITING, ClipStatus.IDENTIFIED),
         ]
         return self._clip_repo.reset_stuck(_STUCK_CLIPS)
 
@@ -271,18 +271,19 @@ class PipelineService:
         video = self._video_repo.get(video_id)
         if video is None:
             raise ValueError(f"Vídeo não encontrado: {video_id}")
-        _APPROVE_MAP: dict[str, str] = {
-            "discovered": "triage_metadata_passed",
-            "triage_metadata_rejected": "triage_metadata_passed",
-            "on_hold_metadata_passed": "triage_caption_passed",
-            "triage_metadata_passed": "triage_caption_passed",
-            "triage_caption_rejected": "triage_caption_passed",
-            "triage_caption_skipped": "downloading",
-            "triage_caption_passed": "downloading",
-            "transcribe_error": "transcribed",
-            "triage_transcript_rejected": "approved_for_clips",
-            "transcribed": "triage_transcript_passed",
-            "triage_transcript_passed": "approved_for_clips",
+        VS = VideoStatus
+        _APPROVE_MAP: dict[VideoStatus, VideoStatus] = {
+            VS.DISCOVERED: VS.TRIAGE_METADATA_PASSED,
+            VS.TRIAGE_METADATA_REJECTED: VS.TRIAGE_METADATA_PASSED,
+            VS.ON_HOLD_METADATA_PASSED: VS.TRIAGE_CAPTION_PASSED,
+            VS.TRIAGE_METADATA_PASSED: VS.TRIAGE_CAPTION_PASSED,
+            VS.TRIAGE_CAPTION_REJECTED: VS.TRIAGE_CAPTION_PASSED,
+            VS.TRIAGE_CAPTION_SKIPPED: VS.DOWNLOADING,
+            VS.TRIAGE_CAPTION_PASSED: VS.DOWNLOADING,
+            VS.TRANSCRIBE_ERROR: VS.TRANSCRIBED,
+            VS.TRIAGE_TRANSCRIPT_REJECTED: VS.APPROVED_FOR_CLIPS,
+            VS.TRANSCRIBED: VS.TRIAGE_TRANSCRIPT_PASSED,
+            VS.TRIAGE_TRANSCRIPT_PASSED: VS.APPROVED_FOR_CLIPS,
         }
         new_status = _APPROVE_MAP.get(video.status)
         if new_status is None:
@@ -442,8 +443,8 @@ class PipelineService:
         )
         if both_gone and old.status in _PLATFORM_STATUSES:
             try:
-                ClipStateMachine.transition(old.clip_id, old.status, "deleted_youtube")
-                self._clip_repo.update_status(old.clip_id, "deleted_youtube")
+                ClipStateMachine.transition(old.clip_id, old.status, ClipStatus.DELETED_YOUTUBE)
+                self._clip_repo.update_status(old.clip_id, ClipStatus.DELETED_YOUTUBE)
             except Exception as exc:
                 logger.error(
                     "propagate_formats: falha ao transicionar {}: {}", old.clip_id, exc
@@ -464,8 +465,8 @@ class PipelineService:
         if clip.youtube_id_horizontal:
             yt.unschedule(clip.youtube_id_horizontal)
 
-        ClipStateMachine.transition(clip_id, clip.status, "unscheduled_youtube")
-        self._clip_repo.update_status(clip_id, "unscheduled_youtube")
+        ClipStateMachine.transition(clip_id, clip.status, ClipStatus.UNSCHEDULED_YOUTUBE)
+        self._clip_repo.update_status(clip_id, ClipStatus.UNSCHEDULED_YOUTUBE)
         self._clip_repo.update_metadata_fields(clip_id, youtube_publish_at="")
         self._bus.publish(PipelineEvent("clip_unscheduled", {"clip_id": clip_id}))
 
@@ -483,8 +484,8 @@ class PipelineService:
             yt.delete(clip.youtube_id_horizontal)
             self._clip_repo.clear_platform_id(clip_id, kind="horizontal")
 
-        ClipStateMachine.transition(clip_id, clip.status, "deleted_youtube")
-        self._clip_repo.update_status(clip_id, "deleted_youtube")
+        ClipStateMachine.transition(clip_id, clip.status, ClipStatus.DELETED_YOUTUBE)
+        self._clip_repo.update_status(clip_id, ClipStatus.DELETED_YOUTUBE)
         self._bus.publish(PipelineEvent("clip_discarded", {"clip_id": clip_id}))
 
     def approve_clip(self, clip_id: str) -> None:
@@ -495,12 +496,13 @@ class PipelineService:
         if clip is None:
             raise ValueError(f"Clip não encontrado: {clip_id}")
 
+        CS = ClipStatus
         _APPROVE_MAP: dict[ClipStatus, ClipStatus] = {
-            "identified": "editing",
-            "editing": "edited",
-            "edited": "thumbnail_ready",
-            "thumbnail_ready": "metadata_ready",
-            "metadata_ready": "scheduled_youtube",
+            CS.IDENTIFIED: CS.EDITING,
+            CS.EDITING: CS.EDITED,
+            CS.EDITED: CS.THUMBNAIL_READY,
+            CS.THUMBNAIL_READY: CS.METADATA_READY,
+            CS.METADATA_READY: CS.SCHEDULED_YOUTUBE,
         }
         new_status = _APPROVE_MAP.get(clip.status)
         if new_status is None:
@@ -532,11 +534,11 @@ class PipelineService:
             )
             if has_subs:
                 cur = self._conn.execute(
-                    "UPDATE clips SET status = 'identified', "
+                    "UPDATE clips SET status = ?, "
                     "clip_path_vertical = NULL, clip_path_horizontal = NULL, "
                     "updated_at = datetime('now') "
-                    "WHERE video_id = ? AND status NOT IN ('processing_error')",
-                    (video_id,),
+                    "WHERE video_id = ? AND status NOT IN (?)",
+                    (ClipStatus.IDENTIFIED, video_id, ClipStatus.PROCESSING_ERROR),
                 )
                 count = cur.rowcount
             else:
@@ -596,10 +598,30 @@ class PipelineService:
         return video
 
     def update_clip_trim(self, clip_id: str, start_s: float, end_s: float) -> None:
-        """Atualiza os pontos de corte de um clipe (sem re-editar automaticamente)."""
+        """Atualiza os pontos de corte e re-enfileira o clipe para re-edição automática."""
         if end_s <= start_s:
             raise ValueError("end_s deve ser maior que start_s")
-        self._clip_repo.update_trim(clip_id, start_s, end_s)
+
+        # Apaga arquivos renderizados em disco para forçar re-encode
+        clip = self._clip_repo.get(clip_id)
+        if clip and clip.status != ClipStatus.PROCESSING_ERROR:
+            from pathlib import Path
+            for p in (clip.clip_path_vertical, clip.clip_path_horizontal):
+                if p:
+                    Path(p).unlink(missing_ok=True)
+
+        with self._conn:
+            self._conn.execute(
+                f"""UPDATE clips
+                   SET start_s = ?,
+                       end_s = ?,
+                       status = CASE WHEN status = '{ClipStatus.PROCESSING_ERROR}' THEN status ELSE '{ClipStatus.IDENTIFIED}' END,
+                       clip_path_vertical   = CASE WHEN status = '{ClipStatus.PROCESSING_ERROR}' THEN clip_path_vertical   ELSE NULL END,
+                       clip_path_horizontal = CASE WHEN status = '{ClipStatus.PROCESSING_ERROR}' THEN clip_path_horizontal ELSE NULL END,
+                       updated_at = datetime('now')
+                   WHERE clip_id = ?""",  # noqa: S608
+                (start_s, end_s, clip_id),
+            )
         self._bus.publish(PipelineEvent("clip_trim_updated", {"clip_id": clip_id, "start_s": start_s, "end_s": end_s}))
 
     # ------------------------------------------------------------------

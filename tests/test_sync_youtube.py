@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from canal_soberania.db import connect, init_db, insert_clip, insert_video
-from canal_soberania.models import Clip, Video
+from canal_soberania.models import Clip, ClipStatus, Video
 from canal_soberania.stages.sync_youtube import _int_or_none, run
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
@@ -29,7 +29,7 @@ def db(tmp_path: Path) -> sqlite3.Connection:
     conn.close()
 
 
-def _make_clip(db: sqlite3.Connection, clip_id: str, status: str, yt_id: str | None = None,
+def _make_clip(db: sqlite3.Connection, clip_id: str, status: ClipStatus, yt_id: str | None = None,
                yt_id_h: str | None = None, publish_at: str | None = None) -> Clip:
     video = Video(
         video_id=clip_id[:11],
@@ -43,7 +43,7 @@ def _make_clip(db: sqlite3.Connection, clip_id: str, status: str, yt_id: str | N
         video_id=clip_id[:11],
         start_s=0.0,
         end_s=60.0,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         youtube_id=yt_id,
         youtube_publish_at=publish_at,
     )
@@ -91,7 +91,7 @@ def _mock_yt(items: list[dict]) -> MagicMock:
 
 def test_published_transitions_status(db: sqlite3.Connection) -> None:
     """privacyStatus=public + publishAt ausente → uploaded_youtube + actual_published_at."""
-    _make_clip(db, "abc123XYZ01_0_60", "scheduled_youtube", yt_id="YT_ID_1",
+    _make_clip(db, "abc123XYZ01_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_ID_1",
                publish_at="2026-05-20T09:00:00Z")
 
     item = _yt_item("YT_ID_1", privacy="public", upload_status="processed",
@@ -103,13 +103,13 @@ def test_published_transitions_status(db: sqlite3.Connection) -> None:
             settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status, youtube_actual_published_at FROM clips").fetchone()
-    assert row["status"] == "uploaded_youtube"
+    assert row["status"] == ClipStatus.UPLOADED_YOUTUBE
     assert row["youtube_actual_published_at"] == "2026-05-20T09:00:05Z"
 
 
 def test_rejected_transitions_status(db: sqlite3.Connection) -> None:
     """uploadStatus=rejected → rejected_youtube + rejection_reason salvo."""
-    _make_clip(db, "abc123XYZ02_0_60", "scheduled_youtube", yt_id="YT_ID_2")
+    _make_clip(db, "abc123XYZ02_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_ID_2")
 
     item = _yt_item("YT_ID_2", privacy="private", upload_status="rejected",
                     rejection_reason="copyright", publish_at=None)
@@ -119,26 +119,26 @@ def test_rejected_transitions_status(db: sqlite3.Connection) -> None:
         run(db, dry_run=False, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status, youtube_rejection_reason FROM clips").fetchone()
-    assert row["status"] == "rejected_youtube"
+    assert row["status"] == ClipStatus.REJECTED_YOUTUBE
     assert row["youtube_rejection_reason"] == "copyright"
 
 
 def test_deleted_video_marks_status(db: sqlite3.Connection) -> None:
     """ID não retorna na lista → deleted_youtube."""
-    _make_clip(db, "abc123XYZ03_0_60", "scheduled_youtube", yt_id="YT_DELETED")
+    _make_clip(db, "abc123XYZ03_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_DELETED")
 
     with patch("canal_soberania.stages.sync_youtube.get_youtube_service") as mock_auth:
         mock_auth.return_value = _mock_yt([])  # YouTube não conhece o ID
         run(db, dry_run=False, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status, youtube_upload_status FROM clips").fetchone()
-    assert row["status"] == "deleted_youtube"
+    assert row["status"] == ClipStatus.DELETED_YOUTUBE
     assert row["youtube_upload_status"] == "deleted"
 
 
 def test_unscheduled_when_publish_at_removed(db: sqlite3.Connection) -> None:
     """private + publishAt ausente + era scheduled → unscheduled_youtube."""
-    _make_clip(db, "abc123XYZ04_0_60", "scheduled_youtube", yt_id="YT_ID_4",
+    _make_clip(db, "abc123XYZ04_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_ID_4",
                publish_at="2026-05-20T09:00:00Z")
 
     item = _yt_item("YT_ID_4", privacy="private", upload_status="processed",
@@ -149,14 +149,14 @@ def test_unscheduled_when_publish_at_removed(db: sqlite3.Connection) -> None:
         run(db, dry_run=False, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status FROM clips").fetchone()
-    assert row["status"] == "unscheduled_youtube"
+    assert row["status"] == ClipStatus.UNSCHEDULED_YOUTUBE
 
 
 def test_reschedule_updates_publish_at_without_status_change(db: sqlite3.Connection) -> None:
     """publishAt mudou no YouTube → atualiza coluna, mantém scheduled_youtube."""
     original_at = "2026-05-20T09:00:00Z"
     new_at = "2026-05-21T14:00:00Z"
-    _make_clip(db, "abc123XYZ05_0_60", "scheduled_youtube", yt_id="YT_ID_5",
+    _make_clip(db, "abc123XYZ05_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_ID_5",
                publish_at=original_at)
 
     item = _yt_item("YT_ID_5", privacy="private", upload_status="processed",
@@ -167,13 +167,13 @@ def test_reschedule_updates_publish_at_without_status_change(db: sqlite3.Connect
         run(db, dry_run=False, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status, youtube_publish_at FROM clips").fetchone()
-    assert row["status"] == "scheduled_youtube"
+    assert row["status"] == ClipStatus.SCHEDULED_YOUTUBE
     assert row["youtube_publish_at"] == new_at
 
 
 def test_statistics_updated(db: sqlite3.Connection) -> None:
     """view_count, like_count e comment_count são persistidos."""
-    _make_clip(db, "abc123XYZ06_0_60", "uploaded_youtube", yt_id="YT_ID_6")
+    _make_clip(db, "abc123XYZ06_0_60", ClipStatus.UPLOADED_YOUTUBE, yt_id="YT_ID_6")
 
     item = _yt_item("YT_ID_6", privacy="public", upload_status="processed",
                     publish_at=None, views="12345", likes="678", comments="90")
@@ -190,7 +190,7 @@ def test_statistics_updated(db: sqlite3.Connection) -> None:
 
 def test_horizontal_does_not_change_clip_status(db: sqlite3.Connection) -> None:
     """Vídeo horizontal deletado não altera o status principal do clipe."""
-    _make_clip(db, "abc123XYZ07_0_60", "uploaded_youtube",
+    _make_clip(db, "abc123XYZ07_0_60", ClipStatus.UPLOADED_YOUTUBE,
                yt_id="YT_VERT_7", yt_id_h="YT_HORZ_7")
 
     # horizontal deletado; vertical ok
@@ -203,7 +203,7 @@ def test_horizontal_does_not_change_clip_status(db: sqlite3.Connection) -> None:
         run(db, dry_run=False, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status, youtube_id_horizontal, youtube_upload_status_horizontal FROM clips").fetchone()
-    assert row["status"] == "uploaded_youtube"          # não mudou
+    assert row["status"] == ClipStatus.UPLOADED_YOUTUBE          # não mudou
     assert row["youtube_id_horizontal"] is None         # limpo
     assert row["youtube_upload_status_horizontal"] == "deleted"
 
@@ -225,7 +225,7 @@ def test_batches_in_groups_of_50(db: sqlite3.Connection) -> None:
             video_id=vid_id,
             start_s=float(i),
             end_s=float(i + 60),
-            status="scheduled_youtube",
+            status=ClipStatus.SCHEDULED_YOUTUBE,
             youtube_id=f"YT_{i:03d}",
         )
         insert_clip(db, clip)
@@ -242,7 +242,7 @@ def test_batches_in_groups_of_50(db: sqlite3.Connection) -> None:
 
 def test_dry_run_does_not_write(db: sqlite3.Connection) -> None:
     """dry_run=True não persiste nenhuma mudança no banco."""
-    _make_clip(db, "abc123XYZ09_0_60", "scheduled_youtube", yt_id="YT_ID_9")
+    _make_clip(db, "abc123XYZ09_0_60", ClipStatus.SCHEDULED_YOUTUBE, yt_id="YT_ID_9")
 
     item = _yt_item("YT_ID_9", privacy="public", upload_status="processed",
                     publish_at=None)
@@ -252,7 +252,7 @@ def test_dry_run_does_not_write(db: sqlite3.Connection) -> None:
         run(db, dry_run=True, settings=_fake_settings(), paths={})
 
     row = db.execute("SELECT status FROM clips").fetchone()
-    assert row["status"] == "scheduled_youtube"  # inalterado
+    assert row["status"] == ClipStatus.SCHEDULED_YOUTUBE  # inalterado
 
 
 def test_int_or_none() -> None:

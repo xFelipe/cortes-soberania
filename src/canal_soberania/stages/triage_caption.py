@@ -23,7 +23,7 @@ from canal_soberania.db import (
 )
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
-from canal_soberania.models import TriageResult, Video
+from canal_soberania.models import TriageResult, TriageStage, Video, VideoStatus
 
 _MIN_RELEVANCE_SCORE = 6
 
@@ -160,7 +160,7 @@ def _parse_caption_response(
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
-        stage="caption",
+        stage=TriageStage.CAPTION,
         score=score,
         is_relevant=is_relevant,
         themes_detected=themes,
@@ -201,7 +201,7 @@ def triage_video_caption(
         if not dry_run:
             logger.info("Sem caption para {} — marcando como skipped", video.video_id)
             with conn:
-                update_video_status(conn, video.video_id, "triage_caption_skipped")
+                update_video_status(conn, video.video_id, VideoStatus.TRIAGE_CAPTION_SKIPPED)
         return None
 
     caption_texto = parse_vtt(caption_path)
@@ -209,7 +209,7 @@ def triage_video_caption(
         logger.warning("Caption vazia para {} — marcando como skipped", video.video_id)
         if not dry_run:
             with conn:
-                update_video_status(conn, video.video_id, "triage_caption_skipped")
+                update_video_status(conn, video.video_id, VideoStatus.TRIAGE_CAPTION_SKIPPED)
         return None
 
     # Persiste o path da caption
@@ -237,13 +237,13 @@ def triage_video_caption(
         (video.video_id,),
     ).fetchone()
     if existing is not None:
-        new_status = "triage_caption_passed" if existing["is_relevant"] else "triage_caption_rejected"
+        new_status = VideoStatus.TRIAGE_CAPTION_PASSED if existing["is_relevant"] else VideoStatus.TRIAGE_CAPTION_REJECTED
         logger.info(
             "triage_caption {} já feita (score={}), pulando LLM → {}",
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+            update_video_status(conn, video.video_id, new_status)
         return None
 
     try:
@@ -251,7 +251,7 @@ def triage_video_caption(
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
-            update_video_status(conn, video.video_id, "processing_error", str(exc))
+            update_video_status(conn, video.video_id, VideoStatus.PROCESSING_ERROR, str(exc))
         return None
 
     try:
@@ -265,14 +265,14 @@ def triage_video_caption(
         )
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", f"parse_error: {exc}"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, f"parse_error: {exc}"
             )
         return None
 
-    new_status = "triage_caption_passed" if result.score >= threshold else "triage_caption_rejected"
+    new_status = VideoStatus.TRIAGE_CAPTION_PASSED if result.score >= threshold else VideoStatus.TRIAGE_CAPTION_REJECTED
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
+        update_video_status(conn, video.video_id, new_status)
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",
@@ -329,7 +329,7 @@ def run(  # noqa: C901
     criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
     captions_dir = paths["captions_dir"]
 
-    videos = get_videos_by_status(conn, "triage_metadata_passed")
+    videos = get_videos_by_status(conn, VideoStatus.TRIAGE_METADATA_PASSED)
     logger.info("triage_caption: {} vídeos para processar", len(videos))
 
     passed = rejected = skipped = errors = 0

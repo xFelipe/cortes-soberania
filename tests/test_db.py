@@ -17,7 +17,7 @@ from canal_soberania.db import (
     status_summary,
     update_video_status,
 )
-from canal_soberania.models import Clip, TriageResult, Video
+from canal_soberania.models import Clip, ClipStatus, TriageResult, TriageStage, Video, VideoStatus
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 
@@ -50,7 +50,7 @@ def test_insert_and_get_video(db: sqlite3.Connection) -> None:
     v = _make_video()
     with db:
         insert_video(db, v)
-    result = get_videos_by_status(db, "discovered")
+    result = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert len(result) == 1
     assert result[0].video_id == "dQw4w9WgXcQ"
     assert result[0].tags == []
@@ -60,7 +60,7 @@ def test_insert_video_with_tags(db: sqlite3.Connection) -> None:
     v = _make_video(tags=["geopolitica", "soberania"])
     with db:
         insert_video(db, v)
-    result = get_videos_by_status(db, "discovered")
+    result = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert result[0].tags == ["geopolitica", "soberania"]
 
 
@@ -69,7 +69,7 @@ def test_insert_video_idempotent(db: sqlite3.Connection) -> None:
     with db:
         insert_video(db, v)
         insert_video(db, v)  # INSERT OR IGNORE — não deve explodir
-    result = get_videos_by_status(db, "discovered")
+    result = get_videos_by_status(db, VideoStatus.DISCOVERED)
     assert len(result) == 1
 
 
@@ -77,8 +77,8 @@ def test_update_video_status(db: sqlite3.Connection) -> None:
     v = _make_video()
     with db:
         insert_video(db, v)
-        update_video_status(db, "dQw4w9WgXcQ", "triage_metadata_passed")
-    result = get_videos_by_status(db, "triage_metadata_passed")
+        update_video_status(db, "dQw4w9WgXcQ", VideoStatus.TRIAGE_METADATA_PASSED)
+    result = get_videos_by_status(db, VideoStatus.TRIAGE_METADATA_PASSED)
     assert len(result) == 1
 
 
@@ -88,7 +88,7 @@ def test_insert_triage_result(db: sqlite3.Connection) -> None:
         insert_video(db, v)
         result = TriageResult(
             video_id="dQw4w9WgXcQ",
-            stage="metadata",
+            stage=TriageStage.METADATA,
             score=7,
             is_relevant=True,
             themes_detected=["geopolitica_brics"],
@@ -116,7 +116,7 @@ def test_insert_clip(db: sqlite3.Connection) -> None:
     with db:
         insert_video(db, v)
         insert_clip(db, c)
-    clips = get_clips_by_status(db, "identified")
+    clips = get_clips_by_status(db, ClipStatus.IDENTIFIED)
     assert len(clips) == 1
     assert clips[0].clip_id == "dQw4w9WgXcQ_30_90"
 

@@ -64,22 +64,30 @@ def cut_video(
     end_s: float,
     overwrite: bool = True,
 ) -> None:
-    """Corta vídeo de start_s a end_s sem re-encode (stream copy).
+    """Corta vídeo de start_s a end_s com re-encode ultrafast.
 
-    -ss vem DEPOIS de -i para garantir seek frame-accurate e evitar desync
-    áudio/vídeo causado por keyframe misalignment com stream copy.
+    Usa two-pass seek: fast-seek para ~5s antes do ponto de corte, depois
+    seek preciso no output. Re-encode garante I-frame no início do clipe —
+    stream copy com -ss pós-input começa em P-frames quando start_s não cai
+    num keyframe, causando vídeo congelado até o próximo I-frame.
     """
     duration = end_s - start_s
+    seek_margin = 5.0
+    pre_seek = max(0.0, start_s - seek_margin)
+    precise_offset = start_s - pre_seek
     args = [
         "ffmpeg",
         *([ "-y"] if overwrite else []),
         "-hwaccel", "none",
         *_av1_decoder_args(input_path),
+        "-ss", str(pre_seek),
         "-i", str(input_path),
-        "-ss", str(start_s),
+        "-ss", str(precise_offset),
         "-t", str(duration),
-        "-c", "copy",
-        "-avoid_negative_ts", "make_zero",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-c:a", "aac",
+        "-b:a", "192k",
         str(output_path),
     ]
     _run(args)

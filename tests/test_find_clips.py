@@ -9,10 +9,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from canal_soberania.config import Canal, CanaisConfig, Parametros
-from canal_soberania.db import connect, get_clips_by_status, get_videos_by_status, init_db, insert_video
+from canal_soberania.config import CanaisConfig, Canal, Parametros
+from canal_soberania.db import (
+    connect,
+    get_clips_by_status,
+    get_videos_by_status,
+    init_db,
+    insert_video,
+)
 from canal_soberania.llm import LLMResponse
-from canal_soberania.models import Video
+from canal_soberania.models import ClipStatus, Video, VideoStatus
 from canal_soberania.stages.find_clips import (
     _format_segments_seconds,
     _parse_clips_response,
@@ -87,7 +93,7 @@ def video(transcript_file: Path) -> Video:
         title="Soberania industrial: o debate urgente",
         published_at="2026-05-10T12:00:00Z",
         duration_s=3600,
-        status="triage_transcript_passed",
+        status=VideoStatus.TRIAGE_TRANSCRIPT_PASSED,
         transcript_path=str(transcript_file),
     )
 
@@ -238,7 +244,7 @@ def test_find_clips_inserts_clips(
     )
 
     assert len(clips) == 2
-    identified = get_clips_by_status(db, "identified")
+    identified = get_clips_by_status(db, ClipStatus.IDENTIFIED)
     assert len(identified) == 2
     assert all(c.video_id == "dQw4w9WgXcQ" for c in identified)
 
@@ -256,7 +262,7 @@ def test_find_clips_video_status_updated(
         canais_cfg=canais_cfg,
     )
 
-    assert len(get_videos_by_status(db, "clips_found")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.CLIPS_FOUND)) == 1
 
 
 def test_find_clips_clip_id_format(
@@ -292,7 +298,7 @@ def test_find_clips_dry_run(
 
     assert clips == []
     llm.complete.assert_not_called()
-    assert len(get_clips_by_status(db, "identified")) == 0
+    assert len(get_clips_by_status(db, ClipStatus.IDENTIFIED)) == 0
 
 
 def test_find_clips_llm_error(
@@ -312,7 +318,7 @@ def test_find_clips_llm_error(
     )
 
     assert clips == []
-    assert len(get_videos_by_status(db, "processing_error")) == 1
+    assert len(get_videos_by_status(db, VideoStatus.PROCESSING_ERROR)) == 1
 
 
 def test_find_clips_no_transcript_path(
@@ -324,7 +330,7 @@ def test_find_clips_no_transcript_path(
         canal_id="arte_da_guerra",
         title="Teste",
         published_at="2026-05-10T12:00:00Z",
-        status="triage_transcript_passed",
+        status=VideoStatus.TRIAGE_TRANSCRIPT_PASSED,
         transcript_path=None,
     )
     with db:

@@ -18,7 +18,7 @@ from canal_soberania.db import (
 )
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip, ClipCandidate, Video
+from canal_soberania.models import Clip, ClipCandidate, Video, VideoStatus
 
 _MIN_SCORE_VIRAL = 6
 _MIN_SCORE_RELEVANCIA = 6
@@ -121,7 +121,7 @@ def find_clips_for_video(  # noqa: C901
         logger.error("Transcript não encontrado: {}", transcript_file)
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", "transcript_file_missing"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, "transcript_file_missing"
             )
         return []
 
@@ -156,18 +156,18 @@ def find_clips_for_video(  # noqa: C901
             video.video_id, existing_count["n"],
         )
         with conn:
-            update_video_status(conn, video.video_id, "clips_found")
+            update_video_status(conn, video.video_id, VideoStatus.CLIPS_FOUND)
         return []
 
     with conn:
-        update_video_status(conn, video.video_id, "finding_clips")
+        update_video_status(conn, video.video_id, VideoStatus.FINDING_CLIPS)
 
     try:
         resp = llm.complete(prompt, model=model, max_tokens=2048, task="find_clips")
     except Exception as exc:
         logger.error("LLM error para {}: {}", video.video_id, exc)
         with conn:
-            update_video_status(conn, video.video_id, "processing_error", str(exc))
+            update_video_status(conn, video.video_id, VideoStatus.PROCESSING_ERROR, str(exc))
         return []
 
     try:
@@ -178,7 +178,7 @@ def find_clips_for_video(  # noqa: C901
         )
         with conn:
             update_video_status(
-                conn, video.video_id, "processing_error", f"parse_clips_error: {exc}"
+                conn, video.video_id, VideoStatus.PROCESSING_ERROR, f"parse_clips_error: {exc}"
             )
         return []
 
@@ -226,7 +226,7 @@ def find_clips_for_video(  # noqa: C901
     with conn:
         for clip in clips:
             insert_clip(conn, clip)
-        update_video_status(conn, video.video_id, "clips_found")
+        update_video_status(conn, video.video_id, VideoStatus.CLIPS_FOUND)
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",
@@ -281,7 +281,7 @@ def run(
     criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
 
     # Inclui "finding_clips" para recuperar orphans de crash mid-LLM
-    videos = get_videos_by_status(conn, "approved_for_clips") + get_videos_by_status(conn, "finding_clips")
+    videos = get_videos_by_status(conn, VideoStatus.APPROVED_FOR_CLIPS) + get_videos_by_status(conn, VideoStatus.FINDING_CLIPS)
     logger.info("find_clips: {} vídeos para processar", len(videos))
 
     total_clips = 0
