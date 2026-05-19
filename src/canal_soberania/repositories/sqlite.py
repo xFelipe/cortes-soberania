@@ -246,6 +246,10 @@ class SqliteClipRepository:
         )
         self._conn.commit()
 
+    def delete(self, clip_id: str) -> None:
+        self._conn.execute("DELETE FROM clips WHERE clip_id = ?", (clip_id,))
+        self._conn.commit()
+
     def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int:
         """Reseta clipes cujo heartbeat está atrasado ≥ 3 min (processo morreu mid-execução)."""
         from canal_soberania.logger import logger

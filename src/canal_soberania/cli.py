@@ -508,5 +508,42 @@ def alert_test(
         raise typer.Exit(1)
 
 
+# ---------------------------------------------------------------------------
+# serve (FastAPI REST)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def serve(
+    ctx: typer.Context,
+    host: Annotated[str, typer.Option("--host", help="Endereço de bind")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Porta HTTP")] = 8000,
+    reload: Annotated[bool, typer.Option("--reload", help="Recarregar ao alterar código (dev)")] = False,
+) -> None:
+    """Inicia a API REST FastAPI (para Tauri e acesso LAN)."""
+    import uvicorn
+
+    from canal_soberania.api.app import create_app
+    from canal_soberania.api.auth import get_or_create_token
+    from canal_soberania.config import load_canais
+
+    settings = ctx.obj["settings"]
+    paths = ctx.obj["paths"]
+    conn = ctx.obj["conn"]
+    service: PipelineService = ctx.obj["service"]
+
+    token = get_or_create_token(paths["data_dir"])
+    canais_cfg = load_canais(paths["canais_path"]) if paths.get("canais_path") else None
+
+    api = create_app(service=service, conn=conn, paths=paths, token=token, canais_cfg=canais_cfg)
+
+    typer.echo(f"Canal Soberania API — http://{host}:{port}")
+    typer.echo(f"Docs: http://{host}:{port}/docs")
+    typer.echo(f"Token: {token}")
+    logger.info("cs serve iniciando em {}:{}", host, port)
+
+    uvicorn.run(api, host=host, port=port, reload=reload, log_level="warning")
+
+
 if __name__ == "__main__":
     app()

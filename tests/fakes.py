@@ -140,8 +140,11 @@ class InMemoryClipRepository:
                 update={"start_s": start_s, "end_s": end_s}
             )
 
-    def reset_stuck(self, stuck_configs: list[tuple[str, int, str]]) -> int:
+    def reset_stuck(self, stuck_configs: list[tuple[str, str]]) -> int:
         return 0
+
+    def delete(self, clip_id: str) -> None:
+        self._clips.pop(clip_id, None)
 
     # helpers de teste
     def add(self, clip: Clip) -> None:
