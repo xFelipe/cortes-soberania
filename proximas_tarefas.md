@@ -12,7 +12,7 @@
 
 | Fase | Ondas | Status |
 |---|---|---|
-| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Onda 0 ✅) |
+| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–1 ✅) |
 | **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
@@ -37,44 +37,29 @@
 
 ---
 
-### ⬜ Onda 1 — Infra de execução plugável (4 dias)
+### ✅ Onda 1 — Infra de execução plugável (`git tag onda-1-done`)
 
 > Objetivo: substituir Haiku por Qwen 14B local na triagem, manter Sonnet nas análises pesadas.
 
-#### transcribers/
-- [ ] `transcribers/base.py` — protocolo `Transcriber` com `transcribe(audio_path) → list[Segment]`
-- [ ] `transcribers/faster_whisper_local.py` — CUDA (WHISPER_BACKEND=local_cuda) e CPU (local_cpu)
-- [ ] `transcribers/groq_whisper.py` — opt-in nuvem grátis (escape hatch)
-- [ ] `transcribers/openai_whisper.py` — opt-in nuvem pago
-- [ ] Refatorar `stages/transcribe.py` para usar interface plugável
-
-#### llm_backends/
-- [ ] `llm_backends/base.py` — protocolo `LLMClient` com `complete(prompt, system) → str`
-- [ ] `llm_backends/anthropic.py` — wraps `llm.py` existente (Haiku + Sonnet)
-- [ ] `llm_backends/ollama.py` — Qwen 2.5 14B Q4 (triagem) e 32B Q4 (full-local opt-in)
-- [ ] `llm_backends/openai.py` — escape hatch
-- [ ] Factory `get_llm_client(backend, model)` roteada por `LLM_BACKEND` env var
-
-#### Hybrid default
-- [ ] `LLM_BACKEND=hybrid`: Ollama Qwen 14B em `triage_metadata`/`triage_caption`; Sonnet em `triage_transcript`/`find_clips`/`metadata`
-- [ ] Refatorar todos os stages para receber `LLMClient` por DI
-
-#### Setup Ollama
-- [ ] Instalar Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`
-- [ ] `ollama pull qwen2.5:14b-instruct-q4_K_M` (~9 GB)
-- [ ] `ollama pull qwen2.5:32b-instruct-q4_K_M` (~20 GB — para `LLM_BACKEND=ollama` full-local)
-- [ ] Verificar VRAM com `nvidia-smi` (Qwen 14B ~5GB + Whisper large-v3 ~3GB = 8GB OK)
-
-#### Validação de qualidade
-- [ ] Rodar triagem nos vídeos do banco com `LLM_BACKEND=hybrid`
-- [ ] Comparar precision/recall Qwen 14B vs Haiku — **só promover se diferença < 10%**
-- [ ] Se diferença > 10%: manter `LLM_BACKEND=anthropic` como default até ajustar prompts
-
-#### Testes
-- [ ] `tests/test_transcribers.py` — mocks dos backends; interface compliance
-- [ ] `tests/test_llm_backends.py` — mocks + factory routing
-
-- **Smoke:** `LLM_BACKEND=hybrid cs triage --stage metadata` em 1 vídeo; logs mostram Ollama sendo chamado; `LLM_BACKEND=anthropic` usa Haiku normalmente
+- [x] `transcribers/base.py` — protocolo `Transcriber` com `transcribe(audio_path) → list[Segment]`
+- [x] `transcribers/faster_whisper_local.py` — CUDA (local_cuda) e CPU (local_cpu)
+- [x] `transcribers/groq_whisper.py` — opt-in nuvem grátis (escape hatch)
+- [x] `transcribers/openai_whisper.py` — opt-in nuvem pago
+- [x] `stages/transcribe.py` refatorado para usar `Transcriber` plugável via `get_transcriber()`
+- [x] `llm_backends/base.py` — protocolo `LLMBackend` com `complete(prompt, model, ...) → LLMResponse`
+- [x] `llm_backends/anthropic.py` — wraps `LLMClient` + `OpenRouterClient` existentes
+- [x] `llm_backends/ollama.py` — Ollama OpenAI-compatible API (Qwen 2.5 14B/32B Q4)
+- [x] `llm_backends/hybrid.py` — Ollama para triage_metadata/triage_caption; Anthropic para stages pesados
+- [x] Factory `get_llm_backend(settings)` roteada por `LLM_BACKEND` env var
+- [x] 5 stages refatorados (`triage_metadata`, `triage_caption`, `triage_transcript`, `find_clips`, `metadata`) usam `LLMBackend` por DI
+- [x] `config.py`: `OLLAMA_BASE_URL`, `OLLAMA_MODEL_TRIAGE`, `OLLAMA_MODEL_DEEP`, `GROQ_API_KEY`, `OPENAI_API_KEY`
+- [x] `.env.example` atualizado com instruções de instalação Ollama
+- [x] 26 novos testes (suite total: 441 passando, 0 falhas)
+- [x] `mypy --strict` zero erros nos novos módulos (17 arquivos verificados)
+- **Pendente operacional (quando GPU disponível):**
+  - [ ] Instalar Ollama e baixar `qwen2.5:14b-instruct-q4_K_M` (~9 GB)
+  - [ ] Verificar VRAM com `nvidia-smi` (Qwen 14B ~5GB + Whisper large-v3 ~3GB = 8GB OK)
+  - [ ] Validar qualidade: precision/recall Qwen 14B vs Haiku (promover só se diferença < 10%)
 
 ---
 

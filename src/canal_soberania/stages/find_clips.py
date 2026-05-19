@@ -16,7 +16,8 @@ from canal_soberania.db import (
     record_api_cost,
     update_video_status,
 )
-from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
+from canal_soberania.llm import extract_json
+from canal_soberania.llm_backends import LLMBackend, get_llm_backend
 from canal_soberania.logger import logger
 from canal_soberania.models import Clip, ClipCandidate, Video, VideoStatus
 
@@ -102,7 +103,7 @@ def _parse_clips_response(
 def find_clips_for_video(  # noqa: C901
     video: Video,
     conn: sqlite3.Connection,
-    llm: LLMClient | OpenRouterClient,
+    llm: LLMBackend,
     model: str,
     prompt_template: str,
     criterios: str,
@@ -247,7 +248,7 @@ def find_clips_for_video(  # noqa: C901
 
 
 def run(
-    llm: LLMClient | OpenRouterClient | None = None,
+    llm: LLMBackend | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> None:
@@ -263,12 +264,7 @@ def run(
     model = settings.anthropic_model_deep
 
     if llm is None:
-        required_key = settings.anthropic_api_key if model.startswith("claude-") else settings.openrouter_api_key
-        if not required_key:
-            key_name = "ANTHROPIC_API_KEY" if model.startswith("claude-") else "OPENROUTER_API_KEY"
-            logger.error("{} não configurada — abortando find_clips", key_name)
-            return
-        llm = get_llm_client(model, settings, training_conn=conn)
+        llm = get_llm_backend(settings, training_conn=conn)
     canais_cfg = load_canais(paths["canais_path"])
 
     prompt_path = paths["prompts_dir"] / "identificar_cortes.txt"

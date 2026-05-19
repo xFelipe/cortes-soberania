@@ -21,7 +21,8 @@ from canal_soberania.db import (
     update_video_paths,
     update_video_status,
 )
-from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
+from canal_soberania.llm import extract_json
+from canal_soberania.llm_backends import LLMBackend, get_llm_backend
 from canal_soberania.logger import logger
 from canal_soberania.models import TriageResult, TriageStage, Video, VideoStatus
 
@@ -176,7 +177,7 @@ def _parse_caption_response(
 def triage_video_caption(
     video: Video,
     conn: sqlite3.Connection,
-    llm: LLMClient | OpenRouterClient,
+    llm: LLMBackend,
     model: str,
     prompt_template: str,
     criterios: str,
@@ -293,7 +294,7 @@ def triage_video_caption(
 
 
 def run(  # noqa: C901
-    llm: LLMClient | OpenRouterClient | None = None,
+    llm: LLMBackend | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> None:
@@ -309,12 +310,7 @@ def run(  # noqa: C901
     model = settings.anthropic_model_triage
 
     if llm is None:
-        required_key = settings.anthropic_api_key if model.startswith("claude-") else settings.openrouter_api_key
-        if not required_key:
-            key_name = "ANTHROPIC_API_KEY" if model.startswith("claude-") else "OPENROUTER_API_KEY"
-            logger.error("{} não configurada — abortando triage_caption", key_name)
-            return
-        llm = get_llm_client(model, settings, training_conn=conn)
+        llm = get_llm_backend(settings, training_conn=conn)
     canais_cfg = load_canais(paths["canais_path"])
     threshold = canais_cfg.parametros.threshold_triage_caption
 

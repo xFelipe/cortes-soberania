@@ -64,6 +64,15 @@ class Settings(BaseModel):
     llm_backend: str = Field(default="anthropic")      # anthropic | ollama | hybrid | openai
     whisper_backend: str = Field(default="local_cpu")  # local_cpu | local_cuda | groq | openai
 
+    # Ollama
+    ollama_base_url: str = Field(default="http://localhost:11434/v1/chat/completions")
+    ollama_model_triage: str = Field(default="qwen2.5:14b-instruct-q4_K_M")
+    ollama_model_deep: str = Field(default="qwen2.5:32b-instruct-q4_K_M")
+
+    # APIs de escape hatch
+    groq_api_key: str = Field(default="")
+    openai_api_key: str = Field(default="")
+
 
 def load_settings() -> Settings:
     return Settings(
@@ -94,6 +103,11 @@ def load_settings() -> Settings:
         alert_stuck_threshold=int(os.getenv("ALERT_STUCK_THRESHOLD", "50")),
         llm_backend=os.getenv("LLM_BACKEND", "anthropic"),
         whisper_backend=os.getenv("WHISPER_BACKEND", "local_cpu"),
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1/chat/completions"),
+        ollama_model_triage=os.getenv("OLLAMA_MODEL_TRIAGE", "qwen2.5:14b-instruct-q4_K_M"),
+        ollama_model_deep=os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:32b-instruct-q4_K_M"),
+        groq_api_key=os.getenv("GROQ_API_KEY", ""),
+        openai_api_key=os.getenv("OPENAI_API_KEY", ""),
     )
 
 

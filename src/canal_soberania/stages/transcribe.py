@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from canal_soberania.config import get_paths, load_settings
+from canal_soberania.transcribers import Transcriber, get_transcriber
 from canal_soberania.db import (
     connect,
     get_videos_by_statuses,
@@ -167,6 +168,7 @@ def transcribe_video(
     video: Video,
     conn: sqlite3.Connection,
     transcripts_dir: Path,
+    transcriber: Transcriber | None = None,
     model_size: str = "large-v3",
     device: str = "cpu",
     compute_type: str = "int8",
@@ -174,6 +176,7 @@ def transcribe_video(
 ) -> Path | None:
     """
     Transcreve o áudio de um vídeo. Retorna o path do JSON ou None em caso de erro.
+    Se `transcriber` for None, usa FasterWhisperLocal com os parâmetros legados.
     """
     if not video.audio_path:
         logger.error("audio_path vazio para {} — pulando", video.video_id)
@@ -206,11 +209,15 @@ def transcribe_video(
     with conn:
         update_video_status(conn, video.video_id, VideoStatus.TRANSCRIBING)
 
+    if transcriber is None:
+        from canal_soberania.transcribers import FasterWhisperLocal
+        transcriber = FasterWhisperLocal(model_size, device, compute_type)
+
     from canal_soberania.utils.heartbeat import HeartbeatKeeper
 
     try:
         with HeartbeatKeeper(conn, "videos", "video_id", video.video_id):
-            segments = transcribe_audio(audio_path, model_size, device, compute_type)
+            segments = transcriber.transcribe(audio_path)
     except Exception as exc:
         logger.error("Whisper error para {}: {}", video.video_id, exc)
         with conn:
@@ -250,6 +257,7 @@ def run(
         return
 
     transcripts_dir = paths["transcripts_dir"]
+    transcriber = get_transcriber(settings)
     success = failed = 0
 
     for video in videos:
@@ -257,9 +265,7 @@ def run(
             video=video,
             conn=conn,
             transcripts_dir=transcripts_dir,
-            model_size=settings.whisper_model,
-            device=settings.whisper_device,
-            compute_type=settings.whisper_compute_type,
+            transcriber=transcriber,
             dry_run=dry_run or settings.dry_run,
         )
         if result is not None:
