@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-import subprocess
-import tempfile
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QDateTime, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QCursor, QDesktopServices, QKeyEvent, QMouseEvent
+from PySide6.QtCore import QDateTime, QRectF, QSizeF, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import (
+    QBrush,
+    QCloseEvent,
+    QColor,
+    QCursor,
+    QDesktopServices,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPen,
+)
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateTimeEdit,
@@ -18,6 +26,9 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -39,7 +50,19 @@ _DESC_PREVIEW_LEN = 300
 
 
 class _SeekSlider(QSlider):
-    """QSlider que pula direto para o ponto clicado em vez de avançar um page step."""
+    """QSlider com jump-to-click e marcas visuais de in/out."""
+
+    def __init__(self, orientation: Qt.Orientation, parent: QWidget | None = None) -> None:
+        super().__init__(orientation, parent)
+        self._in_ms: int = 0
+        self._out_ms: int = 0
+        self._duration_ms: int = 0
+
+    def set_bounds(self, in_ms: int, out_ms: int, duration_ms: int) -> None:
+        self._in_ms = in_ms
+        self._out_ms = out_ms
+        self._duration_ms = duration_ms
+        self.update()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -50,14 +73,68 @@ class _SeekSlider(QSlider):
             self.sliderMoved.emit(val)
         super().mousePressEvent(event)
 
+    def paintEvent(self, event: object) -> None:  # type: ignore[override]
+        super().paintEvent(event)  # type: ignore[arg-type]
+        if self._duration_ms <= 0:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        h = self.height()
+        w = self.width()
+        for ms, color in [(self._in_ms, QColor(80, 200, 80, 220)), (self._out_ms, QColor(220, 80, 80, 220))]:
+            x = int(ms / self._duration_ms * w)
+            pen = QPen(color, 2)
+            painter.setPen(pen)
+            painter.drawLine(x, 0, x, h)
+        painter.end()
+
+
+class _VerticalMask(QGraphicsRectItem):
+    """Overlay que escurece as laterais fora da janela 9:16."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._crop_x: float = 0.0
+        self._crop_w: float = 0.0
+        self._vid_w: float = 0.0
+        self._vid_h: float = 0.0
+        self.setZValue(10)
+
+    def set_viewport(self, vid_w: float, vid_h: float, crop_x: float) -> None:
+        self._vid_w = vid_w
+        self._vid_h = vid_h
+        self._crop_w = vid_h * 9.0 / 16.0
+        self._crop_x = crop_x
+        self.setRect(QRectF(0, 0, vid_w, vid_h))
+
+    def paint(
+        self, painter: QPainter, option: object, widget: object = None  # type: ignore[override]
+    ) -> None:
+        if self._vid_w <= 0:
+            return
+        overlay = QColor(0, 0, 0, 130)
+        painter.setBrush(QBrush(overlay))
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        # faixa esquerda
+        painter.drawRect(QRectF(0, 0, self._crop_x, self._vid_h))
+        # faixa direita
+        right_x = self._crop_x + self._crop_w
+        painter.drawRect(QRectF(right_x, 0, self._vid_w - right_x, self._vid_h))
+        # borda da área ativa
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(255, 255, 255, 160), 1.5))
+        painter.drawRect(QRectF(self._crop_x, 0, self._crop_w, self._vid_h))
+
 
 class ClipReviewDialog(QDialog):
     """Abre um clipe para review: player, edição de textos, trim e aprovação.
 
-    Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar
+    Atalhos (fora de campos de texto):
+        Space = play/pause | A = aprovar | R = rejeitar
+        [ = marcar início na posição atual | ] = marcar fim na posição atual
     """
 
-    _boost_ready = Signal(str)  # path do arquivo com áudio amplificado, ou "" se falhou
+    _face_detected = Signal(object)  # int | None — crop_x do rosto
 
     def __init__(
         self, clip: Clip, service: PipelineService, parent: QWidget | None = None
@@ -65,12 +142,19 @@ class ClipReviewDialog(QDialog):
         super().__init__(parent)
         self._clip = clip
         self._service = service
-        self._boost_cancelled = False
-        self.published = False  # True se o clipe foi liberado para publicação
+        self.published = False
+        self._loop_start_ms: int = int(clip.start_s * 1000)
+        self._loop_end_ms: int = int(clip.end_s * 1000)
+        self._debounce_timer = QTimer(self)
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.setInterval(200)
+        self._debounce_timer.timeout.connect(self._refresh_loop_bounds)
+        self._vid_natural_w: int = 0
+        self._vid_natural_h: int = 0
         self.setWindowTitle(f"Review — {clip.clip_id}")
         self.resize(960, 700)
         self._setup_ui()
-        self._load_video()
+        self._load_source_video()
 
     def _setup_ui(self) -> None:
         root = QHBoxLayout(self)
@@ -78,10 +162,29 @@ class ClipReviewDialog(QDialog):
         # ── Esquerda: player ──────────────────────────────────────────
         left = QVBoxLayout()
 
-        self._video_widget = QVideoWidget()
-        self._video_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._video_widget.setMinimumSize(480, 360)
-        left.addWidget(self._video_widget)
+        # QGraphicsView com QGraphicsVideoItem para suportar overlay
+        self._scene = QGraphicsScene(self)
+        self._video_item = QGraphicsVideoItem()
+        self._scene.addItem(self._video_item)
+        self._mask = _VerticalMask()
+        self._scene.addItem(self._mask)
+
+        self._gfx_view = QGraphicsView(self._scene)
+        self._gfx_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._gfx_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._gfx_view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._gfx_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._gfx_view.setMinimumSize(480, 270)
+        self._gfx_view.setStyleSheet("background: black; border: none;")
+        left.addWidget(self._gfx_view)
+
+        self._no_video_label = QLabel(
+            "Arquivo de vídeo-fonte não encontrado.\n"
+            "Verifique se o download foi realizado."
+        )
+        self._no_video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._no_video_label.setVisible(False)
+        left.addWidget(self._no_video_label)
 
         self._seek_bar = _SeekSlider(Qt.Orientation.Horizontal)
         self._seek_bar.setRange(0, 0)
@@ -91,6 +194,7 @@ class ClipReviewDialog(QDialog):
 
         ctrl = QHBoxLayout()
         self._play_btn = QPushButton("▶ Play")
+        self._play_btn.setEnabled(False)
         self._play_btn.clicked.connect(self._toggle_play)
         ctrl.addWidget(self._play_btn)
         self._pos_label = QLabel("0:00 / 0:00")
@@ -98,17 +202,11 @@ class ClipReviewDialog(QDialog):
         ctrl.addStretch()
         left.addLayout(ctrl)
 
-        self._no_video_label = QLabel("Arquivo de vídeo não encontrado.\nRode o stage Edit primeiro.")
-        self._no_video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._no_video_label.setVisible(False)
-        left.addWidget(self._no_video_label)
-
         root.addLayout(left, 3)
 
         # ── Direita: info + textos editáveis + trim + ações ──────────
         right = QVBoxLayout()
 
-        # Info (somente leitura)
         info_group = QGroupBox("Informações do clipe")
         info_layout = QFormLayout(info_group)
         info_layout.addRow("ID:", QLabel(self._clip.clip_id))
@@ -130,7 +228,6 @@ class ClipReviewDialog(QDialog):
 
         right.addWidget(info_group)
 
-        # Textos editáveis: título, hook, payoff, descrição, tags
         edit_group = QGroupBox("Textos (editável)")
         edit_layout = QFormLayout(edit_group)
 
@@ -158,7 +255,6 @@ class ClipReviewDialog(QDialog):
         self._tags_edit.setPlaceholderText("tag1, tag2, tag3… (máx 15)")
         edit_layout.addRow("Tags:", self._tags_edit)
 
-        # Agendamento de publicação
         sched_row = QWidget()
         sched_row_layout = QHBoxLayout(sched_row)
         sched_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -185,7 +281,6 @@ class ClipReviewDialog(QDialog):
 
         right.addWidget(edit_group)
 
-        # Formatos de saída
         is_scheduled = self._clip.status in {ClipStatus.SCHEDULED_YOUTUBE, ClipStatus.UPLOADED_YOUTUBE,
                                              ClipStatus.UPLOADING_YOUTUBE}
         formats_group = QGroupBox("Formatos de saída")
@@ -209,7 +304,7 @@ class ClipReviewDialog(QDialog):
         formats_layout.addWidget(self._render_horizontal_chk)
         right.addWidget(formats_group)
 
-        # Trim (bloqueado enquanto clipe está agendado/publicado)
+        # Trim — live preview; salvar persiste no DB e agenda re-render
         trim_group = QGroupBox("Editar trim")
         trim_layout = QFormLayout(trim_group)
         self._start_spin = QDoubleSpinBox()
@@ -217,14 +312,20 @@ class ClipReviewDialog(QDialog):
         self._start_spin.setDecimals(1)
         self._start_spin.setSuffix(" s")
         self._start_spin.setValue(self._clip.start_s)
+        self._start_spin.valueChanged.connect(self._on_trim_changed)
         trim_layout.addRow("Início:", self._start_spin)
         self._end_spin = QDoubleSpinBox()
         self._end_spin.setRange(0, 86400)
         self._end_spin.setDecimals(1)
         self._end_spin.setSuffix(" s")
         self._end_spin.setValue(self._clip.end_s)
+        self._end_spin.valueChanged.connect(self._on_trim_changed)
         trim_layout.addRow("Fim:", self._end_spin)
-        self._apply_trim_btn = QPushButton("Aplicar trim")
+        self._apply_trim_btn = QPushButton("Salvar trim")
+        self._apply_trim_btn.setToolTip(
+            "Persiste início/fim no banco e agenda re-render.\n"
+            "O preview acima já reflete o trim ao vivo — salve quando estiver satisfeito."
+        )
         self._apply_trim_btn.clicked.connect(self._apply_trim)
         trim_layout.addRow(self._apply_trim_btn)
         if is_scheduled:
@@ -236,7 +337,6 @@ class ClipReviewDialog(QDialog):
 
         right.addStretch()
 
-        # Botões — layout condicional por status
         btn_box = QDialogButtonBox()
         approve_label = (
             "Liberar para publicação" if self._clip.status == ClipStatus.METADATA_READY else "Aprovar etapa"
@@ -249,7 +349,6 @@ class ClipReviewDialog(QDialog):
         self._discard_btn: QPushButton | None = None
 
         if self._clip.status in {ClipStatus.SCHEDULED_YOUTUBE, ClipStatus.UPLOADED_YOUTUBE, ClipStatus.UPLOADING_YOUTUBE}:
-            # Dois botões de remoção para clipes já no YouTube
             self._unschedule_btn = btn_box.addButton(
                 "Cancelar agendamento", QDialogButtonBox.ButtonRole.ActionRole
             )
@@ -264,7 +363,7 @@ class ClipReviewDialog(QDialog):
             self._discard_btn.setToolTip("Deleta o vídeo do YouTube permanentemente")
             self._discard_btn.clicked.connect(self._do_discard)
 
-            self._reject_btn = self._discard_btn  # alias para o atalho R
+            self._reject_btn = self._discard_btn
         else:
             self._reject_btn = btn_box.addButton("Rejeitar", QDialogButtonBox.ButtonRole.RejectRole)
             self._reject_btn.setStyleSheet("background-color: #b71c1c; color: white;")
@@ -274,7 +373,6 @@ class ClipReviewDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         right.addWidget(btn_box)
 
-        # Inicializa estado dos botões conforme status atual do clipe
         if self._clip.status == ClipStatus.PROCESSING_ERROR:
             self._set_rejected_ui(True)
         elif self._clip.status in {ClipStatus.UNSCHEDULED_YOUTUBE, ClipStatus.DELETED_YOUTUBE}:
@@ -282,7 +380,8 @@ class ClipReviewDialog(QDialog):
             self._approve_btn.setStyleSheet("background-color: #444444; color: #888888;")
 
         hint = QLabel(
-            "Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar"
+            "Atalhos (fora de campos de texto): Space = play/pause | A = aprovar | R = rejeitar\n"
+            "[ = marcar início na posição atual  |  ] = marcar fim na posição atual"
         )
         hint.setStyleSheet("color: #888; font-size: 10px;")
         hint.setWordWrap(True)
@@ -292,23 +391,17 @@ class ClipReviewDialog(QDialog):
 
         # Media player
         self._audio_output = QAudioOutput(self)
-        self._audio_output.setVolume(1.0)
+        self._audio_output.setVolume(1.5)
         self._player = QMediaPlayer(self)
         self._player.setAudioOutput(self._audio_output)
-        self._player.setVideoOutput(self._video_widget)
+        self._player.setVideoOutput(self._video_item)
         self._player.positionChanged.connect(self._update_pos)
+        self._player.positionChanged.connect(self._check_loop)
         self._player.durationChanged.connect(self._on_duration_changed)
         self._player.playbackStateChanged.connect(self._on_playback_state)
 
-    def _on_burned_subs_toggled(self, checked: bool) -> None:
-        count = self._service.mark_video_burned_subtitles(self._clip.video_id, checked)
-        if checked and count > 0:
-            QMessageBox.information(
-                self,
-                "Legenda queimada marcada",
-                f"{count} clipe(s) deste vídeo foram re-enfileirados para edição sem legenda.\n"
-                "Os clipes serão re-renderizados automaticamente.",
-            )
+        # Face detection para overlay 9:16
+        self._face_detected.connect(self._on_face_detected, Qt.ConnectionType.QueuedConnection)
 
     def _make_video_link(self) -> QLabel:
         video = self._service.get_video(self._clip.video_id)
@@ -322,48 +415,120 @@ class ClipReviewDialog(QDialog):
         label.linkActivated.connect(lambda _: QDesktopServices.openUrl(QUrl(url)))
         return label
 
-    # ── Reprodução ────────────────────────────────────────────────────
+    # ── Carregamento do vídeo-fonte ───────────────────────────────────
 
-    def _load_video(self) -> None:
-        self._temp_preview: Path | None = None
-        path = self._clip.clip_path_vertical
-        if path and Path(path).exists():
-            self._video_widget.setVisible(True)
-            self._no_video_label.setVisible(False)
-            self._play_btn.setEnabled(False)
-            self._play_btn.setText("⏳ Preparando áudio…")
-            self._boost_ready.connect(self._on_boost_ready, Qt.ConnectionType.QueuedConnection)
-            threading.Thread(target=self._run_boost, args=(path,), daemon=True).start()
-        else:
-            self._video_widget.setVisible(False)
+    def _load_source_video(self) -> None:
+        """Carrega o vídeo-fonte (não o render final) para preview instantâneo."""
+        video = self._service.get_video(self._clip.video_id)
+        source_path = Path(video.video_path) if (video and video.video_path) else None
+
+        if not source_path or not source_path.exists():
+            self._gfx_view.setVisible(False)
             self._no_video_label.setVisible(True)
-            self._play_btn.setEnabled(False)
-
-    def _run_boost(self, source: str) -> None:
-        """Executa em thread de fundo — amplifica áudio via ffmpeg."""
-        with tempfile.NamedTemporaryFile(suffix="_preview.mp4", delete=False) as _f:
-            tmp = Path(_f.name)
-        try:
-            cmd = ["ffmpeg", "-i", source, "-af", "volume=8dB", "-c:v", "copy", "-y", str(tmp)]
-            subprocess.run(cmd, capture_output=True, timeout=60, check=True)  # noqa: S603
-            self._boost_ready.emit(str(tmp))
-        except Exception:
-            self._boost_ready.emit("")  # falha: thread principal usará arquivo original
-
-    def _on_boost_ready(self, boosted_path: str) -> None:
-        """Chamado na thread principal quando o ffmpeg termina."""
-        if self._boost_cancelled:
-            if boosted_path:
-                Path(boosted_path).unlink(missing_ok=True)
             return
-        original = self._clip.clip_path_vertical or ""
-        if boosted_path:
-            self._temp_preview = Path(boosted_path)
-            self._player.setSource(QUrl.fromLocalFile(boosted_path))
-        elif original:
-            self._player.setSource(QUrl.fromLocalFile(original))
+
+        self._gfx_view.setVisible(True)
+        self._no_video_label.setVisible(False)
+
+        # Detecta AV1 antes de carregar — QMediaPlayer pode não suportar
+        try:
+            from canal_soberania.utils.ffmpeg import probe
+            data = probe(source_path)
+            for stream in data.get("streams", []):
+                if stream.get("codec_type") == "video" and stream.get("codec_name") == "av1":
+                    self._gfx_view.setVisible(False)
+                    self._no_video_label.setText(
+                        "Codec AV1 detectado: preview indisponível neste sistema.\n"
+                        "Use o render final para conferir o resultado."
+                    )
+                    self._no_video_label.setVisible(True)
+                    return
+        except Exception:
+            pass
+
+        self._player.setSource(QUrl.fromLocalFile(str(source_path)))
         self._play_btn.setEnabled(True)
-        self._play_btn.setText("▶ Play")
+        # Salta para start_s assim que o player estiver pronto
+        self._player.mediaStatusChanged.connect(self._on_media_ready)
+
+        # Detecta rosto em background para posicionar o overlay
+        threading.Thread(
+            target=self._run_face_detection, args=(source_path,), daemon=True
+        ).start()
+
+    def _on_media_ready(self, status: QMediaPlayer.MediaStatus) -> None:
+        if status in (
+            QMediaPlayer.MediaStatus.BufferedMedia,
+            QMediaPlayer.MediaStatus.LoadedMedia,
+        ):
+            self._player.mediaStatusChanged.disconnect(self._on_media_ready)
+            self._player.setPosition(self._loop_start_ms)
+            # Ajusta tamanho natural do vídeo para o overlay
+            size = self._video_item.nativeSize()
+            if size.isValid():
+                self._vid_natural_w = int(size.width())
+                self._vid_natural_h = int(size.height())
+                self._update_mask_center()
+            self._fit_video()
+
+    def _fit_video(self) -> None:
+        """Ajusta o QGraphicsVideoItem para preencher o QGraphicsView."""
+        vp = self._gfx_view.viewport()
+        vp_w = vp.width()
+        vp_h = vp.height()
+        self._video_item.setSize(QSizeF(vp_w, vp_h))
+        self._scene.setSceneRect(0, 0, vp_w, vp_h)
+        self._update_mask_geometry(vp_w, vp_h)
+
+    def resizeEvent(self, event: object) -> None:  # type: ignore[override]
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        self._fit_video()
+
+    # ── Overlay 9:16 ─────────────────────────────────────────────────
+
+    def _run_face_detection(self, path: Path) -> None:
+        try:
+            from canal_soberania.utils.reframe import detect_face_crop_x
+            crop_x = detect_face_crop_x(path, sample_time=self._clip.start_s + 2.0)
+        except Exception:
+            crop_x = None
+        self._face_detected.emit(crop_x)
+
+    def _on_face_detected(self, crop_x: object) -> None:
+        if self._vid_natural_w > 0:
+            cx = crop_x if isinstance(crop_x, int) else (self._vid_natural_w - int(self._vid_natural_h * 9 / 16)) // 2
+            self._face_crop_x = cx
+        else:
+            self._face_crop_x = None
+        self._update_mask_center()
+
+    def _update_mask_center(self) -> None:
+        if self._vid_natural_w <= 0 or self._vid_natural_h <= 0:
+            return
+        crop_x = getattr(self, "_face_crop_x", None)
+        if crop_x is None:
+            crop_x = (self._vid_natural_w - int(self._vid_natural_h * 9 / 16)) // 2
+        vp = self._gfx_view.viewport()
+        self._update_mask_geometry(vp.width(), vp.height(), src_crop_x=crop_x)
+
+    def _update_mask_geometry(
+        self, vp_w: int, vp_h: int, src_crop_x: int | None = None
+    ) -> None:
+        if self._vid_natural_w <= 0:
+            return
+        if src_crop_x is None:
+            src_crop_x = getattr(self, "_face_crop_x", None)
+            if src_crop_x is None:
+                src_crop_x = (self._vid_natural_w - int(self._vid_natural_h * 9 / 16)) // 2
+        # Escala crop_x para coordenadas do viewport
+        scale_x = vp_w / self._vid_natural_w
+        scale_y = vp_h / self._vid_natural_h
+        scaled_crop_x = src_crop_x * scale_x
+        scaled_crop_w = int(self._vid_natural_h * 9 / 16) * scale_x
+        self._mask.set_viewport(float(vp_w), float(vp_h), scaled_crop_x)
+        _ = scale_y  # usado indiretamente via vp_h proporcional
+
+    # ── Reprodução ────────────────────────────────────────────────────
 
     def _toggle_play(self) -> None:
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -380,6 +545,7 @@ class ClipReviewDialog(QDialog):
     def _on_duration_changed(self, ms: int) -> None:
         self._seek_bar.setRange(0, ms)
         self._seek_bar.setEnabled(ms > 0)
+        self._seek_bar.set_bounds(self._loop_start_ms, self._loop_end_ms, ms)
         self._update_pos(self._player.position())
 
     def _on_seek(self, ms: int) -> None:
@@ -391,10 +557,32 @@ class ClipReviewDialog(QDialog):
         dur = self._player.duration()
         self._pos_label.setText(f"{self._fmt(ms)} / {self._fmt(dur)}")
 
+    def _check_loop(self, ms: int) -> None:
+        if self._loop_end_ms > 0 and ms >= self._loop_end_ms:
+            self._player.setPosition(self._loop_start_ms)
+
     @staticmethod
     def _fmt(ms: int) -> str:
         s = ms // 1000
         return f"{s // 60}:{s % 60:02d}"
+
+    # ── Loop A↔B em tempo real ────────────────────────────────────────
+
+    def _on_trim_changed(self) -> None:
+        """Debounce: espera 200ms parado antes de atualizar os limites do loop."""
+        self._debounce_timer.start()
+
+    def _refresh_loop_bounds(self) -> None:
+        start_ms = int(self._start_spin.value() * 1000)
+        end_ms = int(self._end_spin.value() * 1000)
+        self._loop_start_ms = start_ms
+        self._loop_end_ms = end_ms
+        dur = self._player.duration()
+        self._seek_bar.set_bounds(start_ms, end_ms, dur)
+        # Se posição atual estiver fora do novo intervalo, salta para o início
+        pos = self._player.position()
+        if pos < start_ms or pos >= end_ms:
+            self._player.setPosition(start_ms)
 
     # ── Atalhos de teclado ────────────────────────────────────────────
 
@@ -411,6 +599,12 @@ class ClipReviewDialog(QDialog):
                 return
             elif key == Qt.Key.Key_R:
                 self._toggle_reject()
+                return
+            elif key == Qt.Key.Key_BracketLeft:
+                self._start_spin.setValue(self._player.position() / 1000.0)
+                return
+            elif key == Qt.Key.Key_BracketRight:
+                self._end_spin.setValue(self._player.position() / 1000.0)
                 return
         super().keyPressEvent(event)
 
@@ -473,12 +667,23 @@ class ClipReviewDialog(QDialog):
             QMessageBox.information(
                 self,
                 "Trim salvo",
-                f"Trim atualizado: {start:.1f}s → {end:.1f}s\nO clipe será re-renderizado automaticamente.",
+                f"Trim salvo: {start:.1f}s → {end:.1f}s\n"
+                "O clipe será re-renderizado na próxima execução do pipeline.",
             )
         except Exception as exc:
             QMessageBox.critical(self, "Erro", str(exc))
 
     # ── Aprovação / rejeição ──────────────────────────────────────────
+
+    def _on_burned_subs_toggled(self, checked: bool) -> None:
+        count = self._service.mark_video_burned_subtitles(self._clip.video_id, checked)
+        if checked and count > 0:
+            QMessageBox.information(
+                self,
+                "Legenda queimada marcada",
+                f"{count} clipe(s) deste vídeo foram re-enfileirados para edição sem legenda.\n"
+                "Os clipes serão re-renderizados automaticamente.",
+            )
 
     def _approve(self) -> None:
         self._save_changes(silent=True)
@@ -521,7 +726,6 @@ class ClipReviewDialog(QDialog):
                 QMessageBox.critical(self, "Erro ao liberar", str(exc))
 
     def _do_unschedule(self) -> None:
-        """Cancela o agendamento no YouTube (vídeo vira privado sem publishAt)."""
         from PySide6.QtWidgets import QApplication
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -535,7 +739,6 @@ class ClipReviewDialog(QDialog):
             return
         finally:
             QApplication.restoreOverrideCursor()
-        # Atualiza UI: desativa botões de plataforma, libera trim
         if self._unschedule_btn:
             self._unschedule_btn.setEnabled(False)
         if self._discard_btn:
@@ -548,7 +751,6 @@ class ClipReviewDialog(QDialog):
         self._schedule_chk.setChecked(False)
 
     def _do_discard(self) -> None:
-        """Deleta o vídeo do YouTube permanentemente."""
         confirm = QMessageBox.question(
             self,
             "Confirmar descarte",
@@ -574,7 +776,6 @@ class ClipReviewDialog(QDialog):
         self.accept()
 
     def _toggle_reject(self) -> None:
-        """Alterna entre rejeitado e aguardando aprovação (sem fechar o diálogo)."""
         if self._clip.status == ClipStatus.PROCESSING_ERROR:
             try:
                 self._service.restore_clip(self._clip.clip_id)
@@ -605,8 +806,6 @@ class ClipReviewDialog(QDialog):
             self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self._boost_cancelled = True
         self._player.stop()
-        if self._temp_preview is not None and self._temp_preview.exists():
-            self._temp_preview.unlink(missing_ok=True)
+        self._debounce_timer.stop()
         super().closeEvent(event)

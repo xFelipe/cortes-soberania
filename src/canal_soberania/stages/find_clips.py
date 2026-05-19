@@ -22,6 +22,7 @@ from canal_soberania.models import Clip, ClipCandidate, Video, VideoStatus
 
 _MIN_SCORE_VIRAL = 6
 _MIN_SCORE_RELEVANCIA = 6
+_END_PADDING_S = 0.3  # respiro após o fim da fala identificado pelo LLM
 
 
 def _format_segments_seconds(segments: list[dict[str, Any]]) -> str:
@@ -189,7 +190,7 @@ def find_clips_for_video(  # noqa: C901
             clip_id=clip_id,
             video_id=video.video_id,
             start_s=candidate.start_s,
-            end_s=candidate.end_s,
+            end_s=candidate.end_s + _END_PADDING_S,
             hook=candidate.hook,
             payoff=candidate.payoff,
             tema_soberania=candidate.tema_soberania,

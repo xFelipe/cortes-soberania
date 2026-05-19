@@ -141,3 +141,7 @@ em VPS dedicada — ver `docs/pipeline.md §TikTok`.
 | 2026-05-19T12:45:49Z | TT_002 | unschedule |  |
 | 2026-05-19T12:45:49Z | TT_003 | delete |  |
 | 2026-05-19T12:45:49Z | TT_004 | fetch_status |  |
+| 2026-05-19T14:07:28Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-19T14:07:28Z | TT_002 | unschedule |  |
+| 2026-05-19T14:07:28Z | TT_003 | delete |  |
+| 2026-05-19T14:07:28Z | TT_004 | fetch_status |  |

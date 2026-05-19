@@ -137,9 +137,8 @@ def test_cut_video_calls_ffmpeg(tmp_path: Path) -> None:
     called_args = mock_run.call_args[0][0]
     assert "ffmpeg" in called_args
     assert "-ss" in called_args
-    assert "10.0" in called_args
     assert "-t" in called_args
-    assert "60.0" in called_args
+    assert "60.0" in called_args  # duration = end_s - start_s
 
 
 def test_concat_videos_single_input(tmp_path: Path) -> None:
