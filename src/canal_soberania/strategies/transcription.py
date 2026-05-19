@@ -27,7 +27,7 @@ class FasterWhisperBackend:
 
     def _get_model(self) -> object:
         if self._model is None:
-            from faster_whisper import WhisperModel  # type: ignore[import-untyped]
+            from faster_whisper import WhisperModel
             self._model = WhisperModel(
                 self._model_size,
                 device=self._device,
@@ -41,7 +41,7 @@ class FasterWhisperBackend:
         language: str = "pt",
     ) -> list[TranscriptionSegment]:
         model = self._get_model()
-        segments_raw, _ = model.transcribe(  # type: ignore[union-attr]
+        segments_raw, _ = model.transcribe(  # type: ignore[attr-defined]
             str(audio_path),
             language=language,
             word_timestamps=True,

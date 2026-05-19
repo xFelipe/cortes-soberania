@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db, record_api_cost
 from canal_soberania.llm import LLMClient, OpenRouterClient, extract_json, get_llm_client
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS = "thumbnail_ready"
+_INPUT_STATUS: ClipStatus = "thumbnail_ready"
 
 
 def _load_clip_transcript(
@@ -150,7 +150,7 @@ def generate_metadata_for_clip(
 
     title: str = str(parsed.get("title", ""))[:60]
     description: str = str(parsed.get("description", ""))
-    tags_raw = parsed.get("tags", [])
+    tags_raw = cast(list[object], parsed.get("tags", []))
     tags: list[str] = [str(t) for t in tags_raw if t][:15]
 
     if not title:

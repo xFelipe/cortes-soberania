@@ -25,19 +25,19 @@ def get_youtube_service(client_secrets_path: Path, token_path: Path) -> object:
     No primeiro uso (ou quando o token não cobre os escopos necessários) abre
     o browser para autorização OAuth e salva o token em disco.
     """
-    from google.auth.transport.requests import Request  # type: ignore[import-untyped]
-    from google.oauth2.credentials import Credentials  # type: ignore[import-untyped]
-    from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-untyped]
-    from googleapiclient.discovery import build  # type: ignore[import-untyped]
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
 
     creds: Credentials | None = None
 
     if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), YOUTUBE_SCOPES)
+        creds = Credentials.from_authorized_user_file(str(token_path), YOUTUBE_SCOPES)  # type: ignore[no-untyped-call]
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            creds.refresh(Request())  # type: ignore[no-untyped-call]
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(client_secrets_path), YOUTUBE_SCOPES

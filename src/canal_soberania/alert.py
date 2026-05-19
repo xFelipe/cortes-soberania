@@ -20,7 +20,7 @@ def _send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
         data = f"chat_id={urllib.parse.quote(chat_id)}&text={urllib.parse.quote(message)}&parse_mode=Markdown".encode()
         req = urllib.request.Request(url, data=data, method="POST")  # noqa: S310
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-            return resp.status == _HTTP_OK
+            return bool(resp.status == _HTTP_OK)
     except Exception as exc:
         logger.warning("Telegram: falha ao enviar alerta: {}", exc)
         return False

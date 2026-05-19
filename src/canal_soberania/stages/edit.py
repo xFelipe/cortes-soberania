@@ -161,24 +161,36 @@ def detect_face_crop_x(video_path: Path, sample_time: float = 2.0) -> int | None
     Retorna None se mediapipe não disponível ou face não detectada.
     """
     try:
-        import cv2  # type: ignore[import-untyped]
-        import mediapipe as mp  # type: ignore[import-untyped]
+        import cv2
+        import mediapipe as mp
     except ImportError:
         logger.debug("mediapipe/cv2 não disponível — usando crop central")
         return None
 
-    cap = cv2.VideoCapture(str(video_path))
-    try:
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(fps * sample_time))
-        ok, frame = cap.read()
-    finally:
-        cap.release()
+    # Extrai frame via ffmpeg (com libdav1d para AV1) para evitar os erros de
+    # hardware decoding que o cv2.VideoCapture dispara ao abrir vídeos AV1.
+    from canal_soberania.utils.ffmpeg import _av1_decoder_args, _run
 
-    if not ok:
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as _f:
+        frame_path = Path(_f.name)
+    try:
+        _run([
+            "ffmpeg", "-y",
+            "-hwaccel", "none",
+            *_av1_decoder_args(video_path),
+            "-ss", str(sample_time),
+            "-i", str(video_path),
+            "-frames:v", "1",
+            str(frame_path),
+        ], check=False)
+        frame_bgr = cv2.imread(str(frame_path))
+    finally:
+        frame_path.unlink(missing_ok=True)
+
+    if frame_bgr is None:
         return None
 
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     h, w = frame_rgb.shape[:2]
 
     with mp.solutions.face_detection.FaceDetection(
@@ -195,7 +207,7 @@ def detect_face_crop_x(video_path: Path, sample_time: float = 2.0) -> int | None
 
     # crop_w para 9:16 a partir de 16:9: target width = h * 9/16
     crop_w = int(h * 9 / 16)
-    crop_x = max(0, min(face_cx - crop_w // 2, w - crop_w))
+    crop_x: int = max(0, min(face_cx - crop_w // 2, int(w) - crop_w))
     return crop_x
 
 

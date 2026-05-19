@@ -91,7 +91,7 @@ def transcribe_audio(
     [{start: float, end: float, text: str}].
     """
     _preload_cuda_from_venv()
-    from faster_whisper import WhisperModel  # type: ignore[import-untyped]
+    from faster_whisper import WhisperModel
 
     logger.info("Carregando Whisper {} ({}/{})", model_size, device, compute_type)
     import os

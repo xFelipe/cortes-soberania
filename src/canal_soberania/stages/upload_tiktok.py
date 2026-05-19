@@ -11,9 +11,9 @@ from pathlib import Path
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db
 from canal_soberania.logger import logger
-from canal_soberania.models import Clip
+from canal_soberania.models import Clip, ClipStatus
 
-_INPUT_STATUS = "scheduled_youtube"
+_INPUT_STATUS: ClipStatus = "scheduled_youtube"
 _PENDING_DIR_NAME = "pending_tiktok"
 
 

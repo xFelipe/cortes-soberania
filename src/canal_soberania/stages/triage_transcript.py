@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
 from canal_soberania.db import (
@@ -54,9 +55,9 @@ def _parse_transcript_response(
     cost_usd: float,
 ) -> TriageResult:
     data = extract_json(raw)
-    score = int(data.get("score", 0))
+    score = int(cast(int, data.get("score", 0)))
     is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
-    themes = [str(t) for t in data.get("themes_detected", [])]
+    themes = [str(t) for t in cast(list[object], data.get("themes_detected", []))]
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
@@ -128,15 +129,13 @@ def triage_video_transcript(
         (video.video_id,),
     ).fetchone()
     if existing is not None:
-        new_status = (
-            "triage_transcript_passed" if existing["is_relevant"] else "triage_transcript_rejected"
-        )
+        new_status = "triage_transcript_passed" if existing["is_relevant"] else "triage_transcript_rejected"
         logger.info(
             "triage_transcript {} já feita (score={}), pulando LLM → {}",
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)
+            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         return None
 
     try:
@@ -162,12 +161,10 @@ def triage_video_transcript(
             )
         return None
 
-    new_status = (
-        "triage_transcript_passed" if result.score >= threshold else "triage_transcript_rejected"
-    )
+    new_status = "triage_transcript_passed" if result.score >= threshold else "triage_transcript_rejected"
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)
+        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",

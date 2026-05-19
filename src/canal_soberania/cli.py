@@ -20,7 +20,7 @@ app = typer.Typer(
 )
 
 
-@app.callback()  # type: ignore[untyped-decorator]
+@app.callback()
 def main(
     ctx: typer.Context,
     log_level: Annotated[str, typer.Option("--log-level", help="DEBUG|INFO|WARNING|ERROR")] = "",
@@ -60,7 +60,7 @@ def main(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def status(
     ctx: typer.Context,
     video_id: Annotated[str | None, typer.Option("--video-id", help="Detalhe de um vídeo")] = None,
@@ -95,7 +95,7 @@ def status(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def discover(
     ctx: typer.Context,
     canal: Annotated[list[str] | None, typer.Option("--canal", help="ID do canal (pode repetir). Padrão: todos ativos.")] = None,
@@ -129,7 +129,7 @@ class TriageStage(StrEnum):
     transcript = "transcript"
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def triage(
     ctx: typer.Context,
     stage: Annotated[TriageStage, typer.Option("--stage", help="metadata|caption|transcript")],
@@ -155,7 +155,7 @@ def triage(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def download(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -171,7 +171,7 @@ def download(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def transcribe(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -187,7 +187,7 @@ def transcribe(
 # ---------------------------------------------------------------------------
 
 
-@app.command(name="find-clips")  # type: ignore[untyped-decorator]
+@app.command(name="find-clips")
 def find_clips(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -203,7 +203,7 @@ def find_clips(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def edit(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -219,7 +219,7 @@ def edit(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def thumbnail(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -235,7 +235,7 @@ def thumbnail(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def metadata(
     ctx: typer.Context,
     _pending: Annotated[bool, typer.Option("--pending")] = True,
@@ -256,7 +256,7 @@ class Platform(StrEnum):
     tiktok = "tiktok"
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def upload(
     ctx: typer.Context,
     platform: Annotated[Platform, typer.Option("--platform", help="youtube|tiktok")],
@@ -273,7 +273,7 @@ def upload(
         service.run_upload_tiktok(dry_run=effective_dry_run)
 
 
-@app.command(name="sync-youtube")  # type: ignore[untyped-decorator]
+@app.command(name="sync-youtube")
 def sync_youtube(
     ctx: typer.Context,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
@@ -289,7 +289,7 @@ def sync_youtube(
 # ---------------------------------------------------------------------------
 
 
-@app.command(name="training-stats")  # type: ignore[untyped-decorator]
+@app.command(name="training-stats")
 def training_stats(ctx: typer.Context) -> None:
     """Mostra contagem de exemplos de treino por task e status de curadoria."""
     from canal_soberania.db import training_stats as _training_stats
@@ -308,7 +308,7 @@ def training_stats(ctx: typer.Context) -> None:
         )
 
 
-@app.command(name="export-training")  # type: ignore[untyped-decorator]
+@app.command(name="export-training")
 def export_training(
     ctx: typer.Context,
     task: Annotated[str | None, typer.Option("--task", help="Filtrar por task específica")] = None,
@@ -347,7 +347,7 @@ def export_training(
 # ---------------------------------------------------------------------------
 
 
-@app.command()  # type: ignore[untyped-decorator]
+@app.command()
 def alert(
     ctx: typer.Context,
     threshold: Annotated[int, typer.Option("--threshold", help="Itens presos para disparar alerta")] = 50,
@@ -375,7 +375,7 @@ def alert(
 # ---------------------------------------------------------------------------
 
 
-@app.command(name="pipeline-loop")  # type: ignore[untyped-decorator]
+@app.command(name="pipeline-loop")
 def pipeline_loop(
     ctx: typer.Context,
     interval: Annotated[int, typer.Option("--interval", help="Segundos entre iterações")] = 60,

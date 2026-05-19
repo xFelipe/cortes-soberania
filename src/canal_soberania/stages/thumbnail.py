@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont  # type: ignore[import-untyped]
+from PIL import Image, ImageDraw, ImageFont
 
 from canal_soberania.config import get_paths, load_settings
 from canal_soberania.db import connect, get_clips_by_status, init_db
@@ -95,7 +95,7 @@ def generate_thumbnail(
 
     # Base: frame ou fundo escuro fallback
     if frame_path and frame_path.exists():
-        base = Image.open(frame_path).convert("RGB").resize((width, height), Image.LANCZOS)
+        base = Image.open(frame_path).convert("RGB").resize((width, height), Image.Resampling.LANCZOS)
     else:
         base = Image.new("RGB", (width, height), (20, 20, 35))
 
@@ -136,7 +136,7 @@ def generate_thumbnail(
             logo_h = 80
             ratio = logo_h / logo.height
             logo_w = int(logo.width * ratio)
-            logo = logo.resize((logo_w, logo_h), Image.LANCZOS)
+            logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
             base.paste(logo, (30, 20), logo)
         except Exception as exc:
             logger.debug("Falha ao colocar logo: {}", exc)

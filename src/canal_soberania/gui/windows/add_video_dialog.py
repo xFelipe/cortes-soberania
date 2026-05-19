@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QThread,
     QVBoxLayout,
+    QWidget,
 )
 
 from canal_soberania.models import Video
@@ -36,7 +36,7 @@ class _Worker(QThread):
     success: Signal = Signal(object)   # Video
     error: Signal = Signal(str)
 
-    def __init__(self, service: PipelineService, video_id: str, parent: QThread | None = None) -> None:
+    def __init__(self, service: PipelineService, video_id: str, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._service = service
         self._video_id = video_id
@@ -54,8 +54,8 @@ class AddVideoDialog(QDialog):
 
     video_added = Signal(str)   # video_id adicionado com sucesso
 
-    def __init__(self, service: PipelineService, parent: object = None) -> None:
-        super().__init__(parent)  # type: ignore[call-overload]
+    def __init__(self, service: PipelineService, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
         self._service = service
         self._worker: _Worker | None = None
         self._setup_ui()

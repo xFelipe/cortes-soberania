@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QDateTime, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QCursor, QDesktopServices, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QCloseEvent, QCursor, QDesktopServices, QKeyEvent, QMouseEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -169,7 +169,7 @@ class ClipReviewDialog(QDialog):
         has_schedule = bool(self._clip.youtube_publish_at)
         self._schedule_chk.setChecked(has_schedule)
         if has_schedule:
-            dt = QDateTime.fromString(self._clip.youtube_publish_at[:16], "yyyy-MM-ddTHH:mm")
+            dt = QDateTime.fromString((self._clip.youtube_publish_at or "")[:16], "yyyy-MM-ddTHH:mm")
             self._schedule_dt.setDateTime(dt if dt.isValid() else QDateTime.currentDateTime().addDays(1))
         else:
             self._schedule_dt.setDateTime(QDateTime.currentDateTime().addDays(1))
@@ -307,7 +307,7 @@ class ClipReviewDialog(QDialog):
                 self,
                 "Legenda queimada marcada",
                 f"{count} clipe(s) deste vídeo foram re-enfileirados para edição sem legenda.\n"
-                "Rode o stage Edit para re-renderizar.",
+                "Os clipes serão re-renderizados automaticamente.",
             )
 
     def _make_video_link(self) -> QLabel:
@@ -398,7 +398,7 @@ class ClipReviewDialog(QDialog):
 
     # ── Atalhos de teclado ────────────────────────────────────────────
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:  # type: ignore[override]
+    def keyPressEvent(self, event: QKeyEvent) -> None:
         focused = self.focusWidget()
         typing = isinstance(focused, (QTextEdit, QLineEdit, QDoubleSpinBox))
         if not typing:
@@ -473,7 +473,7 @@ class ClipReviewDialog(QDialog):
             QMessageBox.information(
                 self,
                 "Trim salvo",
-                f"Trim atualizado: {start:.1f}s → {end:.1f}s\nRode o stage Edit para re-renderizar.",
+                f"Trim atualizado: {start:.1f}s → {end:.1f}s\nO clipe será re-renderizado automaticamente.",
             )
         except Exception as exc:
             QMessageBox.critical(self, "Erro", str(exc))
@@ -604,9 +604,9 @@ class ClipReviewDialog(QDialog):
             self._approve_btn.setEnabled(True)
             self._approve_btn.setStyleSheet("background-color: #2e7d32; color: white;")
 
-    def closeEvent(self, event) -> None:  # type: ignore[override]
+    def closeEvent(self, event: QCloseEvent) -> None:
         self._boost_cancelled = True
         self._player.stop()
-        if getattr(self, "_temp_preview", None) and self._temp_preview.exists():
+        if self._temp_preview is not None and self._temp_preview.exists():
             self._temp_preview.unlink(missing_ok=True)
         super().closeEvent(event)

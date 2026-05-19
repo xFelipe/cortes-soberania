@@ -7,8 +7,8 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from googleapiclient.discovery import build  # type: ignore[import-untyped]
-from googleapiclient.errors import HttpError  # type: ignore[import-untyped]
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from canal_soberania.config import Canal, Parametros, get_paths, load_canais, load_settings
 from canal_soberania.db import connect, init_db, insert_video

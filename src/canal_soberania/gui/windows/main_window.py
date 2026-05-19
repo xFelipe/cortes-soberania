@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -224,8 +225,10 @@ class MainWindow(QMainWindow):
         # Limpar grid anterior
         while self._clips_grid.count():
             child = self._clips_grid.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            if child is not None:
+                w = child.widget()
+                if w is not None:
+                    w.deleteLater()
 
         cols = 3
         for idx, clip in enumerate(clips):
@@ -402,7 +405,7 @@ class MainWindow(QMainWindow):
         lines = [f"<b>{k}</b>: {v}" for k, v in video.model_dump().items() if v is not None]
         QMessageBox.information(self, f"Vídeo {video_id}", "<br>".join(lines))
 
-    def closeEvent(self, event) -> None:  # type: ignore[override]
+    def closeEvent(self, event: QCloseEvent) -> None:
         self._loop_worker.stop()
         if self._worker and self._worker.isRunning():
             self._service.cancel()

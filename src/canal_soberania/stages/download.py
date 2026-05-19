@@ -6,8 +6,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-import yt_dlp  # type: ignore[import-untyped]
-import yt_dlp.utils as ydl_utils  # type: ignore[import-untyped]
+import yt_dlp
+import yt_dlp.utils as ydl_utils
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from canal_soberania.config import get_paths, load_settings

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any
+from typing import Any, cast
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
 from canal_soberania.db import (
@@ -76,9 +76,9 @@ def _parse_triage_response(
     raw: str, video_id: str, model: str, tokens_in: int, tokens_out: int, cost_usd: float
 ) -> TriageResult:
     data = extract_json(raw)
-    score = int(data.get("score", 0))
+    score = int(cast(int, data.get("score", 0)))
     is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
-    themes = [str(t) for t in data.get("themes_detected", [])]
+    themes = [str(t) for t in cast(list[object], data.get("themes_detected", []))]
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
@@ -139,7 +139,7 @@ def triage_video_metadata(
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)
+            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         return None
 
     try:
@@ -160,12 +160,10 @@ def triage_video_metadata(
             update_video_status(conn, video.video_id, "processing_error", f"parse_error: {exc}")
         return None
 
-    new_status = (
-        "triage_metadata_passed" if result.score >= threshold else "triage_metadata_rejected"
-    )
+    new_status = "triage_metadata_passed" if result.score >= threshold else "triage_metadata_rejected"
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)
+        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",
@@ -224,7 +222,7 @@ def run(  # noqa: C901
 
     if youtube is None and settings.youtube_api_key:
         try:
-            from googleapiclient.discovery import build  # type: ignore[import-untyped]
+            from googleapiclient.discovery import build
 
             youtube = build("youtube", "v3", developerKey=settings.youtube_api_key)
         except Exception as exc:

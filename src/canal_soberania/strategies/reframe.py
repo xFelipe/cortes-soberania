@@ -50,7 +50,7 @@ class FaceDetectionReframe:
 
         try:
             import cv2
-            import mediapipe as mp  # type: ignore[import-untyped]
+            import mediapipe as mp
 
             if frame is None:
                 raise ValueError("frame nulo")

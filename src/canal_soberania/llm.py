@@ -8,6 +8,7 @@ import socket
 import sqlite3
 import urllib.error
 import urllib.request
+from typing import cast
 
 import anthropic
 from pydantic import BaseModel
@@ -114,7 +115,7 @@ class LLMClient:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._training_conn = training_conn
 
-    @retry(  # type: ignore[untyped-decorator]
+    @retry(
         retry=retry_if_exception_type((
             anthropic.RateLimitError,
             anthropic.APITimeoutError,
@@ -181,7 +182,7 @@ class OpenRouterClient:
         self._api_key = api_key
         self._training_conn = training_conn
 
-    @retry(  # type: ignore[untyped-decorator]
+    @retry(
         retry=(
             retry_if_exception_type((urllib.error.URLError, socket.timeout, json.JSONDecodeError))
             | retry_if_exception(_is_retriable_http_error)
@@ -192,7 +193,7 @@ class OpenRouterClient:
     )
     def _call_api(self, req: urllib.request.Request) -> dict[str, object]:
         with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
-            return dict(json.loads(resp.read()))  # type: ignore[arg-type]
+            return dict(json.loads(resp.read()))
 
     def complete(
         self,
@@ -219,9 +220,9 @@ class OpenRouterClient:
         data = self._call_api(req)
 
         text = data["choices"][0]["message"]["content"]  # type: ignore[index]
-        usage = data.get("usage", {})
-        tokens_in = usage.get("prompt_tokens", 0)
-        tokens_out = usage.get("completion_tokens", 0)
+        usage: dict[str, object] = cast(dict[str, object], data.get("usage", {}))
+        tokens_in = cast(int, usage.get("prompt_tokens", 0))
+        tokens_out = cast(int, usage.get("completion_tokens", 0))
         cost = _calc_cost(model, tokens_in, tokens_out)
 
         logger.debug(

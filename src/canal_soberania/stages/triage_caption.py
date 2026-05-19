@@ -5,10 +5,10 @@ from __future__ import annotations
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import yt_dlp  # type: ignore[import-untyped]
-import yt_dlp.utils as ydl_utils  # type: ignore[import-untyped]
+import yt_dlp
+import yt_dlp.utils as ydl_utils
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
@@ -154,9 +154,9 @@ def _parse_caption_response(
     cost_usd: float,
 ) -> TriageResult:
     data = extract_json(raw)
-    score = int(data.get("score", 0))
+    score = int(cast(int, data.get("score", 0)))
     is_relevant = bool(data.get("is_relevant", score >= _MIN_RELEVANCE_SCORE))
-    themes = [str(t) for t in data.get("themes_detected", [])]
+    themes = [str(t) for t in cast(list[object], data.get("themes_detected", []))]
     rationale = str(data.get("rationale", ""))
     return TriageResult(
         video_id=video_id,
@@ -243,7 +243,7 @@ def triage_video_caption(
             video.video_id, existing["score"], new_status,
         )
         with conn:
-            update_video_status(conn, video.video_id, new_status)
+            update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         return None
 
     try:
@@ -269,12 +269,10 @@ def triage_video_caption(
             )
         return None
 
-    new_status = (
-        "triage_caption_passed" if result.score >= threshold else "triage_caption_rejected"
-    )
+    new_status = "triage_caption_passed" if result.score >= threshold else "triage_caption_rejected"
     with conn:
         insert_triage_result(conn, result)
-        update_video_status(conn, video.video_id, new_status)
+        update_video_status(conn, video.video_id, new_status)  # type: ignore[arg-type]
         record_api_cost(
             conn,
             provider="anthropic" if model.startswith("claude-") else "openrouter",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from canal_soberania.services.pipeline_service import PipelineService
 
@@ -23,8 +23,8 @@ class StageWorker(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, fn: Callable[[], None], parent: QThread | None = None) -> None:
-        super().__init__(parent)  # type: ignore[arg-type]
+    def __init__(self, fn: Callable[[], None], parent: QObject | None = None) -> None:
+        super().__init__(parent)
         self._fn = fn
 
     def run(self) -> None:
@@ -49,9 +49,9 @@ class PipelineLoopWorker(QThread):
         self,
         service: PipelineService,
         interval_s: int = 60,
-        parent: QThread | None = None,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__(parent)  # type: ignore[arg-type]
+        super().__init__(parent)
         self._service = service
         self._interval = interval_s
         self._active = True
