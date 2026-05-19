@@ -12,7 +12,7 @@
 
 | Fase | Ondas | Status |
 |---|---|---|
-| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–1 ✅) |
+| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–2 ✅) |
 | **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
@@ -63,61 +63,79 @@
 
 ---
 
-### ⬜ Onda 2 — API REST FastAPI (4 dias)
+### ✅ Onda 2 — API REST FastAPI (`git tag onda-2-done`)
 
 > Objetivo: expor o PipelineService via HTTP+SSE para o frontend Tauri consumir.
 
-#### Endpoints principais
-- [ ] `api/main.py` — app FastAPI com CORS e auth por token local
-- [ ] `GET /videos` + `POST /videos` (adicionar por ID)
-- [ ] `GET /clips` + `GET /clips/{id}` + `GET /clips/{id}/face-crop`
-- [ ] `POST /clips/{id}/approve` | `reject` | `trim` | `discard`
-- [ ] `GET /canais` + `POST /canais` + `PUT /canais/{id}` + `DELETE /canais/{id}`
-- [ ] `POST /stages/{name}/run` + `POST /pipeline/cancel` + `POST /pipeline/pause`
-- [ ] `GET /stats/summary` + `GET /stats/cost` + `GET /stats/throughput`
-- [ ] `GET /inbox` — lista priorizada: METADATA_READY → erros → triagem pendente → agendados 24h
-- [ ] `GET /events` — SSE stream do EventBus
-
-#### Auth
-- [ ] Token local gerado em `~/.config/canal-soberania/token` na primeira execução
-- [ ] Middleware valida `Authorization: Bearer <token>` em todos os endpoints
-
-#### CLI
-- [ ] `cs serve` — levanta FastAPI em `:8000` (+ flag `--with-tauri` futura)
-- [ ] `GET /openapi.json` disponível para geração de cliente TypeScript
-
-#### Testes
-- [ ] `tests/api/test_videos.py`, `test_clips.py`, `test_stages.py`, `test_sse.py`
-- [ ] Todos com `httpx.AsyncClient` contra app real em memória
-
-- **Smoke:** `cs serve` → `curl http://localhost:8000/videos` retorna JSON; `curl -N http://localhost:8000/events` recebe stream SSE ao rodar um stage
+- [x] `api/app.py` — `create_app()` factory com CORS (tauri://localhost + localhost:*)
+- [x] `api/auth.py` — token Bearer em `DATA_DIR/.api_token` (chmod 600, `secrets.compare_digest`)
+- [x] `api/sse.py` — `SSEBridge` thread-safe (EventBus sync → async via queue + `loop.call_soon_threadsafe`); heartbeat 15s
+- [x] `GET /videos`, `GET /videos/{id}`, `POST /{id}/approve`, `POST /{id}/reject`
+- [x] `GET /clips`, `GET /clips/{id}`, `POST /{id}/approve` (upload em thread), `POST /{id}/reject`, `POST /{id}/trim`, `PATCH /{id}`, `DELETE /{id}`
+- [x] `GET /canais`, `POST /canais`, `PUT /canais/{id}`, `DELETE /canais/{id}`
+- [x] `POST /stages/{name}/run` — 13 stages em daemon thread; retorna 202 imediato
+- [x] `POST /pipeline/cancel`, `POST /pipeline/reset`
+- [x] `GET /stats/summary`, `GET /stats/costs`, `GET /stats/costs/detail`
+- [x] `GET /inbox` — lista priorizada (clips METADATA_READY prio 1, vídeos prio 2+)
+- [x] `GET /events` — SSE stream com heartbeat keepalive
+- [x] `GET /health`
+- [x] `cs serve` — levanta FastAPI em `:8000`, imprime token Bearer no stdout
+- [x] 59 novos testes `tests/api/` (500 total, todos passando)
+- [x] `mypy --strict` zero erros em `src/canal_soberania/api/` (13 arquivos)
+- **Referência completa:** `docs/api.md`
+- **Smoke:** `cs serve` → `curl -H "Authorization: Bearer <token>" http://localhost:8000/inbox`
 
 ---
 
 ### ⬜ Onda 3 — Tauri + React fundação (5 dias)
 
-> Objetivo: shell desktop funcionando com layout completo e remove PySide6.
+> Objetivo: shell desktop funcionando com layout completo e remove PySide6. A API (Onda 2) já está pronta — esta onda só consome endpoints existentes.
+
+#### Pré-requisitos de sistema
+```bash
+# Node / pnpm
+curl -fsSL https://get.pnpm.io/install.sh | sh
+pnpm --version  # esperado ≥ 9
+
+# Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Dependências de sistema (Linux)
+sudo apt install libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
 
 #### Scaffold
 - [ ] `pnpm create tauri-app ui --template react-ts` na raiz do repo
-- [ ] Instalar: `tailwindcss` + `shadcn/ui` + `@tanstack/react-query` + `@tanstack/router` + `zod` + `cmdk` + `sonner`
+- [ ] `cd ui && pnpm add -D tailwindcss @tailwindcss/vite`
+- [ ] `pnpm dlx shadcn@latest init` (style: Default, color: Slate, CSS vars: yes)
+- [ ] `pnpm add @tanstack/react-query @tanstack/router zod cmdk sonner`
 - [ ] `src-tauri/`: comandos Tauri mínimos (open external URL, file dialog, system tray)
+- [ ] `src-tauri/tauri.conf.json`: `devUrl = "http://localhost:5173"`, `beforeDevCommand = "pnpm dev"`
 
-#### Fundação React
-- [ ] `lib/api.ts` — cliente gerado de `/openapi.json` via `openapi-typescript`
-- [ ] `lib/sse.ts` — hook `useSSE()` que conecta ao EventBus e invalida queries TanStack
-- [ ] `lib/status-labels.ts` — `STATUS_META[status] = { label_pt, color, icon }` central
-- [ ] `lib/theme.ts` — auto OS (prefers-color-scheme) + override salvo em localStorage
-- [ ] `lib/shortcuts.ts` — registro global de hotkeys (Ctrl+1..6, J/K, A/R, etc.)
-- [ ] `components/layout/Sidebar.tsx` — 60px, ícones + tooltip + badge de contagem
-- [ ] `components/layout/StatusFooter.tsx` — 28px: stage atual · cancel · pause loop · custo mês
-- [ ] `App.tsx` com router + QueryClientProvider + ThemeProvider + Toaster
+#### Integração com FastAPI
+- [ ] `lib/api.ts` — gerado via `pnpm dlx openapi-typescript http://localhost:8000/openapi.json -o src/lib/api.d.ts`
+- [ ] Token lido de `~/.config/canal-soberania/.api_token` via Tauri `readTextFile`; injetado em todo fetch
+- [ ] `lib/sse.ts` — hook `useSSE()`:
+  ```ts
+  // Conecta ao GET /events, parseia "data: {...}\n\n"
+  // Chama queryClient.invalidateQueries() nos tipos relevantes
+  // Reconecta automaticamente após 3s de desconexão
+  ```
+- [ ] `lib/status-labels.ts` — `STATUS_META` mapeando cada status → `{ label_pt, color, icon }`
+- [ ] `lib/theme.ts` — auto OS (prefers-color-scheme) + override salvo em Tauri Store
+- [ ] `lib/shortcuts.ts` — registro global de hotkeys (Ctrl+1..6, J/K, A/R, `[`, `]`)
+
+#### Layout base
+- [ ] `components/layout/Sidebar.tsx` — 60px com ícones Lucide + tooltip + badge de contagem (busca de `GET /stats/summary`)
+- [ ] `components/layout/StatusFooter.tsx` — 28px: stage atual via SSE · cancel inline · custo do mês de `GET /stats/costs`
+- [ ] `App.tsx` com `<RouterProvider>` + `<QueryClientProvider>` + `<ThemeProvider>` + `<Toaster>`
 
 #### Remoção PySide6
-- [ ] Deletar `src/canal_soberania/gui/` inteira
-- [ ] Remover dependências PySide6 do `pyproject.toml`
+- [ ] `git rm -r src/canal_soberania/gui/`
+- [ ] Remover `pyside6>=6.11.1` e `"gui"` extra do `pyproject.toml`
+- [ ] `uv sync` — verificar que nada quebra nos 500 testes
 
-- **Smoke:** `pnpm tauri dev` abre janela; tema segue OS; troca entre 6 rotas funciona; Ctrl+K abre placeholder de palette; StatusFooter exibe custo mensal real
+- **Smoke:** `cs serve &` em terminal 1; `pnpm tauri dev` em terminal 2; janela abre; sidebar exibe contagens reais da API; StatusFooter mostra custo do mês; Ctrl+K abre placeholder; tema dark/light segue OS
 
 ---
 
@@ -246,11 +264,13 @@
 ## Smoke checklist padrão (< 5 min, rodar ao fechar cada onda)
 
 ```bash
-uv run pytest --tb=no -q          # todos passando
-uv run mypy src/ --strict          # zero erros
-uv run cs health-check             # [OK]
+.venv/bin/pytest --tb=no -q        # todos passando
+.venv/bin/mypy src/ --strict       # zero erros (exceto gui/ pré-existente até Onda 3)
+cs health-check                    # [OK]
 git tag onda-N-done                # marcar conclusão
 ```
+
+> **Nota:** Usar `.venv/bin/pytest` diretamente (não `uv run pytest`) — o pyenv shim pode não ativar a venv corretamente. Dev deps instaladas via `uv sync --extra dev`.
 
 ---
 
