@@ -393,6 +393,7 @@ def pipeline_loop(
 
     service: PipelineService = ctx.obj["service"]
     effective_dry_run = dry_run or ctx.obj["settings"].dry_run
+    heartbeat_path = ctx.obj["paths"]["data_dir"] / ".pipeline_heartbeat"
 
     typer.echo(f"Pipeline loop iniciado (intervalo={interval}s). Ctrl+C para parar.")
     logger.info("pipeline-loop iniciado | interval={}s | dry_run={}", interval, effective_dry_run)
@@ -428,12 +429,83 @@ def pipeline_loop(
             logger.error("pipeline-loop: erro na iteração #{}: {}", iteration, exc)
             typer.echo(f"  ✗ ERRO: {exc}")
 
+        # Heartbeat para restart_pipeline.sh detectar loop ativo
+        try:
+            heartbeat_path.touch()
+        except Exception:
+            pass
+
         if running:
             typer.echo(f"  … aguardando {interval}s")
             time.sleep(interval)
 
     typer.echo("Pipeline loop encerrado.")
     logger.info("pipeline-loop encerrado após {} iterações", iteration)
+
+
+# ---------------------------------------------------------------------------
+# health-check
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="health-check")
+def health_check(
+    ctx: typer.Context,
+    heartbeat: Annotated[str, typer.Option("--heartbeat", help="Arquivo de heartbeat do loop")] = "",
+    notify: Annotated[bool, typer.Option("--notify", help="Envia alerta se houver problema")] = False,
+) -> None:
+    """Verifica saúde do pipeline: DB, disco, itens presos e loop ativo."""
+    from canal_soberania.alerts.router import AlertRouter
+    from canal_soberania.health.check import run_health_check
+
+    settings = ctx.obj["settings"]
+    paths = ctx.obj["paths"]
+    heartbeat_path = Path(heartbeat) if heartbeat else None
+
+    result = run_health_check(
+        conn=ctx.obj["conn"],
+        settings=settings,
+        paths=paths,
+        loop_heartbeat_file=heartbeat_path,
+        stuck_threshold=settings.alert_stuck_threshold,
+    )
+
+    typer.echo(result.summary())
+
+    if notify and (not result.ok or result.warnings):
+        router = AlertRouter.from_settings(settings)
+        level = "error" if not result.ok else "warning"
+        router.send("Healthcheck", result.summary(), level=level)
+
+    if not result.ok:
+        raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# alert-test
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="alert-test")
+def alert_test(
+    ctx: typer.Context,
+    level: Annotated[str, typer.Option("--level", help="info|warning|error|critical")] = "warning",
+) -> None:
+    """Dispara alerta de teste em todos os canais configurados."""
+    from canal_soberania.alerts.router import AlertRouter
+
+    settings = ctx.obj["settings"]
+    router = AlertRouter.from_settings(settings)
+    sent = router.send(
+        title="Teste de alerta",
+        body="Se você recebeu isso, os alertas estão funcionando.",
+        level=level,
+    )
+    if sent:
+        typer.echo(f"✓ Alerta enviado para {sent} canal(is)")
+    else:
+        typer.echo("✗ Nenhum canal configurado ou todos falharam")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

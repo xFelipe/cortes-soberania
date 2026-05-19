@@ -47,6 +47,23 @@ class Settings(BaseModel):
     telegram_bot_token: str = Field(default="")
     telegram_chat_id: str = Field(default="")
 
+    # Alertas SMTP
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_user: str = Field(default="")
+    smtp_password: str = Field(default="")
+    smtp_from: str = Field(default="")
+    smtp_to: str = Field(default="")
+
+    # Canais de alerta ativos (comma-separated: "telegram,smtp" | "telegram" | "smtp" | "none")
+    alert_channels: str = Field(default="telegram")
+    # Threshold para alertar sobre itens presos num mesmo status
+    alert_stuck_threshold: int = Field(default=50)
+
+    # Backends plugáveis (Onda 1)
+    llm_backend: str = Field(default="anthropic")      # anthropic | ollama | hybrid | openai
+    whisper_backend: str = Field(default="local_cpu")  # local_cpu | local_cuda | groq | openai
+
 
 def load_settings() -> Settings:
     return Settings(
@@ -67,6 +84,16 @@ def load_settings() -> Settings:
         dry_run=os.getenv("DRY_RUN", "false").lower() == "true",
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        smtp_host=os.getenv("SMTP_HOST", ""),
+        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_user=os.getenv("SMTP_USER", ""),
+        smtp_password=os.getenv("SMTP_PASSWORD", ""),
+        smtp_from=os.getenv("SMTP_FROM", ""),
+        smtp_to=os.getenv("SMTP_TO", ""),
+        alert_channels=os.getenv("ALERT_CHANNELS", "telegram"),
+        alert_stuck_threshold=int(os.getenv("ALERT_STUCK_THRESHOLD", "50")),
+        llm_backend=os.getenv("LLM_BACKEND", "anthropic"),
+        whisper_backend=os.getenv("WHISPER_BACKEND", "local_cpu"),
     )
 
 
