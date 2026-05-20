@@ -36,6 +36,11 @@ youtube_token.json
 data/
 !data/.gitkeep
 
+# Eval runs (saídas geradas, não comprometer)
+evals/runs/*.jsonl
+evals/runs/*.json
+report.html
+
 # Logs
 *.log
 

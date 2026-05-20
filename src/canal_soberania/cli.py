@@ -21,6 +21,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+eval_app = typer.Typer(name="eval", help="Avaliar qualidade de prompts e backends de triagem.", no_args_is_help=True)
+app.add_typer(eval_app)
+
 
 @app.callback()
 def main(
@@ -551,6 +554,96 @@ def serve(
     logger.info("cs serve iniciando em {}:{}", host, port)
 
     uvicorn.run(api, host=host, port=port, reload=reload, log_level="warning")
+
+
+# ---------------------------------------------------------------------------
+# eval
+# ---------------------------------------------------------------------------
+
+
+@eval_app.command("run")
+def eval_run(
+    stage: Annotated[str, typer.Option("--stage", help="triage-metadata|triage-caption|triage-transcript")],
+    backend: Annotated[str, typer.Option("--backend", help="anthropic|ollama-14b|ollama-32b|hybrid")] = "anthropic",
+    version: Annotated[str, typer.Option("--version", help="Versão do prompt (v1, v2, ...)")] = "v1",
+    dataset: Annotated[Path, typer.Option("--dataset", help="JSONL de entradas rotuladas")] = Path("evals/dataset.jsonl"),
+    output: Annotated[Path, typer.Option("--output", help="Diretório de saída dos runs")] = Path("evals/runs"),
+) -> None:
+    """Roda eval de um stage de triagem contra o dataset e mede precision/recall/custo."""
+    from canal_soberania.config import load_settings
+    from canal_soberania.evals.runner import run_eval
+
+    stage_norm = stage.replace("-", "_")
+    try:
+        summary = run_eval(
+            stage=stage_norm,
+            backend_name=backend,
+            prompt_version=version,
+            dataset_path=dataset,
+            output_dir=output,
+            settings=load_settings(),
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        typer.echo(f"Erro: {exc}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"\nRun: {summary.run_id}")
+    typer.echo(f"  Precision : {summary.precision:.3f}")
+    typer.echo(f"  Recall    : {summary.recall:.3f}")
+    typer.echo(f"  F1        : {summary.f1:.3f}")
+    typer.echo(f"  Accuracy  : {summary.accuracy:.3f}")
+    typer.echo(f"  Custo     : ${summary.total_cost_usd:.4f} USD")
+    typer.echo(f"  Entradas  : {summary.total_entries}")
+    typer.echo(f"\nResultados → {output}/{summary.run_id}.jsonl")
+
+
+@eval_app.command("compare")
+def eval_compare(
+    run1: Annotated[Path, typer.Argument(help="Primeiro run JSONL")],
+    run2: Annotated[Path, typer.Argument(help="Segundo run JSONL")],
+    output: Annotated[Path, typer.Option("--output", help="Arquivo HTML de saída")] = Path("report.html"),
+) -> None:
+    """Compara dois runs e gera report.html com métricas e divergências."""
+    from canal_soberania.evals.compare import compare_runs
+
+    if not run1.exists():
+        typer.echo(f"Arquivo não encontrado: {run1}", err=True)
+        raise typer.Exit(1)
+    if not run2.exists():
+        typer.echo(f"Arquivo não encontrado: {run2}", err=True)
+        raise typer.Exit(1)
+
+    compare_runs(run1, run2, output)
+    typer.echo(f"Report gerado → {output}")
+
+
+@eval_app.command("list")
+def eval_list(
+    runs_dir: Annotated[Path, typer.Option("--dir", help="Diretório de runs")] = Path("evals/runs"),
+) -> None:
+    """Lista runs disponíveis com métricas resumidas."""
+    import json as _json
+
+    summary_files = sorted(runs_dir.glob("*.summary.json")) if runs_dir.exists() else []
+    if not summary_files:
+        typer.echo("Nenhum run encontrado. Use `cs eval run` para criar um.")
+        return
+
+    typer.echo(f"\n{'Run ID':<55} {'P':>6} {'R':>6} {'F1':>6} {'Acc':>6} {'Custo':>9}")
+    typer.echo("-" * 95)
+    for sf in summary_files:
+        try:
+            d = _json.loads(sf.read_text())
+            typer.echo(
+                f"{d.get('run_id', sf.stem):<55} "
+                f"{d.get('precision', 0):.3f}  "
+                f"{d.get('recall', 0):.3f}  "
+                f"{d.get('f1', 0):.3f}  "
+                f"{d.get('accuracy', 0):.3f}  "
+                f"${d.get('total_cost_usd', 0):.4f}"
+            )
+        except Exception:  # noqa: BLE001
+            typer.echo(f"  {sf.name} (erro ao ler)")
 
 
 if __name__ == "__main__":
