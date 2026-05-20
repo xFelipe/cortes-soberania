@@ -263,7 +263,7 @@ Qwen 2.5 14B Q4 na GPU local custa R$0 e tem latência < 3s — adequado para tr
 
 ## Qualidade e testes (Onda 8+)
 
-### Backend — pytest (636 testes, cobertura 93.71% nos pacotes críticos)
+### Backend — pytest (654 testes, cobertura 93.71% nos pacotes críticos)
 
 Estrutura de testes em `tests/`:
 
@@ -342,6 +342,65 @@ Os specs verificam `execSync("npx playwright install --dry-run chromium")` e faz
 - **`pre-push` stage:** `pytest --cov-fail-under=90` (pacotes críticos), `pnpm test`
 
 Instalar: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+
+---
+
+## Eval de prompts (Onda 9+)
+
+Sistema de avaliação em `src/canal_soberania/evals/` para medir qualidade de prompts de triagem contra diferentes backends.
+
+### Fluxo
+
+```
+evals/dataset.jsonl           ← 50 vídeos rotulados (ground truth manual)
+         │
+         ▼
+  runner.run_eval(stage, backend, version)
+         │
+         ├── cria SQLite :memory: por entry
+         ├── chama função de stage real (triage_video_metadata etc.)
+         ├── compara TriageResult.is_relevant vs ground_truth
+         └── persiste em evals/runs/{ts}_{stage}_{backend}.jsonl
+                                          │
+                                          ▼
+                             compare.compare_runs(run1, run2)
+                                          │
+                                          └── report.html (SVG + divergências)
+```
+
+### CLI
+
+```bash
+# Gerar dataset a partir do banco (uma vez)
+python -m canal_soberania.evals.build_dataset --db data/canal.db --limit 50 --output evals/dataset.jsonl
+
+# Rodar eval
+cs eval run --stage triage-metadata --backend anthropic --version v1
+cs eval run --stage triage-metadata --backend ollama-14b --version v1
+
+# Comparar dois runs
+cs eval compare evals/runs/run1.jsonl evals/runs/run2.jsonl --output report.html
+
+# Listar todos os runs com métricas
+cs eval list
+```
+
+### Módulos
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `evals/models.py` | `EvalEntry`, `EvalResult`, `RunSummary` (Pydantic) |
+| `evals/runner.py` | `run_eval()`, `compute_metrics()`, `load_run()` |
+| `evals/compare.py` | `compare_runs()` → `report.html` standalone |
+| `evals/build_dataset.py` | extrai labels de `triage_results` do banco |
+
+### Notas de design
+
+- `video_id` no dataset deve ter **exatamente 11 chars** (constraint do `Video` model do pipeline)
+- O idempotency guard nas stage functions não dispara porque cada entry usa DB `:memory:` fresco
+- Backends suportados: `anthropic`, `ollama-14b`, `ollama-32b`, `hybrid`
+- Versões de prompt: `v1` → `prompts/triagem_metadata.txt`, `v2` → `prompts/triagem_metadata_v2.txt`
+- `evals/runs/*.jsonl` são gitignored; `evals/dataset.jsonl` é versionado
 
 ---
 

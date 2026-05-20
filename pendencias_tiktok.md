@@ -205,3 +205,31 @@ em VPS dedicada — ver `docs/pipeline.md §TikTok`.
 | 2026-05-20T14:13:07Z | TT_002 | unschedule |  |
 | 2026-05-20T14:13:07Z | TT_003 | delete |  |
 | 2026-05-20T14:13:07Z | TT_004 | fetch_status |  |
+| 2026-05-20T15:41:44Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T15:41:44Z | TT_002 | unschedule |  |
+| 2026-05-20T15:41:44Z | TT_003 | delete |  |
+| 2026-05-20T15:41:44Z | TT_004 | fetch_status |  |
+| 2026-05-20T17:01:14Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T17:01:14Z | TT_002 | unschedule |  |
+| 2026-05-20T17:01:14Z | TT_003 | delete |  |
+| 2026-05-20T17:01:14Z | TT_004 | fetch_status |  |
+| 2026-05-20T17:01:45Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T17:01:45Z | TT_002 | unschedule |  |
+| 2026-05-20T17:01:45Z | TT_003 | delete |  |
+| 2026-05-20T17:01:45Z | TT_004 | fetch_status |  |
+| 2026-05-20T17:10:26Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T17:10:26Z | TT_002 | unschedule |  |
+| 2026-05-20T17:10:26Z | TT_003 | delete |  |
+| 2026-05-20T17:10:26Z | TT_004 | fetch_status |  |
+| 2026-05-20T19:30:10Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T19:30:10Z | TT_002 | unschedule |  |
+| 2026-05-20T19:30:10Z | TT_003 | delete |  |
+| 2026-05-20T19:30:10Z | TT_004 | fetch_status |  |
+| 2026-05-20T19:30:54Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T19:30:54Z | TT_002 | unschedule |  |
+| 2026-05-20T19:30:54Z | TT_003 | delete |  |
+| 2026-05-20T19:30:54Z | TT_004 | fetch_status |  |
+| 2026-05-20T23:13:57Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-20T23:13:57Z | TT_002 | unschedule |  |
+| 2026-05-20T23:13:57Z | TT_003 | delete |  |
+| 2026-05-20T23:13:57Z | TT_004 | fetch_status |  |

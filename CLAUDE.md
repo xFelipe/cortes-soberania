@@ -198,6 +198,7 @@ Começar pelo (2). Não vale risco de ban de conta no início.
 - **Tabelas e estado?** → `schema.sql`
 - **API REST (todos os endpoints)?** → `docs/api.md`
 - **Frontend (rotas, padrões, como estender)?** → `docs/frontend.md`
+- **Eval de prompts (cs eval run/compare)?** → `docs/arquitetura.md` § "Eval de prompts"
 
 ## Trabalhando com Claude Code neste projeto
 
@@ -205,4 +206,5 @@ Começar pelo (2). Não vale risco de ban de conta no início.
 - **Uma etapa por PR mental.** Não tente fazer "tudo de uma vez". Pegue uma tarefa de `proximas_tarefas.md`, implemente, teste, marque concluída.
 - **Não mude o esquema sem migration.** Se for adicionar coluna, crie `migrations/00X_descricao.sql`.
 - **Não mude prompts sem versionar.** Prompts vivem em `prompts/` com nome semântico. Mudança grande → novo arquivo com sufixo `_v2.txt` e alternar via config.
+- **Antes de iterar prompts, rode o eval baseline.** `cs eval run --stage triage-metadata --backend anthropic --version v1` gera métrica de referência. Novas versões devem superar o baseline em F1.
 - **Use os subagents.** `video-editor` para ffmpeg, `prompt-engineer` para iterar prompts. Não polua o contexto principal.

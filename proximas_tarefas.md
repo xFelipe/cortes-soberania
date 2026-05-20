@@ -13,8 +13,8 @@
 | Fase | Ondas | Status |
 |---|---|---|
 | **A — MVP completo e bonito** | 0–5 | ✅ Fase A concluída (Ondas 0–5 ✅) |
-| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Ondas 6–8 ✅) |
-| **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
+| **B — Robustez + features power** | 6–9 | ✅ Fase B concluída (Ondas 6–9 ✅) |
+| **C — Extras** | 10–12 | ⬜ Aguardando início |
 
 ---
 
