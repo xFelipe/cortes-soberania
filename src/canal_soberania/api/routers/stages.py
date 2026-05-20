@@ -1,4 +1,4 @@
-"""Router: /stages e /pipeline"""
+"""Router: /stages, /pipeline e /discover"""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import threading
 from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from canal_soberania.api.auth import verify_token
 from canal_soberania.api.deps import get_service
@@ -67,3 +68,34 @@ def reset_stuck(
     videos = service.reset_stuck_videos()
     clips = service.reset_stuck_clips()
     return {"reset_videos": videos, "reset_clips": clips}
+
+
+class _DiscoverAdhocBody(BaseModel):
+    channel_url_or_handle: str
+    persist: bool = False
+    janela_dias: int | None = None
+    max_videos: int | None = None
+
+
+@router.post("/discover/adhoc", status_code=202)
+def discover_adhoc(
+    body: _DiscoverAdhocBody,
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> dict[str, str]:
+    """Roda discover em canal ad-hoc em background thread. Retorna 202 imediatamente."""
+    settings = service._settings
+    if not settings.youtube_api_key:
+        raise HTTPException(status_code=400, detail="YOUTUBE_API_KEY não configurada em .env")
+
+    def _run() -> None:
+        service.discover_adhoc(
+            body.channel_url_or_handle,
+            persist=body.persist,
+            janela_dias=body.janela_dias,
+            max_videos=body.max_videos,
+        )
+
+    thread = threading.Thread(target=_run, daemon=True, name="discover-adhoc")
+    thread.start()
+    return {"status": "started", "handle": body.channel_url_or_handle}

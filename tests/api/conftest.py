@@ -62,12 +62,27 @@ def mock_service() -> MagicMock:
 def conn() -> sqlite3.Connection:
     c = sqlite3.connect(":memory:", check_same_thread=False)
     c.row_factory = sqlite3.Row
-    c.execute(
-        """CREATE TABLE IF NOT EXISTS api_costs (
-               date TEXT, provider TEXT, model TEXT,
-               tokens_in INT, tokens_out INT, requests INT, cost_usd REAL,
-               PRIMARY KEY (date, provider, model)
-           )"""
+    c.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS api_costs (
+            date TEXT, provider TEXT, model TEXT,
+            tokens_in INT, tokens_out INT, requests INT, cost_usd REAL,
+            PRIMARY KEY (date, provider, model)
+        );
+        CREATE TABLE IF NOT EXISTS videos (
+            video_id TEXT PRIMARY KEY, canal_id TEXT NOT NULL, title TEXT NOT NULL,
+            published_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'discovered',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS clips (
+            clip_id TEXT PRIMARY KEY, video_id TEXT NOT NULL,
+            start_s REAL NOT NULL, end_s REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'identified',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        """
     )
     return c
 

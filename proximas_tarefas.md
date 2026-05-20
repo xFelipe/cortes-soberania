@@ -13,7 +13,7 @@
 | Fase | Ondas | Status |
 |---|---|---|
 | **A — MVP completo e bonito** | 0–5 | ✅ Fase A concluída (Ondas 0–5 ✅) |
-| **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
+| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Onda 6 ✅) |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
 ---
@@ -188,13 +188,16 @@
 
 ## FASE B — Robustez + features power (~10 dias)
 
-### ⬜ Onda 6 — Operação + Stats + Settings (3 dias)
+### ✅ Onda 6 — Operação + Stats + Settings (`git tag onda-6-done`)
 
-- [ ] `routes/operacao/pipeline.tsx` — 12 stages em 4 grupos; contagem de pendentes por stage; log virtualizado com filtro/busca/clear
-- [ ] `routes/operacao/discover.tsx` — form simplificado de discover ad-hoc; histórico de runs
-- [ ] `routes/operacao/canais.tsx` — CRUD via `<Sheet>` (edição inline, sem página separada)
-- [ ] `routes/stats.tsx` — 4 cards (custo+projeção, throughput, publicados, taxa aprovação) + `recharts` bar chart 4 semanas + tabela por canal
-- [ ] `routes/settings.tsx` — tema, loop interval, LLM_BACKEND, WHISPER_BACKEND, destinos de alerta, cheatsheet de atalhos
+- [x] `routes/operacao/pipeline.tsx` — 12 stages em 4 grupos; contagem de pendentes por stage; log virtualizado com filtro/busca/clear
+- [x] `routes/operacao/discover.tsx` — form simplificado de discover ad-hoc; histórico de runs (SSE)
+- [x] `routes/operacao/canais.tsx` — CRUD via `<Sheet>` (edição inline, sem página separada)
+- [x] `routes/stats.tsx` — 4 cards (custo+projeção, throughput, publicados, taxa aprovação) + `recharts` bar chart 4 semanas + tabela por canal
+- [x] `routes/settings.tsx` — tema, loop interval, LLM_BACKEND, WHISPER_BACKEND, destinos de alerta, cheatsheet de atalhos, import .env filtrado
+- [x] Backend: canais CRUD (POST/PUT/PATCH/DELETE), `POST /discover/adhoc`, `/stats/by-canal`, `/stats/throughput`, `GET/PUT /config`
+- [x] `Settings.pipeline_loop_interval` + cli.py + restart_pipeline.sh atualizado
+- [x] 533 testes passando; mypy --strict zero erros; pnpm tsc zero erros
 
 ---
 

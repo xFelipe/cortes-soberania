@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -373,7 +374,7 @@ def alert(
 @app.command(name="pipeline-loop")
 def pipeline_loop(
     ctx: typer.Context,
-    interval: Annotated[int, typer.Option("--interval", help="Segundos entre iterações")] = 60,
+    interval: Annotated[int, typer.Option("--interval", help="Segundos entre iterações")] = int(os.getenv("PIPELINE_LOOP_INTERVAL", "60")),
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Roda o pipeline completo em loop, resetando itens travados antes de cada iteração.

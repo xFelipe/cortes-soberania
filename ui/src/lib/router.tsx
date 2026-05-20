@@ -2,7 +2,10 @@ import { createRouter, createRoute, createRootRoute, Navigate } from "@tanstack/
 import RootLayout from "@/components/layout/RootLayout";
 import InboxPage from "@/routes/index";
 import BibliotecaPage from "@/routes/biblioteca";
-import OperacaoPage from "@/routes/operacao";
+import OperacaoLayout from "@/routes/operacao/layout";
+import PipelinePage from "@/routes/operacao/pipeline";
+import DiscoverPage from "@/routes/operacao/discover";
+import CanaisPage from "@/routes/operacao/canais";
 import StatsPage from "@/routes/stats";
 import SettingsPage from "@/routes/settings";
 import ClipReviewPage from "@/routes/clip-review";
@@ -30,7 +33,31 @@ const bibliotecaRoute = createRoute({
 const operacaoRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/operacao",
-  component: OperacaoPage,
+  component: OperacaoLayout,
+});
+
+const operacaoIndexRoute = createRoute({
+  getParentRoute: () => operacaoRoute,
+  path: "/",
+  component: () => <Navigate to="/operacao/pipeline" />,
+});
+
+const pipelineRoute = createRoute({
+  getParentRoute: () => operacaoRoute,
+  path: "/pipeline",
+  component: PipelinePage,
+});
+
+const discoverRoute = createRoute({
+  getParentRoute: () => operacaoRoute,
+  path: "/discover",
+  component: DiscoverPage,
+});
+
+const canaisRoute = createRoute({
+  getParentRoute: () => operacaoRoute,
+  path: "/canais",
+  component: CanaisPage,
 });
 
 const statsRoute = createRoute({
@@ -55,7 +82,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   inboxRoute,
   bibliotecaRoute,
-  operacaoRoute,
+  operacaoRoute.addChildren([operacaoIndexRoute, pipelineRoute, discoverRoute, canaisRoute]),
   statsRoute,
   settingsRoute,
   clipReviewRoute,

@@ -91,3 +91,29 @@ export const ACTIVE_VIDEO_STATUSES = new Set<VideoStatus>(
     .filter(([, m]) => m.active)
     .map(([s]) => s)
 );
+
+// Mapeamento stage → statuses que indicam "pendente naquele stage"
+// Usado na página Operação para exibir contagem de pendentes por stage.
+export const STAGE_PENDING_STATUSES: Record<string, string[]> = {
+  discover: [],
+  triage_metadata: ["discovered"],
+  triage_caption: ["triage_metadata_passed", "on_hold_metadata_passed"],
+  download: ["triage_caption_passed", "triage_caption_skipped"],
+  transcribe: ["downloaded"],
+  triage_transcript: ["transcribed"],
+  find_clips: ["approved_for_clips"],
+  edit: ["identified"],
+  thumbnail: ["edited"],
+  generate_metadata: ["thumbnail_ready"],
+  upload_youtube: ["metadata_ready", "unscheduled_youtube"],
+  upload_tiktok: ["pending_tiktok_manual"],
+  sync_youtube: ["scheduled_youtube", "uploaded_youtube"],
+};
+
+export function stagePendingCount(
+  summary: Record<string, number>,
+  stageName: string
+): number {
+  const statuses = STAGE_PENDING_STATUSES[stageName] ?? [];
+  return statuses.reduce((acc, s) => acc + (summary[s] ?? 0), 0);
+}

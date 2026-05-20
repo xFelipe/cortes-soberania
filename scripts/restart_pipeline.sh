@@ -14,7 +14,7 @@ mkdir -p data/logs
 
 HEARTBEAT="data/.pipeline_heartbeat"
 PIDFILE="data/.pipeline_loop.pid"
-LOOP_CMD="uv run cs pipeline-loop --interval 60"
+LOOP_CMD="uv run cs pipeline-loop --interval ${PIPELINE_LOOP_INTERVAL:-60}"
 
 # Threshold em segundos (2 horas)
 IDLE_THRESHOLD=7200

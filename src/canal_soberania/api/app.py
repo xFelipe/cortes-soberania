@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from canal_soberania.api.routers import canais, clips, events, inbox, stages, stats, videos
+from canal_soberania.api.routers import canais, clips, config, events, inbox, stages, stats, videos
 from canal_soberania.api.sse import SSEBridge
 from canal_soberania.config import CanaisConfig
 from canal_soberania.services.pipeline_service import PipelineService
@@ -62,6 +62,7 @@ def create_app(
     app.include_router(stats.router)
     app.include_router(inbox.router)
     app.include_router(events.router)
+    app.include_router(config.router)
 
     @app.get("/health")
     def health() -> dict[str, str]:

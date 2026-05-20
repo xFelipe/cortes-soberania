@@ -73,6 +73,14 @@ class Settings(BaseModel):
     groq_api_key: str = Field(default="")
     openai_api_key: str = Field(default="")
 
+    # Pipeline loop
+    pipeline_loop_interval: int = Field(default=60)
+
+
+def get_repo_root() -> Path:
+    """Retorna a raiz do repositório (usado externamente para localizar o .env)."""
+    return _REPO_ROOT
+
 
 def load_settings() -> Settings:
     return Settings(
@@ -108,6 +116,7 @@ def load_settings() -> Settings:
         ollama_model_deep=os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:32b-instruct-q4_K_M"),
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        pipeline_loop_interval=int(os.getenv("PIPELINE_LOOP_INTERVAL", "60")),
     )
 
 

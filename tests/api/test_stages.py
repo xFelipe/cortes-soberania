@@ -189,3 +189,101 @@ def test_inbox_contains_video_priority_2(
 def test_inbox_no_auth(client: TestClient) -> None:
     r = client.get("/inbox")
     assert r.status_code == 401
+
+
+# ── discover adhoc ────────────────────────────────────────────────────────────
+
+def test_discover_adhoc_no_api_key(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service._settings.youtube_api_key = ""
+    r = client.post(
+        "/discover/adhoc",
+        json={"channel_url_or_handle": "@teste"},
+        headers=auth_headers,
+    )
+    assert r.status_code == 400
+
+
+def test_discover_adhoc_started(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service._settings.youtube_api_key = "fake-key"
+    mock_service.discover_adhoc.return_value = 5
+    r = client.post(
+        "/discover/adhoc",
+        json={"channel_url_or_handle": "@teste", "persist": True},
+        headers=auth_headers,
+    )
+    assert r.status_code == 202
+    assert r.json()["status"] == "started"
+    assert r.json()["handle"] == "@teste"
+
+
+def test_discover_adhoc_no_auth(client: TestClient) -> None:
+    r = client.post("/discover/adhoc", json={"channel_url_or_handle": "@teste"})
+    assert r.status_code == 401
+
+
+# ── stats by-canal / throughput ───────────────────────────────────────────────
+
+def test_stats_by_canal_empty(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    r = client.get("/stats/by-canal", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_stats_throughput_empty(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    r = client.get("/stats/throughput", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_stats_by_canal_with_data(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    conn = client.app.state.conn  # type: ignore[attr-defined]
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS videos (
+            video_id TEXT PRIMARY KEY, canal_id TEXT NOT NULL, title TEXT NOT NULL,
+            published_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'discovered',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS clips (
+            clip_id TEXT PRIMARY KEY, video_id TEXT NOT NULL,
+            start_s REAL NOT NULL, end_s REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'identified',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO videos VALUES ('vid1','canal-a','T','2024-01-01T00:00:00Z','clips_found','2024-01-01','2024-01-01')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO clips VALUES ('vid1_10_70','vid1',10,70,'uploaded_youtube','2024-01-01','2024-01-01')"
+    )
+    conn.commit()
+    r = client.get("/stats/by-canal", headers=auth_headers)
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) == 1
+    assert rows[0]["canal_id"] == "canal-a"
+    assert rows[0]["clips_publicados"] == 1
+
+
+def test_stats_by_canal_no_auth(client: TestClient) -> None:
+    r = client.get("/stats/by-canal")
+    assert r.status_code == 401
+
+
+def test_stats_throughput_no_auth(client: TestClient) -> None:
+    r = client.get("/stats/throughput")
+    assert r.status_code == 401

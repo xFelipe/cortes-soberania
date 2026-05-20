@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_URL, getToken } from "./api";
 
 type SSEStatus = "connecting" | "open" | "closed";
 
-export function useSSE() {
+export interface SSEEvent {
+  type: string;
+  data: unknown;
+}
+
+export function useSSE(onEvent?: (event: SSEEvent) => void) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<SSEStatus>("connecting");
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -30,12 +37,20 @@ export function useSSE() {
 
       es.onmessage = (e: MessageEvent<string>) => {
         try {
-          const event = JSON.parse(e.data) as { event_type?: string };
-          if (event.event_type?.includes("clip")) {
+          const parsed = JSON.parse(e.data) as { event_type?: string; [k: string]: unknown };
+
+          if (onEventRef.current) {
+            onEventRef.current({
+              type: parsed.event_type ?? "unknown",
+              data: parsed,
+            });
+          }
+
+          if (parsed.event_type?.includes("clip")) {
             void queryClient.invalidateQueries({ queryKey: ["clips"] });
             void queryClient.invalidateQueries({ queryKey: ["inbox"] });
           }
-          if (event.event_type?.includes("video")) {
+          if (parsed.event_type?.includes("video")) {
             void queryClient.invalidateQueries({ queryKey: ["videos"] });
             void queryClient.invalidateQueries({ queryKey: ["inbox"] });
           }

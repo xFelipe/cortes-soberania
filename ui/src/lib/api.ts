@@ -35,6 +35,31 @@ export interface StatsCosts {
   total_usd: number;
 }
 
+export interface StatsCostDetail {
+  date: string;
+  provider: string;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  requests: number;
+  cost_usd: number;
+}
+
+export interface StatsByCanal {
+  canal_id: string;
+  total_videos: number;
+  videos_aprovados: number;
+  clips_gerados: number;
+  clips_publicados: number;
+}
+
+export interface StatsThroughput {
+  semana: string;
+  videos_descobertos: number;
+  clips_criados: number;
+  clips_publicados: number;
+}
+
 export interface Video {
   video_id: string;
   canal_id: string;
@@ -114,12 +139,37 @@ export interface InboxResponse {
   total: number;
 }
 
+export interface Canal {
+  id: string;
+  nome: string;
+  handle: string;
+  channel_url: string;
+  tema_primario: string;
+  peso: number;
+  auto_publish: boolean;
+  tolerancia_cortes: string;
+  nota: string;
+  ativo: boolean;
+}
+
+export interface DiscoverAdhocParams {
+  channel_url_or_handle: string;
+  persist?: boolean;
+  janela_dias?: number | null;
+  max_videos?: number | null;
+}
+
+export type ConfigValues = Record<string, string | number | boolean>;
+
 // ── API surface ───────────────────────────────────────────────────────────────
 
 export const api = {
   stats: {
     summary: () => request<StatsSummary>("/stats/summary"),
     costs: () => request<StatsCosts>("/stats/costs"),
+    costsDetail: () => request<StatsCostDetail[]>("/stats/costs/detail"),
+    byCanal: () => request<StatsByCanal[]>("/stats/by-canal"),
+    throughput: () => request<StatsThroughput[]>("/stats/throughput"),
   },
   inbox: {
     get: () => request<InboxResponse>("/inbox"),
@@ -131,6 +181,13 @@ export const api = {
       request<{ status: string }>("/pipeline/cancel", { method: "POST" }),
     reset: () =>
       request<{ reset_videos: number; reset_clips: number }>("/pipeline/reset", { method: "POST" }),
+  },
+  discover: {
+    adhoc: (params: DiscoverAdhocParams) =>
+      request<{ status: string; handle: string }>("/discover/adhoc", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
   },
   videos: {
     list: (params?: { status?: string; limit?: number }) => {
@@ -174,6 +231,28 @@ export const api = {
     faceCrop: (clip_id: string) =>
       request<FaceCropData>(`/clips/${clip_id}/face-crop`),
     sourceVideoUrl: (clip_id: string) => `${API_URL}/clips/${clip_id}/source-video`,
+  },
+  canais: {
+    list: () => request<Canal[]>("/canais"),
+    create: (canal: Canal) =>
+      request<Canal>("/canais", { method: "POST", body: JSON.stringify(canal) }),
+    update: (id: string, canal: Canal) =>
+      request<Canal>(`/canais/${id}`, { method: "PUT", body: JSON.stringify(canal) }),
+    toggleAtivo: (id: string, ativo: boolean) =>
+      request<{ canal_id: string; ativo: boolean }>(`/canais/${id}/ativo`, {
+        method: "PATCH",
+        body: JSON.stringify({ ativo }),
+      }),
+    remove: (id: string) =>
+      request<{ status: string; canal_id: string }>(`/canais/${id}`, { method: "DELETE" }),
+  },
+  config: {
+    get: () => request<ConfigValues>("/config"),
+    put: (patch: ConfigValues) =>
+      request<{ status: string; restart_required: boolean; updated: string[] }>("/config", {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      }),
   },
 };
 
