@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from canal_soberania.api.auth import verify_token
@@ -25,6 +27,7 @@ class ClipPatchBody(BaseModel):
     youtube_publish_at: str | None = None
     render_vertical: bool = True
     render_horizontal: bool = True
+    score_viral: int | None = None
 
 
 class TrimBody(BaseModel):
@@ -146,5 +149,101 @@ def update_clip(
         youtube_publish_at=body.youtube_publish_at,
         render_vertical=body.render_vertical,
         render_horizontal=body.render_horizontal,
+        score_viral=body.score_viral,
     )
     return {"status": "updated", "clip_id": clip_id}
+
+
+class FaceCropResponse(BaseModel):
+    crop_x: int
+    crop_width: int
+    source_width: int
+    source_height: int
+
+
+@router.get("/{clip_id}/face-crop", response_model=FaceCropResponse)
+def get_face_crop(
+    clip_id: str,
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> FaceCropResponse:
+    """Detecta posição do rosto no vídeo-fonte e retorna coordenadas do crop 9:16."""
+    clip = service.get_clip(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="Clipe não encontrado")
+
+    video = service.get_video(clip.video_id)
+    if video is None or not video.video_path:
+        raise HTTPException(status_code=404, detail="Vídeo-fonte não disponível")
+
+    video_path = Path(video.video_path)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Arquivo de vídeo não encontrado")
+
+    # Detecta dimensões via ffprobe
+    import subprocess, json as _json
+    probe = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(video_path)],
+        capture_output=True,
+        text=True,
+    )
+    source_width, source_height = 1280, 720  # fallback
+    if probe.returncode == 0:
+        streams = _json.loads(probe.stdout).get("streams", [])
+        for s in streams:
+            if s.get("codec_type") == "video":
+                source_width = int(s.get("width", source_width))
+                source_height = int(s.get("height", source_height))
+                break
+
+    crop_width = int(source_height * 9 / 16)
+
+    from canal_soberania.utils.reframe import detect_face_crop_x
+    crop_x = detect_face_crop_x(video_path, sample_time=clip.start_s + 2.0)
+    if crop_x is None:
+        crop_x = (source_width - crop_width) // 2
+
+    return FaceCropResponse(
+        crop_x=crop_x,
+        crop_width=crop_width,
+        source_width=source_width,
+        source_height=source_height,
+    )
+
+
+@router.get("/{clip_id}/source-video")
+def stream_source_video(
+    clip_id: str,
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> FileResponse:
+    """Serve o arquivo de vídeo original (usado pelo player HTML5 no frontend)."""
+    clip = service.get_clip(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="Clipe não encontrado")
+
+    # Preferir o clipe editado vertical (se já processado)
+    for candidate_path in [clip.clip_path_vertical, clip.clip_path_horizontal]:
+        if candidate_path:
+            p = Path(candidate_path)
+            if p.exists():
+                return FileResponse(
+                    path=p,
+                    media_type="video/mp4",
+                    filename=p.name,
+                    headers={"Accept-Ranges": "bytes"},
+                )
+
+    # Fallback: vídeo-fonte original
+    video = service.get_video(clip.video_id)
+    if video and video.video_path:
+        p = Path(video.video_path)
+        if p.exists():
+            return FileResponse(
+                path=p,
+                media_type="video/mp4",
+                filename=p.name,
+                headers={"Accept-Ranges": "bytes"},
+            )
+
+    raise HTTPException(status_code=404, detail="Arquivo de vídeo não disponível")

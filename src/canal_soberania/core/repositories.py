@@ -46,6 +46,7 @@ class ClipRepository(Protocol):
         youtube_publish_at: str | None = None,
         render_vertical: bool | None = None,
         render_horizontal: bool | None = None,
+        score_viral: int | None = None,
     ) -> None: ...
     def clear_platform_id(
         self, clip_id: str, *, kind: Literal["vertical", "horizontal"]

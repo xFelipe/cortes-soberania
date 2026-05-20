@@ -32,6 +32,62 @@ export function useGlobalShortcuts(onCommandPalette: () => void) {
   }, [onCommandPalette]);
 }
 
+export interface ClipReviewShortcutHandlers {
+  onSetIn: () => void;
+  onSetOut: () => void;
+  onPlayPause: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  enabled: boolean;
+}
+
+export function useClipReviewShortcuts({
+  onSetIn,
+  onSetOut,
+  onPlayPause,
+  onApprove,
+  onReject,
+  enabled,
+}: ClipReviewShortcutHandlers) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    function handleKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      // Allow Space in non-textarea/input; block [ ] A R in inputs
+      if (tag === "TEXTAREA" || (tag === "INPUT" && e.key !== " ")) return;
+
+      switch (e.key) {
+        case "[":
+          e.preventDefault();
+          onSetIn();
+          break;
+        case "]":
+          e.preventDefault();
+          onSetOut();
+          break;
+        case " ":
+          if (tag !== "TEXTAREA" && tag !== "INPUT") {
+            e.preventDefault();
+            onPlayPause();
+          }
+          break;
+        case "a":
+        case "A":
+          if (tag !== "TEXTAREA" && tag !== "INPUT") onApprove();
+          break;
+        case "r":
+        case "R":
+          if (tag !== "TEXTAREA" && tag !== "INPUT") onReject();
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [enabled, onSetIn, onSetOut, onPlayPause, onApprove, onReject]);
+}
+
 export interface InboxShortcutHandlers {
   onNext: () => void;
   onPrev: () => void;

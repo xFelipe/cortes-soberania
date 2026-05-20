@@ -318,6 +318,7 @@ class PipelineService:
         render_horizontal: bool = True,
         description: str | None = None,
         tags: list[str] | None = None,
+        score_viral: int | None = None,
     ) -> None:
         """Persiste edições manuais e propaga às plataformas se o clipe já foi enviado."""
         old = self._clip_repo.get(clip_id)
@@ -335,6 +336,7 @@ class PipelineService:
             youtube_publish_at=youtube_publish_at,
             render_vertical=render_vertical,
             render_horizontal=render_horizontal,
+            score_viral=score_viral,
         )
         # Propaga a plataformas se o clipe já está em alguma delas
         if old.status in _PLATFORM_STATUSES:

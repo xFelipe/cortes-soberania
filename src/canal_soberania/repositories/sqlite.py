@@ -204,6 +204,7 @@ class SqliteClipRepository:
         youtube_publish_at: str | None = None,
         render_vertical: bool | None = None,
         render_horizontal: bool | None = None,
+        score_viral: int | None = None,
     ) -> None:
         """UPDATE dinâmico — só altera os campos explicitamente passados (None = não mexer)."""
         scalar: dict[str, Any] = {
@@ -211,6 +212,8 @@ class SqliteClipRepository:
             "description": description, "youtube_publish_at": youtube_publish_at,
         }
         cols: dict[str, Any] = {k: v for k, v in scalar.items() if v is not None}
+        if score_viral is not None:
+            cols["score_viral"] = score_viral
         if tags is not None:
             cols["tags"] = json.dumps(tags, ensure_ascii=False)
         if render_vertical is not None:

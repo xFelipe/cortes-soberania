@@ -76,6 +76,25 @@ export interface Clip {
   updated_at: string | null;
 }
 
+export interface FaceCropData {
+  crop_x: number;
+  crop_width: number;
+  source_width: number;
+  source_height: number;
+}
+
+export interface ClipPatch {
+  hook?: string | null;
+  payoff?: string | null;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[];
+  youtube_publish_at?: string | null;
+  render_vertical?: boolean;
+  render_horizontal?: boolean;
+  score_viral?: number | null;
+}
+
 export interface InboxItem {
   type: "clip" | "video";
   priority: number;
@@ -135,12 +154,26 @@ export const api = {
       const q = qs.toString();
       return request<Clip[]>(`/clips${q ? `?${q}` : ""}`);
     },
+    get: (clip_id: string) => request<Clip>(`/clips/${clip_id}`),
     approve: (clip_id: string) =>
       request<{ status: string; clip_id: string }>(`/clips/${clip_id}/approve`, { method: "POST" }),
     reject: (clip_id: string) =>
       request<{ status: string; clip_id: string }>(`/clips/${clip_id}/reject`, { method: "POST" }),
     discard: (clip_id: string) =>
       request<{ status: string; clip_id: string }>(`/clips/${clip_id}`, { method: "DELETE" }),
+    patch: (clip_id: string, data: ClipPatch) =>
+      request<{ status: string; clip_id: string }>(`/clips/${clip_id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    trim: (clip_id: string, start_s: number, end_s: number) =>
+      request<{ status: string; clip_id: string; start_s: number; end_s: number }>(
+        `/clips/${clip_id}/trim`,
+        { method: "POST", body: JSON.stringify({ start_s, end_s }) }
+      ),
+    faceCrop: (clip_id: string) =>
+      request<FaceCropData>(`/clips/${clip_id}/face-crop`),
+    sourceVideoUrl: (clip_id: string) => `${API_URL}/clips/${clip_id}/source-video`,
   },
 };
 

@@ -87,6 +87,7 @@ class InMemoryClipRepository:
         youtube_publish_at: str | None = None,
         render_vertical: bool | None = None,
         render_horizontal: bool | None = None,
+        score_viral: int | None = None,
     ) -> None:
         if clip_id not in self._clips:
             raise ValueError(f"Clip não encontrado: {clip_id}")
@@ -107,6 +108,8 @@ class InMemoryClipRepository:
             updates["render_vertical"] = render_vertical
         if render_horizontal is not None:
             updates["render_horizontal"] = render_horizontal
+        if score_viral is not None:
+            updates["score_viral"] = score_viral
         if updates:
             self._clips[clip_id] = self._clips[clip_id].model_copy(update=updates)
 
