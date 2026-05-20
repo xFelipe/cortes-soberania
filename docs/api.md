@@ -2,6 +2,8 @@
 
 Referência dos endpoints FastAPI expostos pelo `cs serve`. Consumida pelo frontend Tauri (Onda 3+) e utilizável diretamente via `curl` para debug.
 
+**Atualizado após Onda 6** — canais CRUD, discover adhoc, stats agregado, config R/W.
+
 ## Inicialização
 
 ```bash
@@ -148,22 +150,76 @@ Detecta a posição do rosto no vídeo-fonte usando `mediapipe` e retorna as coo
 
 ### Canais
 
+Fonte de dados: SQLite (tabela `canais`), não o YAML. O YAML (`config/canais.yaml`) é apenas seed inicial; após a primeira importação, o banco é a fonte de verdade.
+
 ```
 GET /canais
-GET /canais?apenas_ativos=true
 ```
+Retorna todos os canais cadastrados (`list[Canal]`).
 
 ```
 POST /canais
 Content-Type: application/json
-{canal schema completo — ver Canal model}
+```
+Body: schema `Canal` completo. Retorna 201 com o canal criado.
+
+```json
+{
+  "id": "flow_podcast",
+  "nome": "Flow Podcast",
+  "handle": "@FlowPodcast",
+  "channel_url": "https://youtube.com/@FlowPodcast",
+  "tema_primario": "variado",
+  "peso": 0.7,
+  "auto_publish": false,
+  "tolerancia_cortes": "alta",
+  "nota": "",
+  "ativo": true
+}
 ```
 
 ```
 PUT /canais/{canal_id}
-DELETE /canais/{canal_id}
-POST /canais/{canal_id}/toggle-ativo
+Content-Type: application/json
 ```
+Body: schema `Canal` completo. O `id` no body deve ser igual ao `canal_id` do path (422 se divergir). Faz upsert.
+
+```
+PATCH /canais/{canal_id}/ativo
+Content-Type: application/json
+{"ativo": false}
+```
+Liga/desliga o canal sem editar os demais campos. Retorna `{"canal_id": "...", "ativo": false}`.
+
+```
+DELETE /canais/{canal_id}
+```
+Remove o canal do banco. Retorna `{"status": "deleted", "canal_id": "..."}`.
+
+---
+
+### Discover ad-hoc
+
+```
+POST /discover/adhoc
+Content-Type: application/json
+```
+
+```json
+{
+  "channel_url_or_handle": "@NomeDoCanal",
+  "persist": false,
+  "janela_dias": 7,
+  "max_videos": 20
+}
+```
+
+Todos os campos exceto `channel_url_or_handle` são opcionais (defaults do `canais.yaml`).
+
+- Retorna **202** imediatamente: `{"status": "started", "handle": "@NomeDoCanal"}`.
+- O discover roda em daemon thread; acompanhe via SSE (`discover_adhoc_done`).
+- Se `YOUTUBE_API_KEY` não estiver configurada, retorna **400** antes de disparar a thread.
+- Se `persist = true`, o canal é salvo na tabela `canais` ao fim do discover.
 
 ---
 
@@ -233,6 +289,82 @@ Retorna últimas 90 linhas da tabela `api_costs` (90 dias):
 ]
 ```
 
+```
+GET /stats/by-canal
+```
+Retorna contagens por `canal_id` (JOIN videos + clips):
+```json
+[
+  {
+    "canal_id": "flow_podcast",
+    "total_videos": 28,
+    "videos_aprovados": 3,
+    "clips_gerados": 12,
+    "clips_publicados": 4
+  },
+  ...
+]
+```
+`videos_aprovados` = vídeos em status `approved_for_clips`, `finding_clips` ou `clips_found`.
+`clips_publicados` = clips em `uploaded_youtube`, `scheduled_youtube`, `uploaded_tiktok` ou `pending_tiktok_manual`.
+
+```
+GET /stats/throughput
+```
+Retorna throughput semanal das últimas 4 semanas (última data de 28 dias):
+```json
+[
+  {
+    "semana": "2026-19",
+    "videos_descobertos": 134,
+    "clips_criados": 10,
+    "clips_publicados": 6
+  },
+  ...
+]
+```
+`semana` = `strftime('%Y-%W', created_at)` (ano-semanaISO). Ordenado ASC.
+
+---
+
+### Config
+
+Permite ler e persistir as configurações editáveis do backend. **Não expõe segredos** (API keys). Após salvar, reiniciar `cs serve` para aplicar.
+
+```
+GET /config
+```
+Retorna os valores atuais das chaves editáveis (lidos via `load_settings()`):
+```json
+{
+  "LLM_BACKEND": "anthropic",
+  "WHISPER_BACKEND": "local_cpu",
+  "WHISPER_DEVICE": "cuda",
+  "WHISPER_COMPUTE_TYPE": "float16",
+  "OLLAMA_BASE_URL": "http://localhost:11434/v1/chat/completions",
+  "OLLAMA_MODEL_TRIAGE": "qwen2.5:14b-instruct-q4_K_M",
+  "OLLAMA_MODEL_DEEP": "qwen2.5:32b-instruct-q4_K_M",
+  "ALERT_CHANNELS": "telegram",
+  "ALERT_STUCK_THRESHOLD": 50,
+  "TELEGRAM_CHAT_ID": "",
+  "SMTP_HOST": "", "SMTP_PORT": 587, "SMTP_FROM": "", "SMTP_TO": "",
+  "LOG_LEVEL": "INFO",
+  "DRY_RUN": false,
+  "PIPELINE_LOOP_INTERVAL": 60
+}
+```
+
+```
+PUT /config
+Content-Type: application/json
+{"LOG_LEVEL": "DEBUG", "PIPELINE_LOOP_INTERVAL": "120"}
+```
+
+- Aceita um subset das chaves acima (mais `SMTP_PASSWORD` e `TELEGRAM_BOT_TOKEN` — graváveis, não retornados no GET).
+- Faz **merge não-destrutivo no `.env`**: atualiza apenas as linhas das chaves enviadas, preserva comentários e demais vars.
+- Retorna `{"status": "saved", "restart_required": true, "updated": ["LOG_LEVEL", "PIPELINE_LOOP_INTERVAL"]}`.
+- Chaves fora da whitelist retornam **400**.
+
 ---
 
 ### Inbox
@@ -279,31 +411,34 @@ data: {"event_type": "stage_complete", "stage": "edit", "clip_id": "dQw4w9WgXcQ_
 
 Heartbeat a cada 15 segundos para manter a conexão viva. Reconectar após desconexão com `EventSource` nativo ou hook customizado.
 
-**Hook React sugerido:**
+**Hook React (`lib/sse.ts`):**
 ```typescript
-// lib/sse.ts
-export function useSSE(token: string) {
-  const queryClient = useQueryClient()
+// Uso básico (só invalida queries automaticamente)
+const status = useSSE()   // "connecting" | "open" | "closed"
 
-  useEffect(() => {
-    const es = new EventSource(`/events?token=${token}`)
-    es.onmessage = (e) => {
-      const event = JSON.parse(e.data)
-      // Invalida queries afetadas pelo tipo de evento
-      if (event.event_type?.includes('clip')) {
-        queryClient.invalidateQueries({ queryKey: ['clips'] })
-        queryClient.invalidateQueries({ queryKey: ['inbox'] })
-      }
-      if (event.event_type?.includes('video')) {
-        queryClient.invalidateQueries({ queryKey: ['videos'] })
-        queryClient.invalidateQueries({ queryKey: ['inbox'] })
-      }
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
-    }
-    return () => es.close()
-  }, [token, queryClient])
-}
+// Uso com callback (recebe cada evento)
+useSSE((event) => {
+  // event.type  = event_type da mensagem SSE (ex: "discover_adhoc_done")
+  // event.data  = objeto JSON completo parseado
+  if (event.type === "discover_adhoc_done") {
+    const d = event.data as { handle: string; inserted: number }
+    setHistory(prev => [...prev, { handle: d.handle, inserted: d.inserted }])
+  }
+})
 ```
+
+O callback recebe **todos** os eventos; a invalidação de queries continua acontecendo automaticamente em paralelo.
+
+**Eventos mais comuns do pipeline:**
+
+| `event_type` | Dados relevantes |
+|---|---|
+| `stage_progress` | `stage`, `video_id`, `status`, `message` |
+| `stage_complete` | `stage`, `clip_id` ou `video_id` |
+| `stage_error` | `stage`, `error` |
+| `discover_adhoc_done` | `handle`, `inserted`, `persisted` |
+| `canal_upserted` | `canal_id` |
+| `canal_deleted` | `canal_id` |
 
 ---
 
