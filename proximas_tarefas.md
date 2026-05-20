@@ -265,12 +265,20 @@
 
 ---
 
-### ⬜ Onda 9 — Eval pipeline de prompts (3 dias)
+### ✅ Onda 9 — Eval pipeline de prompts (2026-05-20)
 
-- [ ] `evals/dataset.jsonl` — 50 vídeos rotulados (extraídos do banco + correção manual em sessão única)
-- [ ] `evals/runner.py` — roda prompt vN contra 4 backends; mede precision/recall/cost por vídeo
-- [ ] `evals/compare.py` — diff entre 2 versões; gera `report.html` com gráficos + exemplos divergentes
-- [ ] `cs eval run --prompt triagem_metadata --backend ollama-14b --version v1`
+- [x] `src/canal_soberania/evals/models.py` — EvalEntry, EvalResult, RunSummary (Pydantic)
+- [x] `src/canal_soberania/evals/runner.py` — engine com DB :memory: por entry, reutiliza funções de stage reais; `run_eval()`, `compute_metrics()`, `load_run()`
+- [x] `src/canal_soberania/evals/build_dataset.py` — extrai candidatos do canal.db com labels de triage_results
+- [x] `src/canal_soberania/evals/compare.py` — gera `report.html` standalone com SVG + tabela de divergências
+- [x] `cs eval run --stage triage-metadata --backend anthropic --version v1`
+- [x] `cs eval compare run1.jsonl run2.jsonl`, `cs eval list`
+- [x] `evals/dataset.jsonl` — 3 exemplos sintéticos; populate com `python -m canal_soberania.evals.build_dataset --db data/canal.db`
+- [x] 18 novos testes (654 total), mypy --strict zero erros, `git tag onda-9-done`
+
+#### Nota: estratégia de avaliação
+
+Runner cria SQLite `:memory:` para cada entrada, insere o vídeo com status adequado ao stage, chama a função de stage real (ex: `triage_video_metadata`), lê `TriageResult` e compara com `ground_truth`. Não mocka a lógica de parsing — testa o pipeline real com backend mockado nos testes.
 
 ---
 
