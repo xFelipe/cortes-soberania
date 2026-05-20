@@ -27,6 +27,7 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
 } from "lucide-react";
 import { ContextMenu, Checkbox } from "radix-ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -116,6 +117,7 @@ function BulkToolbar({
   onApprove,
   onReject,
   onDiscard,
+  onExport,
   onClear,
   type,
 }: {
@@ -123,6 +125,7 @@ function BulkToolbar({
   onApprove?: () => void;
   onReject: () => void;
   onDiscard?: () => void;
+  onExport: () => void;
   onClear: () => void;
   type: "video" | "clip";
 }) {
@@ -159,6 +162,10 @@ function BulkToolbar({
             Excluir
           </Button>
         )}
+        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={onExport}>
+          <ClipboardList size={12} />
+          Exportar lista
+        </Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onClear}>
           Limpar
         </Button>
@@ -537,12 +544,38 @@ function VideosTab() {
           count={selectedIds.length}
           type="video"
           onApprove={() => {
-            selectedIds.forEach((id) => approveMutation.mutate(id));
+            const ids = selectedIds;
             setRowSelection({});
+            void Promise.allSettled(ids.map((id) => api.videos.approve(id))).then((results) => {
+              const ok = results.filter((r) => r.status === "fulfilled").length;
+              const fail = results.length - ok;
+              if (fail === 0) toast.success(`${ok} vídeo${ok > 1 ? "s" : ""} aprovado${ok > 1 ? "s" : ""}`);
+              else toast.warning(`${ok} aprovado${ok !== 1 ? "s" : ""}, ${fail} falhou`);
+              void queryClient.invalidateQueries({ queryKey: ["videos"] });
+              void queryClient.invalidateQueries({ queryKey: ["stats"] });
+            });
           }}
           onReject={() => {
-            selectedIds.forEach((id) => rejectMutation.mutate(id));
+            const ids = selectedIds;
             setRowSelection({});
+            void Promise.allSettled(ids.map((id) => api.videos.reject(id))).then((results) => {
+              const ok = results.filter((r) => r.status === "fulfilled").length;
+              const fail = results.length - ok;
+              if (fail === 0) toast.success(`${ok} vídeo${ok > 1 ? "s" : ""} rejeitado${ok > 1 ? "s" : ""}`);
+              else toast.warning(`${ok} rejeitado${ok !== 1 ? "s" : ""}, ${fail} falhou`);
+              void queryClient.invalidateQueries({ queryKey: ["videos"] });
+              void queryClient.invalidateQueries({ queryKey: ["stats"] });
+            });
+          }}
+          onExport={() => {
+            const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+            const header = "video_id,status,title,canal_id,score_triage";
+            const rows = selected.map((v) =>
+              [v.video_id, v.status, `"${(v.title ?? "").replace(/"/g, '""')}"`, v.canal_id, v.score_triage ?? ""].join(",")
+            );
+            void navigator.clipboard.writeText([header, ...rows].join("\n")).then(() => {
+              toast.success(`${selected.length} item${selected.length > 1 ? "s" : ""} copiado${selected.length > 1 ? "s" : ""} (CSV)`);
+            });
           }}
           onClear={() => setRowSelection({})}
         />
@@ -918,16 +951,52 @@ function ClipsTab() {
           count={selectedIds.length}
           type="clip"
           onApprove={() => {
-            selectedIds.forEach((id) => approveMutation.mutate(id));
+            const ids = selectedIds;
             setRowSelection({});
+            void Promise.allSettled(ids.map((id) => api.clips.approve(id))).then((results) => {
+              const ok = results.filter((r) => r.status === "fulfilled").length;
+              const fail = results.length - ok;
+              if (fail === 0) toast.success(`${ok} clipe${ok > 1 ? "s" : ""} aprovado${ok > 1 ? "s" : ""} — upload iniciado`);
+              else toast.warning(`${ok} aprovado${ok !== 1 ? "s" : ""}, ${fail} falhou`);
+              void queryClient.invalidateQueries({ queryKey: ["clips"] });
+              void queryClient.invalidateQueries({ queryKey: ["inbox"] });
+              void queryClient.invalidateQueries({ queryKey: ["stats"] });
+            });
           }}
           onReject={() => {
-            selectedIds.forEach((id) => rejectMutation.mutate(id));
+            const ids = selectedIds;
             setRowSelection({});
+            void Promise.allSettled(ids.map((id) => api.clips.reject(id))).then((results) => {
+              const ok = results.filter((r) => r.status === "fulfilled").length;
+              const fail = results.length - ok;
+              if (fail === 0) toast.success(`${ok} clipe${ok > 1 ? "s" : ""} rejeitado${ok > 1 ? "s" : ""}`);
+              else toast.warning(`${ok} rejeitado${ok !== 1 ? "s" : ""}, ${fail} falhou`);
+              void queryClient.invalidateQueries({ queryKey: ["clips"] });
+              void queryClient.invalidateQueries({ queryKey: ["inbox"] });
+              void queryClient.invalidateQueries({ queryKey: ["stats"] });
+            });
           }}
           onDiscard={() => {
-            selectedIds.forEach((id) => discardMutation.mutate(id));
+            const ids = selectedIds;
             setRowSelection({});
+            void Promise.allSettled(ids.map((id) => api.clips.discard(id))).then((results) => {
+              const ok = results.filter((r) => r.status === "fulfilled").length;
+              const fail = results.length - ok;
+              if (fail === 0) toast.success(`${ok} clipe${ok > 1 ? "s" : ""} excluído${ok > 1 ? "s" : ""}`);
+              else toast.warning(`${ok} excluído${ok !== 1 ? "s" : ""}, ${fail} falhou`);
+              void queryClient.invalidateQueries({ queryKey: ["clips"] });
+              void queryClient.invalidateQueries({ queryKey: ["stats"] });
+            });
+          }}
+          onExport={() => {
+            const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+            const header = "clip_id,status,hook,video_id,score_viral";
+            const rows = selected.map((c) =>
+              [c.clip_id, c.status, `"${(c.hook ?? c.title ?? "").replace(/"/g, '""')}"`, c.video_id, c.score_viral ?? ""].join(",")
+            );
+            void navigator.clipboard.writeText([header, ...rows].join("\n")).then(() => {
+              toast.success(`${selected.length} item${selected.length > 1 ? "s" : ""} copiado${selected.length > 1 ? "s" : ""} (CSV)`);
+            });
           }}
           onClear={() => setRowSelection({})}
         />

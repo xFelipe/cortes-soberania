@@ -43,3 +43,4 @@ data/
 .claude/cache/
 .claude/sessions/
 .claude/scheduled_tasks.lock
+.claude/settings.json

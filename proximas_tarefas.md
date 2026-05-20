@@ -13,7 +13,7 @@
 | Fase | Ondas | Status |
 |---|---|---|
 | **A — MVP completo e bonito** | 0–5 | ✅ Fase A concluída (Ondas 0–5 ✅) |
-| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Onda 6 ✅) |
+| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Ondas 6–7 ✅) |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
 ---
@@ -201,12 +201,14 @@
 
 ---
 
-### ⬜ Onda 7 — Command palette + bulk operations (2 dias)
+### ✅ Onda 7 — Command palette + bulk operations (`git tag onda-7-done`)
 
-- [ ] `cmdk` integrado em `Ctrl+K`; índice in-memory de vídeos, clipes, canais e ações nomeadas
-- [ ] SSE atualiza índice incrementalmente (sem refetch total)
-- [ ] Ações nomeadas: "Aprovar clipe X", "Ir para Stats", "Pausar pipeline loop", "Abrir Settings"
-- [ ] Bulk toolbar sticky na Biblioteca com ações: approve, reject, discard, export list
+- [x] `cmdk` integrado em `Ctrl+K`; índice in-memory de vídeos, clipes, canais e ações nomeadas (`lib/command-index.ts`)
+- [x] SSE atualiza índice incrementalmente (sem refetch total) — fix do bug `event_type` vs `type`/`payload`
+- [x] Ações nomeadas: "Aprovar clipe X", "Ir para Stats", "Pausar/Retomar pipeline loop", "Abrir Settings"
+- [x] Bulk toolbar na Biblioteca: approve, reject, discard + "Exportar lista" (CSV→clipboard); bulk handlers Promise.allSettled (uma toast + uma invalidação)
+- [x] Backend: `pause_loop()`/`resume_loop()`/`is_loop_paused()` em `PipelineService`; endpoints `POST /pipeline/{pause,resume}` + `GET /pipeline/loop-state`; `cs pipeline-loop` respeita flag
+- [x] 544 testes passando; mypy --strict zero erros; pnpm tsc zero erros
 
 ---
 

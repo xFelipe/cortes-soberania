@@ -490,3 +490,30 @@ def test_format_checked_marks_pending_reupload(
     clip = clip_repo.get("dQw4w9WgXcQ_10_40")
     assert clip is not None
     assert clip.render_horizontal is True  # flag salvo
+
+
+# ── pause / resume loop ───────────────────────────────────────────────────────
+
+def test_pause_loop_creates_flag(service: PipelineService, tmp_path: Path) -> None:
+    flag = tmp_path / ".pipeline_paused"
+    assert not flag.exists()
+    service.pause_loop()
+    assert flag.exists()
+    assert service.is_loop_paused() is True
+
+
+def test_resume_loop_removes_flag(service: PipelineService, tmp_path: Path) -> None:
+    service.pause_loop()
+    assert service.is_loop_paused() is True
+    service.resume_loop()
+    assert service.is_loop_paused() is False
+    assert not (tmp_path / ".pipeline_paused").exists()
+
+
+def test_resume_loop_idempotent(service: PipelineService) -> None:
+    service.resume_loop()  # no flag — must not raise
+    assert service.is_loop_paused() is False
+
+
+def test_is_loop_paused_default_false(service: PipelineService) -> None:
+    assert service.is_loop_paused() is False

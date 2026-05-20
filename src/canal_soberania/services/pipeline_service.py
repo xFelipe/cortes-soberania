@@ -81,6 +81,26 @@ class PipelineService:
         return self._cancel_event.is_set()
 
     # ------------------------------------------------------------------
+    # Loop pause / resume
+    # ------------------------------------------------------------------
+
+    def _pause_flag_path(self) -> "Path":
+        return self._paths["data_dir"] / ".pipeline_paused"
+
+    def pause_loop(self) -> None:
+        """Cria flag que faz o pipeline-loop pular execuções até ser retomado."""
+        self._pause_flag_path().touch()
+        self._bus.publish(PipelineEvent("loop_paused", {}))
+
+    def resume_loop(self) -> None:
+        """Remove a flag de pause; o pipeline-loop volta a executar normalmente."""
+        self._pause_flag_path().unlink(missing_ok=True)
+        self._bus.publish(PipelineEvent("loop_resumed", {}))
+
+    def is_loop_paused(self) -> bool:
+        return self._pause_flag_path().exists()
+
+    # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
 

@@ -418,19 +418,23 @@ def pipeline_loop(
         typer.echo(f"\n[{ts}] Iteração #{iteration}")
         logger.info("pipeline-loop: iteração #{}", iteration)
 
-        stuck = service.reset_stuck_videos() + service.reset_stuck_clips()
-        if stuck:
-            typer.echo(f"  ↺ {stuck} item(s) resetados (stuck timeout)")
+        if service.is_loop_paused():
+            typer.echo("  ⏸ pipeline pausado — aguardando retomada")
+            logger.info("pipeline-loop: pausado na iteração #{}", iteration)
+        else:
+            stuck = service.reset_stuck_videos() + service.reset_stuck_clips()
+            if stuck:
+                typer.echo(f"  ↺ {stuck} item(s) resetados (stuck timeout)")
 
-        service.reset_cancel()
-        try:
-            service.run_pipeline_auto(dry_run=effective_dry_run)
-            typer.echo(f"  ✓ iteração #{iteration} concluída")
-        except Exception as exc:
-            logger.error("pipeline-loop: erro na iteração #{}: {}", iteration, exc)
-            typer.echo(f"  ✗ ERRO: {exc}")
+            service.reset_cancel()
+            try:
+                service.run_pipeline_auto(dry_run=effective_dry_run)
+                typer.echo(f"  ✓ iteração #{iteration} concluída")
+            except Exception as exc:
+                logger.error("pipeline-loop: erro na iteração #{}: {}", iteration, exc)
+                typer.echo(f"  ✗ ERRO: {exc}")
 
-        # Heartbeat para restart_pipeline.sh detectar loop ativo
+        # Heartbeat para restart_pipeline.sh detectar loop ativo (mesmo quando pausado)
         try:
             heartbeat_path.touch()
         except Exception:

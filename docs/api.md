@@ -258,6 +258,21 @@ POST /pipeline/reset
 ```
 Reseta vídeos/clipes com heartbeat expirado (processo morreu mid-execução). Retorna `{"reset_videos": N, "reset_clips": M}`.
 
+```
+POST /pipeline/pause
+```
+Cria flag `data/.pipeline_paused`. O `cs pipeline-loop` detecta a flag no início de cada iteração e pula `run_pipeline_auto` (mas ainda atualiza o heartbeat). Retorna `{"paused": true}`.
+
+```
+POST /pipeline/resume
+```
+Remove a flag de pause; loop volta a executar normalmente. Retorna `{"paused": false}`.
+
+```
+GET /pipeline/loop-state
+```
+Retorna `{"paused": bool}` — estado atual da flag.
+
 ---
 
 ### Stats

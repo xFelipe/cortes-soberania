@@ -254,6 +254,11 @@ export const api = {
         body: JSON.stringify(patch),
       }),
   },
+  pipeline: {
+    pause: () => request<{ paused: true }>("/pipeline/pause", { method: "POST" }),
+    resume: () => request<{ paused: false }>("/pipeline/resume", { method: "POST" }),
+    loopState: () => request<{ paused: boolean }>("/pipeline/loop-state"),
+  },
 };
 
 export { API_URL, getToken };

@@ -37,20 +37,19 @@ export function useSSE(onEvent?: (event: SSEEvent) => void) {
 
       es.onmessage = (e: MessageEvent<string>) => {
         try {
-          const parsed = JSON.parse(e.data) as { event_type?: string; [k: string]: unknown };
+          const parsed = JSON.parse(e.data) as { type?: string; payload?: Record<string, unknown> };
+          const eventType = parsed.type ?? "unknown";
+          const payload = parsed.payload ?? {};
 
           if (onEventRef.current) {
-            onEventRef.current({
-              type: parsed.event_type ?? "unknown",
-              data: parsed,
-            });
+            onEventRef.current({ type: eventType, data: payload });
           }
 
-          if (parsed.event_type?.includes("clip")) {
+          if (eventType.includes("clip")) {
             void queryClient.invalidateQueries({ queryKey: ["clips"] });
             void queryClient.invalidateQueries({ queryKey: ["inbox"] });
           }
-          if (parsed.event_type?.includes("video")) {
+          if (eventType.includes("video")) {
             void queryClient.invalidateQueries({ queryKey: ["videos"] });
             void queryClient.invalidateQueries({ queryKey: ["inbox"] });
           }

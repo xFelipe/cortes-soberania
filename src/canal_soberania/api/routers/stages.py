@@ -70,6 +70,32 @@ def reset_stuck(
     return {"reset_videos": videos, "reset_clips": clips}
 
 
+@router.post("/pipeline/pause")
+def pause_loop(
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> dict[str, bool]:
+    service.pause_loop()
+    return {"paused": True}
+
+
+@router.post("/pipeline/resume")
+def resume_loop(
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> dict[str, bool]:
+    service.resume_loop()
+    return {"paused": False}
+
+
+@router.get("/pipeline/loop-state")
+def loop_state(
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> dict[str, bool]:
+    return {"paused": service.is_loop_paused()}
+
+
 class _DiscoverAdhocBody(BaseModel):
     channel_url_or_handle: str
     persist: bool = False

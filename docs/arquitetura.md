@@ -217,8 +217,11 @@ api_costs              ← agregação para acompanhar gasto
 ### Por que SQLite e não Postgres
 Operador único, < 10k linhas previsíveis em 12 meses. Backup é `cp`. Zero ops. Trocar depois, se precisar.
 
-### Por que cron e não Airflow/Prefect/Celery
-Pipeline linear, sem fan-out massivo. Cron + idempotência por status na tabela faz o mesmo trabalho com 1% da complexidade. ADHD agradece.
+### Por que cron e não Airflow
+Pipeline linear, sem fan-out massivo. Cron + idempotência por status na tabela faz o mesmo trabalho com 1% da complexidade operacional. Airflow exige scheduler próprio, metadb separado, workers dedicados e UI — overhead injustificável para um operador único.
+
+### Quando considerar Celery ou Prefect
+**Celery** faz sentido se o pipeline precisar de paralelismo real: ex., transcrever 10 vídeos simultaneamente em workers separados, ou rodar edições em paralelo. O broker (Redis) é leve e já rodaria na mesma máquina. **Prefect** faz sentido se a observabilidade de DAG se tornar crítica — ele é Python-first, o servidor local consome ~200MB e adiciona UI de runs/retry sem mudar o código de negócio. Ambos são aceitáveis; a decisão de adotar deve ser motivada por demanda concreta (gargalo de throughput ou dificuldade de debugar falhas), não antecipação.
 
 ### Por que SQLite no lugar de Pydantic Models como verdade
 SQLite é o estado durável. Pydantic é o **shape** trafegado entre módulos. Não confundir.

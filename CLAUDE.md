@@ -10,7 +10,7 @@ Operador único, TDAH friendly: cada peça é independente, com estado em SQLite
 
 ## Princípios de design (não negocie)
 
-1. **KISS.** Scripts independentes orquestrados por cron. Sem Airflow, sem Prefect, sem Celery.
+1. **KISS.** Scripts independentes orquestrados por cron. **Sem Airflow** (infra pesada: scheduler próprio, metadb, workers — overhead injustificável para pipeline linear). Celery e Prefect são permitidos se houver necessidade clara (ex.: paralelismo real entre vídeos, retry com visibilidade, workers distribuídos) — mas o padrão é cron até haver demanda concreta.
 2. **Triagem em camadas (barato → caro).** Metadata → captions YouTube → transcrição Whisper → análise profunda. Não gasta Whisper em vídeo que claramente não é do tema.
 3. **Idempotência.** Toda etapa pode rerodar. Estado vive na coluna `status` da tabela `videos`/`clips`.
 4. **Fail-fast por item, resiliente no agregado.** Erro em um vídeo loga e segue. Pipeline não trava.

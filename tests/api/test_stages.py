@@ -287,3 +287,56 @@ def test_stats_by_canal_no_auth(client: TestClient) -> None:
 def test_stats_throughput_no_auth(client: TestClient) -> None:
     r = client.get("/stats/throughput")
     assert r.status_code == 401
+
+
+# ── pipeline loop pause / resume ──────────────────────────────────────────────
+
+def test_pause_loop(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    r = client.post("/pipeline/pause", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["paused"] is True
+    mock_service.pause_loop.assert_called_once()
+
+
+def test_resume_loop(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    r = client.post("/pipeline/resume", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["paused"] is False
+    mock_service.resume_loop.assert_called_once()
+
+
+def test_loop_state_not_paused(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service.is_loop_paused.return_value = False
+    r = client.get("/pipeline/loop-state", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["paused"] is False
+
+
+def test_loop_state_paused(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service.is_loop_paused.return_value = True
+    r = client.get("/pipeline/loop-state", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["paused"] is True
+
+
+def test_pause_loop_no_auth(client: TestClient) -> None:
+    r = client.post("/pipeline/pause")
+    assert r.status_code == 401
+
+
+def test_resume_loop_no_auth(client: TestClient) -> None:
+    r = client.post("/pipeline/resume")
+    assert r.status_code == 401
+
+
+def test_loop_state_no_auth(client: TestClient) -> None:
+    r = client.get("/pipeline/loop-state")
+    assert r.status_code == 401

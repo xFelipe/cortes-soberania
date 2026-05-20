@@ -2,7 +2,7 @@
 
 Documentação da camada UI: arquitetura, padrões, como estender.
 
-**Atualizado após Onda 6** (Fase B em andamento). Ondas concluídas: 0–6. Próximas: `proximas_tarefas.md`.
+**Atualizado após Onda 7** (Fase B em andamento). Ondas concluídas: 0–7. Próximas: `proximas_tarefas.md`.
 
 ---
 
@@ -20,7 +20,7 @@ Documentação da camada UI: arquitetura, padrões, como estender.
 | TanStack Query | 5.x | Server state, cache, invalidação |
 | TanStack Table | 8.x | Tabelas com sort/filter/pagination |
 | sonner | 2.x | Toasts |
-| cmdk | 1.x | Command palette (Ctrl+K) — implementado na Onda 7 |
+| cmdk | 1.x | Command palette (Ctrl+K) — implementado na Onda 7 ✅ |
 | recharts | 3.x | Gráficos (bar chart na página Stats) |
 | @tanstack/react-virtual | 3.x | Virtualização de listas longas (log da pipeline) |
 | lucide-react | 1.x | Ícones |
@@ -38,7 +38,8 @@ ui/
 │   ├── index.css             ← variáveis CSS Tailwind v4 + fontes
 │   │
 │   ├── lib/
-│   │   ├── api.ts            ← cliente HTTP tipado + tipos de domínio
+│   │   ├── api.ts            ← cliente HTTP tipado + tipos de domínio (inclui api.pipeline)
+│   │   ├── command-index.ts  ← store in-memory (useSyncExternalStore) do command palette
 │   │   ├── query.ts          ← QueryClient singleton (staleTime 5s)
 │   │   ├── router.tsx        ← createRouter com todas as rotas
 │   │   ├── shortcuts.ts      ← hooks de teclado por contexto
@@ -155,6 +156,11 @@ api.canais.remove(id)           // DELETE /canais/{id}
 // Config
 api.config.get()                // GET /config
 api.config.put(patch)           // PUT /config → merge .env
+
+// Pipeline loop (Onda 7)
+api.pipeline.pause()            // POST /pipeline/pause
+api.pipeline.resume()           // POST /pipeline/resume
+api.pipeline.loopState()        // GET /pipeline/loop-state
 ```
 
 `sourceVideoUrl` retorna uma URL direta (não passa por `request<T>`) porque precisa do `?token=` no query param — usada diretamente como `src` do `<video>`.
@@ -227,14 +233,19 @@ Montado em `clip-review.tsx`. Ativo quando `enabled = !isLoading && !isError`.
 
 `useSSE(onEvent?)` conecta ao `GET /events?token=<token>` via `EventSource` nativo.
 
+**Formato do evento (backend → frontend):** o backend emite `{"type": string, "payload": {...}}`. O `sse.ts` mapeia para `SSEEvent { type, data: payload }`.
+
+> **Nota Onda 7:** havia um bug em que `sse.ts` lia `parsed.event_type` (inexistente) em vez de `parsed.type`. Isso fazia todos os eventos chegarem com `type: "unknown"`, quebrando silenciosamente os callbacks de `discover.tsx`/`pipeline.tsx` e a invalidação condicional de clips/videos. Corrigido na Onda 7.
+
 Ao receber um evento:
-- Qualquer `event_type` contendo `"clip"` → invalida `["clips"]` e `["inbox"]`
-- Qualquer `event_type` contendo `"video"` → invalida `["videos"]` e `["inbox"]`
+- `event.type` contendo `"clip"` → invalida `["clips"]` e `["inbox"]`
+- `event.type` contendo `"video"` → invalida `["videos"]` e `["inbox"]`
 - Sempre invalida `["stats"]`
 - Se `onEvent` for fornecido, chama `onEvent({ type, data })` após a invalidação
+- `RootLayout` também passa `applyEvent` do `command-index.ts` para atualizar o índice do palette
 
 ```ts
-export interface SSEEvent { type: string; data: unknown; }
+export interface SSEEvent { type: string; data: Record<string, unknown>; }
 
 // Sem callback (só invalida queries — uso padrão em StatusFooter)
 useSSE()
@@ -357,7 +368,7 @@ const table = useReactTable({
 **Componentes reutilizáveis dentro do arquivo:**
 - `StatusChip` — badge colorido por status
 - `FilterChips<S>` — chips de filtro por enum de status
-- `BulkToolbar` — toolbar sticky quando `rowSelection` tem itens
+- `BulkToolbar` — toolbar sticky quando `rowSelection` tem itens; ações: approve, reject, discard, **exportar lista** (CSV→clipboard); handlers usam `Promise.allSettled` com uma toast de resumo
 - `RowContextMenu` — `radix-ui` ContextMenu com approve/reject/copy/open YouTube
 - `ClipGrid` — view alternativa em grid de cards 9:16
 
@@ -630,16 +641,68 @@ O form é populado para revisão; não há save automático ao importar.
 
 ---
 
+## lib/command-index.ts — índice in-memory
+
+Store module-level exposto via `useSyncExternalStore` (React 19 nativo, zero dependência nova). Alimenta o `CommandPalette`.
+
+### Tipos
+
+```ts
+IndexVideo  { id, title, canal_id, status }
+IndexClip   { id, hook, title, video_id, status, score_viral }
+IndexCanal  { id, nome, handle }
+```
+
+### API pública
+
+```ts
+seedIndex()                   // fetch único dos 3 recursos; idempotente (guard seeded)
+applyEvent(event: SSEEvent)   // patch incremental por id a partir do evento SSE
+useCommandIndex(): IndexState // hook React; re-renderiza quando store muda
+```
+
+`applyEvent` cobre todos os tipos de evento relevantes:
+- `clip_approved`/`clip_rejected` → atualiza `status` (patch ou fetch unitário se `new_status` ausente)
+- `clip_discarded` → remove do array
+- `clip_text_updated`/`clip_trim_updated` → fetch unitário `api.clips.get(id)`
+- `video_approved`/`video_rejected` → atualiza `status`
+- `video_added_manually` → prepend
+- `canal_upserted`/`canal_toggled` → refetch lista de canais (6 itens)
+- `canal_deleted` → remove por id
+- `stage_*`, `loop_*` → ignorados (não afetam itens)
+
+`RootLayout` chama `seedIndex()` no mount e `useSSE(applyEvent)` para manter o índice atualizado.
+
+---
+
+## components/layout/CommandPalette.tsx — command palette (Ctrl+K)
+
+Implementado na Onda 7. `cmdk` v1.x com filtro nativo e 5 grupos:
+
+| Grupo | Conteúdo |
+|---|---|
+| Navegar | Atalhos para as 5 rotas principais |
+| Pipeline | Rodar auto, cancelar, resetar presos, pausar/retomar loop |
+| Aprovar clipes | Ação rápida por clipe com `status === "metadata_ready"` (até 8) |
+| Clipes | Resultados de busca do índice → navega para `/clip-review/$clipId` |
+| Vídeos | Resultados de busca → navega para `/biblioteca` |
+| Canais | Resultados de busca → navega para `/operacao/canais` |
+
+A ação "Pausar/Retomar pipeline loop" consulta `GET /pipeline/loop-state` (poll enquanto palette aberta) e alterna o label conforme estado.
+
+### Padrão de ação
+
+Cada `onSelect` de ação mutante:
+1. Chama `onClose()` imediatamente (fecha a palette).
+2. Faz chamada direta à API (`api.*`) — não usa `useMutation` (palette não é ciclo de formulário).
+3. Dispara `toast.success/error` com resultado.
+4. Invalida as query keys relevantes via `queryClient.invalidateQueries`.
+
+---
+
 ## O que vem a seguir (Fase B restante)
 
-### Onda 7 — Command palette + bulk ops
-
-`CommandPalette.tsx` já está montado no layout com `cmdk` instalado. Implementar:
-- Índice in-memory de vídeos + clipes + canais + ações nomeadas
-- SSE atualiza índice incrementalmente
-- Bulk approve/reject na Biblioteca (toolbar já presente, sem mutação ainda)
-
-### Onda 8 — Cobertura de testes
+### Onda 8 — Cobertura de testes (próxima)
 
 - pytest coverage ≥ 90% no backend
 - Vitest para hooks/componentes frontend
