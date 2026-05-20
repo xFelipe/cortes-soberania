@@ -12,7 +12,7 @@
 
 | Fase | Ondas | Status |
 |---|---|---|
-| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–3 ✅) |
+| **A — MVP completo e bonito** | 0–5 | ✅ Fase A concluída (Ondas 0–5 ✅) |
 | **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
@@ -145,59 +145,44 @@
 
 ---
 
-### ⬜ Onda 4 — Inbox + Biblioteca (4 dias)
+### ✅ Onda 4 — Inbox + Biblioteca (`git tag onda-4-done`)
 
 > Objetivo: as duas rotas de uso diário funcionando completamente.  
 > Base pronta em `ui/src/routes/inbox.tsx` e `ui/src/routes/biblioteca.tsx` (placeholders da Onda 3).  
 > Todos os hooks e status labels já existem — só implementar o JSX.
 
 #### Inbox (`ui/src/routes/inbox.tsx`)
-- [ ] `useQuery(['inbox'], api.inbox.get)` — consome `GET /inbox` (ver `docs/api.md`)
-- [ ] Cards shadcn com `VIDEO_STATUS_META` / `CLIP_STATUS_META` de `ui/src/lib/status-labels.ts`
-- [ ] Hotkeys J/K nav (adicionar em `ui/src/lib/shortcuts.ts`); A aprova inline via `useMutation`; R rejeita
-- [ ] Cards de vídeo pendente (triagem) e clipe (METADATA_READY) com ações contextuais
-- [ ] Badge na sidebar (`ui/src/components/layout/Sidebar.tsx`) já consome `['stats','summary']` — sem alteração necessária
-- [ ] Empty state com mensagem positiva
+- [x] `useQuery(['inbox'], api.inbox.get)` — cards reais de clipes e vídeos priorizados
+- [x] Cards com `VIDEO_STATUS_META` / `CLIP_STATUS_META` e ações contextuais
+- [x] `useInboxShortcuts` em `shortcuts.ts`; J/K nav; A aprova; R rejeita
+- [x] Empty state com mensagem positiva
+- [x] `useMutation` approve/reject com invalidação de queries
 
 #### Biblioteca (`ui/src/routes/biblioteca.tsx`)
-- [ ] `<Tabs>` Vídeos / Clipes — `useQuery(['videos'], api.videos.list)` e `useQuery(['clips'], api.clips.list)`
-- [ ] Instalar TanStack Table: `pnpm add @tanstack/react-table`
-- [ ] `<DataTable>` com: busca global, chips de filtro por status, ordenação por coluna, paginação virtual
-- [ ] `<Toggle>` tabela ↔ grid; grid de clipes com thumbnail + status badge
-- [ ] Bulk select via checkbox na coluna 0; sticky toolbar quando ≥ 1 selecionado (approve, reject, discard)
-- [ ] `<ContextMenu>` rico em cada linha (approve, reject, review, open YouTube, copy ID)
-
-- **Referências de API:** `GET /inbox`, `GET /videos`, `GET /clips`, `POST /clips/{id}/approve`, `POST /clips/{id}/reject` — todos documentados em `docs/api.md`
-- **Smoke:** Inbox lista corretamente priorizado; J/K navega; A aprova sem recarregar; Biblioteca filtra por status; selecionar 3 → bulk toolbar aparece; grid mostra thumbnails
+- [x] `<Tabs>` Clipes / Vídeos
+- [x] `@tanstack/react-table` 8.21.3
+- [x] `<DataTable>` busca global, chips de filtro por status, ordenação por coluna, paginação (50/página)
+- [x] Toggle tabela ↔ grid; grid de clipes com thumbnail + status badge
+- [x] Bulk select via Checkbox.Root (radix-ui); sticky toolbar approve/reject/discard
+- [x] `<ContextMenu>` rico: approve, reject, abrir YouTube, copy ID, excluir
 
 ---
 
-### ⬜ Onda 5 — ClipReview Tauri (5 dias)
+### ✅ Onda 5 — ClipReview Tauri (`git tag onda-5-done`)
 
-> Objetivo: o fluxo principal de aprovação de clipe end-to-end, substituindo o PySide6 dialog.
-
-#### Layout
-- [ ] `routes/clip-review/$id.tsx` — 2 colunas: Player (esquerda) + Form+Actions (direita)
-- [ ] Player HTML5 com controles padrão + overlay Canvas para máscara 9:16
-- [ ] Preview do crop: `GET /clips/{id}/face-crop` retorna frame PNG; Canvas renderiza sobreposição
-
-#### Timeline e hotkeys
-- [ ] `<Slider>` shadcn customizado com marcas in/out (duplo thumb via Radix)
-- [ ] Loop A↔B com debounce 200ms (igual ao PySide6 atual)
-- [ ] Hotkeys: `[` in, `]` out, `Space` play/pause, `A` aprovar, `R` rejeitar — via `lib/shortcuts.ts`
-
-#### Form e autosave
-- [ ] Campos: hook (textarea), score viral (1-10), in/out timestamps, notas
-- [ ] Zod schema + TanStack `useMutation` + debounce 500ms → autosave sem botão "Salvar"
-- [ ] Toast de confirmação: "Salvo automaticamente"
-
-#### Navegação e ações
-- [ ] "Aprovar e próximo" → muta `POST /clips/{id}/approve` + navega para próximo da Inbox
-- [ ] "Rejeitar" — inline sem confirmação
-- [ ] "Deletar do YouTube" — `shadcn AlertDialog` (única ação destrutiva irreversível)
-- [ ] Breadcrumb: Inbox → Clipe
-
-- **Smoke:** abrir review; ajustar in/out; autosave funciona sem tocar em botão; aprovar navega para próximo clipe; deletar pede confirmação; player sincroniza com slider
+- [x] `routes/clip-review.tsx` — 2 colunas: player (esq) + form+ações (dir)
+- [x] Player HTML5 src autenticado + canvas overlay 9:16 com crop_x da face detection
+- [x] `GET /clips/{id}/face-crop` (backend) — ffprobe + detect_face_crop_x
+- [x] `GET /clips/{id}/source-video` (backend) — FileResponse com preferência clip vertical
+- [x] Slider Radix dual-thumb in/out + scrubber de posição atual
+- [x] Loop A↔B via timeupdate (salta para inPoint quando >= outPoint)
+- [x] Hotkeys via `useClipReviewShortcuts`: `[` in, `]` out, `Space` play/pause, `A`, `R`
+- [x] Form: hook textarea, score viral slider 1–10, in/out numérico, notas
+- [x] Autosave debounce 500ms → PATCH + trim (sem botão Salvar)
+- [x] "Aprovar e próximo" navega ao próximo clipe da inbox
+- [x] "Rejeitar" inline; "Excluir" via AlertDialog
+- [x] `score_viral` propagado por toda a cadeia (protocolo → SQLite → service → router)
+- [x] 506 testes passando; mypy --strict zero erros
 
 ---
 

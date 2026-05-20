@@ -196,6 +196,8 @@ Começar pelo (2). Não vale risco de ban de conta no início.
 - **O que o Claude está sendo perguntado?** → `prompts/` + `docs/prompts.md`
 - **O que falta fazer?** → `proximas_tarefas.md`
 - **Tabelas e estado?** → `schema.sql`
+- **API REST (todos os endpoints)?** → `docs/api.md`
+- **Frontend (rotas, padrões, como estender)?** → `docs/frontend.md`
 
 ## Trabalhando com Claude Code neste projeto
 

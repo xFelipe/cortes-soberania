@@ -110,15 +110,39 @@ Content-Type: application/json
   "tags": ["tag1", "tag2"],
   "youtube_publish_at": "2025-06-01T15:00:00Z",
   "render_vertical": true,
-  "render_horizontal": false
+  "render_horizontal": false,
+  "score_viral": 8
 }
 ```
-Todos os campos são opcionais. Chama `update_clip_text()` no service. Retorna `{"status": "updated", "clip_id": "..."}`.
+Todos os campos são opcionais. `score_viral` aceita 1–10 (int). Chama `update_clip_text()` no service. Retorna `{"status": "updated", "clip_id": "..."}`.
 
 ```
 DELETE /clips/{clip_id}
 ```
 Remove o clipe do banco (irreversível). Retorna `{"status": "discarded", "clip_id": "..."}`.
+
+```
+GET /clips/{clip_id}/source-video
+```
+Serve o arquivo de vídeo do clipe para o player HTML5. Preferência: `clip_path_vertical` → `clip_path_horizontal` → `video_path` do vídeo-fonte. Suporta `Range` requests (necessário para seeking no `<video>`). Requer auth via Bearer ou `?token=`.
+
+```
+GET /clips/{clip_id}/face-crop
+```
+Detecta a posição do rosto no vídeo-fonte usando `mediapipe` e retorna as coordenadas do crop 9:16. Se `mediapipe` não estiver disponível ou nenhum rosto for detectado, retorna crop centralizado.
+
+```json
+{
+  "crop_x": 240,
+  "crop_width": 405,
+  "source_width": 1280,
+  "source_height": 720
+}
+```
+
+- `crop_x`: coluna de início do crop 9:16 no frame original (pixels)
+- `crop_width`: largura do crop = `source_height × 9/16`
+- Usado pelo `CropOverlay` canvas no frontend para renderizar a máscara 9:16
 
 ---
 
