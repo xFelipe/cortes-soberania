@@ -10,7 +10,11 @@ cs serve --host 0.0.0.0        # expõe na LAN (acesso do celular)
 cs serve --port 9000           # porta customizada
 ```
 
-Na primeira execução, gera `DATA_DIR/.api_token` (chmod 600) e imprime o token no stdout. Subsequent runs reutilizam o mesmo token.
+Na primeira execução, gera o token e o grava em dois locais (ambos chmod 600):
+- `DATA_DIR/.api_token` — usado internamente pelo backend
+- `~/.config/canal-soberania/.api_token` — caminho XDG lido pelo Tauri
+
+O XDG tem prioridade: se existir, é reutilizado. O caminho XDG é impresso no stdout ao iniciar (`"Token salvo em ~/.config/canal-soberania/.api_token"`).
 
 ## Autenticação
 

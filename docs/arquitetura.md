@@ -114,8 +114,6 @@ A camada de apresentação migrou de PySide6 (GUI Python) para **Tauri + React**
 
 ## Camada de apresentação (FastAPI + Tauri)
 
-> **Status de migração:** PySide6 GUI preservada em `git tag gui-v1`. Será removida na Onda 3 após scaffold Tauri funcional.
-
 ### FastAPI (`src/canal_soberania/api/`)
 
 A API REST expõe o `PipelineService` para qualquer cliente HTTP. Iniciada via `cs serve`.
@@ -152,23 +150,25 @@ A API REST expõe o `PipelineService` para qualquer cliente HTTP. Iniciada via `
 
 **Referência completa de endpoints:** `docs/api.md`
 
-### Tauri + React (`ui/`) — implementado na Onda 3
+### Tauri + React (`ui/`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tauri shell (Rust, ~50 linhas)                                 │
-│  └─ Abre WebView com React                                      │
-│     ├─ lib/api.ts: cliente gerado de /openapi.json             │
+│  Tauri shell (Rust)                                             │
+│  └─ Abre WebView com React 19                                   │
+│     ├─ lib/api.ts: cliente HTTP typed (fetch + Bearer token)   │
 │     │  token lido de ~/.config/canal-soberania/.api_token      │
 │     ├─ lib/sse.ts: hook useSSE() → invalida queries TanStack   │
-│     ├─ Sidebar 60px + StatusFooter 28px + <Outlet>             │
-│     └─ Rotas: Inbox · Biblioteca · Operação · Stats · Settings │
+│     ├─ lib/theme.tsx: ThemeProvider (OS/light/dark, localStorage)│
+│     ├─ Sidebar 3.75rem + StatusFooter 1.75rem + <Outlet>       │
+│     └─ Rotas: Inbox · Biblioteca · Operação · Stats · Config   │
+│        Hotkeys: Ctrl+1..5 (navegar), Ctrl+K (command palette)  │
 └─────────────────────────────────────────────────────────────────┘
+
+Stack: Vite 7 · Tailwind v4 · shadcn/ui (Radix/Nova) · TanStack Router/Query
+Auth: token em ~/.config/canal-soberania/.api_token (XDG, chmod 600)
+      cs serve grava em ambos: DATA_DIR/.api_token e XDG path
 ```
-
-### PySide6 (legado, removida na Onda 3)
-
-GUI original preservada em `git tag gui-v1`. Thread safety via `EventBridge` (QObject) que converte callbacks do `EventBus` em Qt Signals. Snapshot para consulta; não usar como referência de implementação nova.
 
 ## Modelo de dados (visão lógica)
 

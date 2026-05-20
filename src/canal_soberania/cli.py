@@ -537,9 +537,12 @@ def serve(
 
     api = create_app(service=service, conn=conn, paths=paths, token=token, canais_cfg=canais_cfg)
 
+    from canal_soberania.api.auth import XDG_TOKEN_PATH
+
     typer.echo(f"Canal Soberania API — http://{host}:{port}")
     typer.echo(f"Docs: http://{host}:{port}/docs")
     typer.echo(f"Token: {token}")
+    typer.echo(f"Token salvo em {XDG_TOKEN_PATH}")
     logger.info("cs serve iniciando em {}:{}", host, port)
 
     uvicorn.run(api, host=host, port=port, reload=reload, log_level="warning")

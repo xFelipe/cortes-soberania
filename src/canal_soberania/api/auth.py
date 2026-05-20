@@ -10,19 +10,43 @@ from fastapi import Header, HTTPException, Query, Request
 
 
 _TOKEN_FILE = ".api_token"
+XDG_TOKEN_PATH = Path.home() / ".config" / "canal-soberania" / ".api_token"
+
+
+def _write_token(path: Path, token: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(token)
+    os.chmod(path, 0o600)
 
 
 def get_or_create_token(data_dir: Path) -> str:
-    """Retorna o token da API, criando um novo se não existir."""
-    token_path = data_dir / _TOKEN_FILE
-    if token_path.exists():
-        token = token_path.read_text().strip()
+    """Retorna o token da API, criando-o se não existir.
+
+    Grava em dois locais:
+    - data_dir/.api_token  (legado, usado pelo backend)
+    - ~/.config/canal-soberania/.api_token  (XDG, lido pelo Tauri)
+    """
+    data_token_path = data_dir / _TOKEN_FILE
+    xdg_path = XDG_TOKEN_PATH
+
+    # Tenta carregar token existente (XDG tem prioridade)
+    if xdg_path.exists():
+        token = xdg_path.read_text().strip()
         if token:
+            # Sincroniza para data_dir se necessário
+            if not data_token_path.exists() or data_token_path.read_text().strip() != token:
+                _write_token(data_token_path, token)
             return token
+
+    if data_token_path.exists():
+        token = data_token_path.read_text().strip()
+        if token:
+            _write_token(xdg_path, token)
+            return token
+
     token = secrets.token_hex(24)
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(token)
-    os.chmod(token_path, 0o600)
+    _write_token(data_token_path, token)
+    _write_token(xdg_path, token)
     return token
 
 

@@ -31,12 +31,10 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "nvidia-cublas-cu12>=12.9.2.10",
     "nvidia-cudnn-cu12>=9.22.0.52",
-    "pyside6>=6.11.1",
 ]
 
 [project.scripts]
 cs = "canal_soberania.cli:app"
-cs-gui = "canal_soberania.gui.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -49,9 +47,6 @@ dev = [
     "ipython>=8.27.0",
     "vulture>=2.11",
     "pip-audit>=2.7",
-]
-gui = [
-    "PySide6>=6.7.0",
 ]
 
 [build-system]
@@ -112,13 +107,11 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["canal_soberania"]
-omit = [
-    "*/canal_soberania/gui/*",   # requer display Qt — testado em T1
-]
+omit = []
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 75   # GUI omitida (requer display Qt — testado em T1 GUI)
+fail_under = 75
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.",
