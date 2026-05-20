@@ -13,7 +13,7 @@
 | Fase | Ondas | Status |
 |---|---|---|
 | **A — MVP completo e bonito** | 0–5 | ✅ Fase A concluída (Ondas 0–5 ✅) |
-| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Ondas 6–7 ✅) |
+| **B — Robustez + features power** | 6–9 | 🔄 Em andamento (Ondas 6–8 ✅) |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
 ---
@@ -212,15 +212,56 @@
 
 ---
 
-### ⬜ Onda 8 — Cobertura testes + E2E (3 dias)
+### ✅ Onda 8 — Cobertura testes + E2E (`git tag onda-8-done`)
 
-- [ ] Backend `pytest --cov` ≥ 90% (api/, transcribers/, llm_backends/, alerts/, health/)
-- [ ] Frontend Vitest + React Testing Library para components críticos; cobertura ≥ 80%
-- [ ] E2E Playwright headless contra `cs serve` real:
-  - [ ] Cenário 1: aprovar clipe end-to-end
-  - [ ] Cenário 2: bulk approve 3 clipes
-  - [ ] Cenário 3: rejeitar + restaurar via palette
-- [ ] Pre-commit hook: lint + coverage gate
+#### Backend — 636 testes, cobertura 93.71% nos pacotes críticos
+
+- [x] `tests/api/test_clips.py` — 19 novos testes para `GET /clips/{id}/face-crop` e `source-video`  
+  - Monkeypatch: `subprocess.run` global (não de módulo) e `canal_soberania.utils.reframe.detect_face_crop_x` na fonte
+- [x] `tests/api/test_events.py` (novo) — `_heartbeat`, `_format_event`, `SSEBridge` unit (4 async `@pytest.mark.anyio`), endpoint sem auth (401), endpoint com auth via `stream_events()` direto (evita hang do httpx.ASGITransport em streams infinitos)
+- [x] `tests/test_transcribers.py` — `GroqWhisperTranscriber` (5 testes) e `OpenAIWhisperTranscriber` (3 testes) via `_mock_urlopen` (monkeypatch `urllib.request.urlopen`)
+- [x] `tests/test_alerts.py` — branches de canal desconhecido, lista vazia, falha isolada por canal
+- [x] `tests/test_pipeline_service.py` — +40 testes: todos os stages, cancel/reset, pause/resume loop, canal CRUD, `add_video_by_id`, `approve/reject_clip/video` — fixtures com `_apply_migrations()` para coluna `processing_since` e `legendas_queimadas`
+- [x] `tests/test_repositories.py` — CRUD completo de videos, clips, canais; queries de stats; coluna migration-aware
+
+**Gate de cobertura** (comando documentado em `pyproject.toml`):
+```bash
+.venv/bin/pytest \
+  --cov=canal_soberania.api --cov=canal_soberania.transcribers \
+  --cov=canal_soberania.llm_backends --cov=canal_soberania.alerts \
+  --cov=canal_soberania.health \
+  --cov=canal_soberania.services.pipeline_service \
+  --cov=canal_soberania.repositories.sqlite \
+  --cov-fail-under=90 --cov-report=term-missing
+```
+
+#### Frontend — Vitest + RTL, 40 testes, ≥80% em todas as métricas
+
+- [x] `ui/vitest.config.ts` — jsdom, setupFiles, coverage v8 com thresholds (80% linhas/statements/branches/funções)
+- [x] `ui/src/test/setup.ts` — `@testing-library/jest-dom` + mocks Tauri (`plugin-fs`, `api/core`)
+- [x] `ui/src/lib/status-labels.test.ts` — `VIDEO_STATUS_META`, `CLIP_STATUS_META`, `ACTIVE_VIDEO_STATUSES`, `stagePendingCount`
+- [x] `ui/src/lib/utils.test.ts` — `cn()` merges, conditional, tailwind-merge dedupe
+- [x] `ui/src/lib/command-index.test.ts` — `applyEvent` (todos os event types), `seedIndex`, `useCommandIndex` via `renderHook` + `act()`  
+  - Padrão: `vi.resetModules()` + `vi.doMock()` para isolamento de estado de módulo ES  
+  - `await Promise.resolve()` após `applyEvent` com callbacks `.then()` para flush de microtasks
+
+**Resultado:** Statements 93%, Branches 80.6%, Functions 92.8%, Lines 100%
+
+#### E2E
+
+- [x] `tests/e2e/test_journeys.py` — 5 cenários API-level (httpx + TestClient real): aprovar clipe, bulk approve, rejeitar+restaurar, rejeitar clip, health endpoint — **rodam agora** sem dependências externas
+- [x] `ui/playwright.config.ts` + `ui/e2e/journeys.spec.ts` — 3 jornadas browser (aprovar, bulk toolbar, Ctrl+K); specs prontos, **skip automático** se Chromium não instalado  
+  - Para rodar: `sudo npx playwright install-deps chromium && npx playwright install chromium && cs serve && pnpm exec playwright test`
+
+#### Pre-commit
+
+- [x] `.pre-commit-config.yaml` — `ruff check --fix` + `ruff format --check` + `mypy src/` no stage `pre-commit`; `pytest` gate 90% + `pnpm test` no stage `pre-push`
+- [x] `pyproject.toml` — `pre-commit>=3.8.0` em `[project.optional-dependencies] dev`
+- Instalar hooks: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+
+#### Fix notável
+
+- `src/canal_soberania/api/routers/events.py` — removido `await request.is_disconnected()` do generator SSE (bloqueava `anyio.move_on_after(0)` no TestClient); desconexão do cliente é detectada via exceção no `yield`
 
 ---
 
@@ -267,10 +308,25 @@
 ## Smoke checklist padrão (< 5 min, rodar ao fechar cada onda)
 
 ```bash
-.venv/bin/pytest --tb=no -q        # todos passando
-.venv/bin/mypy src/ --strict       # zero erros
-cs health-check                    # [OK]
-git tag onda-N-done                # marcar conclusão
+# Backend
+.venv/bin/pytest --tb=no -q                           # todos passando
+.venv/bin/mypy src/ --strict                          # zero erros
+cs health-check                                        # [OK]
+
+# Frontend (a partir de ui/)
+export PATH="$HOME/.local/node22/bin:$HOME/.local/share/pnpm/bin:$HOME/.cargo/bin:$PATH"
+pnpm tsc --noEmit && pnpm test                         # zero erros TS + testes passando
+
+# Gate de cobertura backend (Onda 8+)
+.venv/bin/pytest \
+  --cov=canal_soberania.api --cov=canal_soberania.transcribers \
+  --cov=canal_soberania.llm_backends --cov=canal_soberania.alerts \
+  --cov=canal_soberania.health \
+  --cov=canal_soberania.services.pipeline_service \
+  --cov=canal_soberania.repositories.sqlite \
+  --cov-fail-under=90 -q                               # ≥90% nos pacotes críticos
+
+git tag onda-N-done                                    # marcar conclusão
 ```
 
 > **Nota:** Usar `.venv/bin/pytest` diretamente (não `uv run pytest`) — o pyenv shim pode não ativar a venv corretamente. Dev deps instaladas via `uv sync --extra dev`.

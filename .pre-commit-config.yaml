@@ -1,0 +1,52 @@
+repos:
+  - repo: local
+    hooks:
+      # ── pre-commit stage: fast checks on every commit ──────────────────────
+
+      - id: ruff-lint
+        name: ruff (lint)
+        language: system
+        entry: .venv/bin/ruff check --fix
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: ruff (format check)
+        language: system
+        entry: .venv/bin/ruff format --check
+        types: [python]
+        stages: [pre-commit]
+
+      - id: mypy
+        name: mypy --strict
+        language: system
+        entry: .venv/bin/mypy src/
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # ── pre-push stage: slower gates only on push ──────────────────────────
+
+      - id: pytest-coverage-gate
+        name: pytest coverage gate (≥90% critical packages)
+        language: system
+        entry: .venv/bin/pytest
+        args:
+          - --cov=canal_soberania.api
+          - --cov=canal_soberania.transcribers
+          - --cov=canal_soberania.llm_backends
+          - --cov=canal_soberania.alerts
+          - --cov=canal_soberania.health
+          - --cov=canal_soberania.services.pipeline_service
+          - --cov=canal_soberania.repositories.sqlite
+          - --cov-fail-under=90
+          - --cov-report=term-missing
+          - -q
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: vitest
+        name: vitest (frontend unit tests)
+        language: system
+        entry: bash -c 'export PATH="$HOME/.local/node22/bin:$HOME/.local/share/pnpm/bin:$HOME/.cargo/bin:$PATH" && cd ui && pnpm test'
+        pass_filenames: false
+        stages: [pre-push]

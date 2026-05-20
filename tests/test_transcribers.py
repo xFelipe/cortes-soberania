@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from canal_soberania.config import Settings
 from canal_soberania.transcribers import (
     FasterWhisperLocal,
@@ -101,3 +103,191 @@ class TestGetTranscriber:
         t = get_transcriber(s)
         assert isinstance(t, FasterWhisperLocal)
         assert t._device == "cpu"
+
+
+# ---------------------------------------------------------------------------
+# Helpers para mockar urllib.request.urlopen
+# ---------------------------------------------------------------------------
+
+
+import contextlib
+import json as _json
+import urllib.request
+
+
+def _mock_urlopen(response_data: dict[str, Any]):  # type: ignore[type-arg]
+    """Retorna um context manager que simula urlopen retornando JSON."""
+
+    class _FakeResponse:
+        def read(self) -> bytes:
+            return _json.dumps(response_data).encode()
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    return lambda *a, **kw: _FakeResponse()
+
+
+# ---------------------------------------------------------------------------
+# GroqWhisperTranscriber
+# ---------------------------------------------------------------------------
+
+
+class TestGroqWhisperTranscriber:
+    def test_transcribe_with_words_single_segment(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"fake-audio")
+
+        response = {
+            "words": [
+                {"start": 0.0, "end": 0.5, "word": "Olá"},
+                {"start": 0.6, "end": 1.0, "word": "mundo"},
+            ]
+        }
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = GroqWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 1
+        assert segs[0]["text"] == "Olá mundo"
+        assert segs[0]["start"] == 0.0
+        assert segs[0]["end"] == 1.0
+
+    def test_transcribe_words_split_by_gap(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        response = {
+            "words": [
+                {"start": 0.0, "end": 0.5, "word": "A"},
+                # gap > 1.5s → new segment
+                {"start": 2.5, "end": 3.0, "word": "B"},
+            ]
+        }
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = GroqWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 2
+        assert segs[0]["text"] == "A"
+        assert segs[1]["text"] == "B"
+
+    def test_transcribe_words_split_by_long_text(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        long_word = "a" * 501
+        response = {
+            "words": [
+                {"start": 0.0, "end": 0.5, "word": long_word},
+                {"start": 0.6, "end": 1.0, "word": "fim"},
+            ]
+        }
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = GroqWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 2
+
+    def test_transcribe_fallback_no_words_with_text(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        response = {"words": [], "text": "Texto completo.", "duration": 10.5}
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = GroqWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 1
+        assert segs[0]["text"] == "Texto completo."
+        assert segs[0]["end"] == 10.5
+
+    def test_transcribe_fallback_empty_text_returns_empty(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        response = {"words": [], "text": ""}
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = GroqWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert segs == []
+
+
+# ---------------------------------------------------------------------------
+# OpenAIWhisperTranscriber  (mesma lógica, URL diferente)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIWhisperTranscriber:
+    def test_transcribe_with_words(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"fake-audio")
+
+        response = {
+            "words": [
+                {"start": 1.0, "end": 1.5, "word": "Soberania"},
+                {"start": 1.6, "end": 2.0, "word": "nacional"},
+            ]
+        }
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = OpenAIWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 1
+        assert "Soberania" in segs[0]["text"]
+
+    def test_transcribe_fallback_text_only(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        response = {"words": [], "text": "Olá.", "duration": 5.0}
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = OpenAIWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert segs[0]["text"] == "Olá."
+        assert segs[0]["end"] == 5.0
+
+    def test_transcribe_split_by_gap(
+        self, tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        audio = tmp_path / "audio.mp3"
+        audio.write_bytes(b"x")
+
+        response = {
+            "words": [
+                {"start": 0.0, "end": 0.3, "word": "X"},
+                {"start": 5.0, "end": 5.3, "word": "Y"},
+            ]
+        }
+        monkeypatch.setattr("urllib.request.urlopen", _mock_urlopen(response))
+
+        t = OpenAIWhisperTranscriber(api_key="key")
+        segs = t.transcribe(audio)
+
+        assert len(segs) == 2

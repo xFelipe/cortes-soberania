@@ -131,3 +131,49 @@ class TestAlertRouter:
         router = AlertRouter.from_settings(s)
         assert len(router._channels) == 1
         assert isinstance(router._channels[0], TelegramChannel)
+
+    def test_from_settings_smtp_when_configured(self) -> None:
+        from canal_soberania.config import Settings
+        s = Settings(
+            alert_channels="smtp",
+            smtp_host="smtp.example.com",
+            smtp_port=587,
+            smtp_user="user@example.com",
+            smtp_password="pass",
+            smtp_from="from@example.com",
+            smtp_to="to@example.com",
+        )
+        router = AlertRouter.from_settings(s)
+        assert len(router._channels) == 1
+        from canal_soberania.alerts.smtp import SmtpChannel
+        assert isinstance(router._channels[0], SmtpChannel)
+
+    def test_from_settings_empty_channels_includes_telegram_if_configured(self) -> None:
+        """alert_channels='' → tenta telegram por padrão."""
+        from canal_soberania.config import Settings
+        s = Settings(
+            telegram_bot_token="tok",
+            telegram_chat_id="cid",
+            alert_channels="",
+        )
+        router = AlertRouter.from_settings(s)
+        assert len(router._channels) == 1
+
+    def test_send_pipeline_stopped(self) -> None:
+        ch = MagicMock()
+        ch.send.return_value = True
+        router = AlertRouter([ch])  # type: ignore[list-item]
+        result = router.send_pipeline_stopped(3.5)
+        assert result == 1
+        title, body, *_ = ch.send.call_args.args
+        assert "3.5" in body
+
+    def test_send_health_ok(self) -> None:
+        ch = MagicMock()
+        ch.send.return_value = True
+        router = AlertRouter([ch])  # type: ignore[list-item]
+        result = router.send_health_ok("Disco OK, sem presos")
+        assert result == 1
+        title, body, *_ = ch.send.call_args.args
+        assert "OK" in title
+        assert "Disco OK" in body

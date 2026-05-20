@@ -261,6 +261,90 @@ Qwen 2.5 14B Q4 na GPU local custa R$0 e tem latência < 3s — adequado para tr
 | Whisper acerta mal nome próprio brasileiro | Alta | Aceita; o ganho de revisar manualmente não compensa. Citações com erro de nome são raras e perdoáveis em cortes. |
 | Disco enche (vídeos brutos) | Alta | Cron diário deleta `data/video/{id}.mp4` de vídeos com `status='uploaded_youtube'` há mais de 7 dias. Audio fica (é pequeno). |
 
+## Qualidade e testes (Onda 8+)
+
+### Backend — pytest (636 testes, cobertura 93.71% nos pacotes críticos)
+
+Estrutura de testes em `tests/`:
+
+```
+tests/
+├── api/
+│   ├── conftest.py         ← fixtures: client (TestClient), mock_service (MagicMock + EventBus real),
+│   │                          conn (SQLite :memory:), auth_headers
+│   ├── test_auth.py, test_canais.py, test_clips.py, test_config.py
+│   ├── test_events.py      ← SSEBridge unit (async pytest.mark.anyio) + endpoint direto
+│   ├── test_stages.py, test_videos.py
+├── e2e/
+│   └── test_journeys.py    ← 5 cenários httpx + TestClient real (não mock_service)
+├── fakes.py                ← InMemory{Video,Clip,Canal}Repository para testes de serviço
+├── test_pipeline_service.py
+├── test_repositories.py    ← fixtures com _apply_migrations() (garante colunas de migrations)
+└── ...
+```
+
+**Padrões importantes:**
+- `monkeypatch` para `subprocess.run` global (não em módulo importador) e funções localmente importadas na fonte
+- `conftest.py` em `tests/api/` fornece `mock_service` com `svc.event_bus = EventBus()` real
+- Fixtures de DB aplicam `schema.sql` + `migrations/*.sql` via `_apply_migrations()` para evitar `no such column`
+- `httpx.ASGITransport` não suporta streaming infinito → testar endpoint SSE chamando `stream_events()` diretamente
+- `GoogleApiClient.build()` é importado localmente em `add_video_by_id()` → patch em `googleapiclient.discovery.build`, não no módulo do serviço
+
+**Gate de cobertura:**
+```bash
+.venv/bin/pytest \
+  --cov=canal_soberania.api --cov=canal_soberania.transcribers \
+  --cov=canal_soberania.llm_backends --cov=canal_soberania.alerts \
+  --cov=canal_soberania.health \
+  --cov=canal_soberania.services.pipeline_service \
+  --cov=canal_soberania.repositories.sqlite \
+  --cov-fail-under=90 --cov-report=term-missing
+```
+
+### Frontend — Vitest + @testing-library/react (40 testes)
+
+Stack: **Vitest 4** + **@testing-library/react** + **jsdom** + `@testing-library/jest-dom`
+
+Config principal: `ui/vitest.config.ts` — environment jsdom, setupFiles `src/test/setup.ts`, coverage v8 thresholds 80%.
+
+```bash
+export PATH="$HOME/.local/node22/bin:$HOME/.local/share/pnpm/bin:$HOME/.cargo/bin:$PATH"
+cd ui
+pnpm test          # modo run (CI)
+pnpm test:watch    # modo watch
+pnpm test:cov      # com coverage report
+```
+
+**Padrões importantes:**
+- `vi.resetModules()` + `vi.doMock()` (NÃO `vi.mock()` que é hoisted) para isolamento de estado ES module
+- `await Promise.resolve()` após `applyEvent()` com callbacks `.then()` para flush de microtasks
+- `renderHook(() => hook()) + act(() => {...})` para testar `useSyncExternalStore`
+- Tauri APIs (`plugin-fs`, `api/core`) mockados globalmente em `src/test/setup.ts`
+
+### E2E — Playwright (browser, skip sem Chromium)
+
+Specs: `ui/e2e/journeys.spec.ts` — 3 jornadas (aprovar clipe, bulk toolbar, Ctrl+K palette).
+
+Pré-requisito (uma vez por máquina):
+```bash
+sudo npx playwright install-deps chromium
+npx playwright install chromium
+```
+
+Rodar: `cs serve &` + `pnpm exec playwright test`
+
+Os specs verificam `execSync("npx playwright install --dry-run chromium")` e fazem `test.skip()` automaticamente se o browser não estiver instalado.
+
+### Pre-commit
+
+`.pre-commit-config.yaml` com hooks `local`:
+- **`pre-commit` stage:** `ruff check --fix`, `ruff format --check`, `mypy src/`
+- **`pre-push` stage:** `pytest --cov-fail-under=90` (pacotes críticos), `pnpm test`
+
+Instalar: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+
+---
+
 ## Observabilidade
 
 - Logs em `data/logs/{stage}_{date}.log` com rotação diária (loguru)

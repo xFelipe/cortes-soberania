@@ -209,3 +209,271 @@ def test_patch_clip_not_found(
         json={"render_vertical": True, "render_horizontal": True},
     )
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /clips/{id}/face-crop
+# ---------------------------------------------------------------------------
+
+
+def test_face_crop_clip_not_found(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service.get_clip.return_value = None
+    r = client.get("/clips/notfound_0_60/face-crop", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_face_crop_video_not_found(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service.get_video.return_value = None
+    r = client.get(f"/clips/{_CLIP_ID}/face-crop", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_face_crop_video_no_path(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    from canal_soberania.models import Video, VideoStatus
+
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path=None,
+    )
+    r = client.get(f"/clips/{_CLIP_ID}/face-crop", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_face_crop_file_missing(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    from canal_soberania.models import Video, VideoStatus
+
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path="/nonexistent/path/video.mp4",
+    )
+    r = client.get(f"/clips/{_CLIP_ID}/face-crop", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_face_crop_happy_path(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    mock_service: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: "Path",  # type: ignore[name-defined]
+) -> None:
+    from pathlib import Path
+
+    from canal_soberania.models import Video, VideoStatus
+
+    video_file = tmp_path / "video.mp4"
+    video_file.write_bytes(b"fake")
+
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path=str(video_file),
+    )
+
+    import subprocess
+    import json as _json
+
+    fake_probe = subprocess.CompletedProcess(
+        args=[], returncode=0,
+        stdout=_json.dumps({"streams": [{"codec_type": "video", "width": 1920, "height": 1080}]}),
+        stderr="",
+    )
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: fake_probe)
+    monkeypatch.setattr(
+        "canal_soberania.utils.reframe.detect_face_crop_x",
+        lambda *a, **kw: 100,
+    )
+
+    r = client.get(f"/clips/{_CLIP_ID}/face-crop", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source_width"] == 1920
+    assert body["source_height"] == 1080
+    assert body["crop_x"] == 100
+
+
+def test_face_crop_ffprobe_fails_fallback(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    mock_service: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: "Path",  # type: ignore[name-defined]
+) -> None:
+    from pathlib import Path
+
+    from canal_soberania.models import Video, VideoStatus
+
+    video_file = tmp_path / "video.mp4"
+    video_file.write_bytes(b"fake")
+
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path=str(video_file),
+    )
+
+    import subprocess
+
+    fake_probe = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="error")
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: fake_probe)
+    monkeypatch.setattr(
+        "canal_soberania.utils.reframe.detect_face_crop_x",
+        lambda *a, **kw: None,
+    )
+
+    r = client.get(f"/clips/{_CLIP_ID}/face-crop", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source_width"] == 1280  # fallback
+    assert body["source_height"] == 720  # fallback
+    crop_width = int(720 * 9 / 16)
+    assert body["crop_x"] == (1280 - crop_width) // 2  # centrado
+
+
+# ---------------------------------------------------------------------------
+# GET /clips/{id}/source-video
+# ---------------------------------------------------------------------------
+
+
+def test_source_video_clip_not_found(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    mock_service.get_clip.return_value = None
+    r = client.get("/clips/notfound_0_60/source-video", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_source_video_prefers_vertical(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    mock_service: MagicMock,
+    tmp_path: "Path",  # type: ignore[name-defined]
+) -> None:
+    from pathlib import Path
+
+    vert = tmp_path / "clip_vertical.mp4"
+    vert.write_bytes(b"fake")
+
+    clip = Clip(
+        clip_id=_CLIP_ID,
+        video_id=_VIDEO_ID,
+        start_s=10.0,
+        end_s=70.0,
+        clip_path_vertical=str(vert),
+        clip_path_horizontal=None,
+    )
+    mock_service.get_clip.return_value = clip
+
+    r = client.get(f"/clips/{_CLIP_ID}/source-video", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("video/mp4")
+
+
+def test_source_video_fallback_horizontal(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    mock_service: MagicMock,
+    tmp_path: "Path",  # type: ignore[name-defined]
+) -> None:
+    from pathlib import Path
+
+    horiz = tmp_path / "clip_horiz.mp4"
+    horiz.write_bytes(b"fake")
+
+    clip = Clip(
+        clip_id=_CLIP_ID,
+        video_id=_VIDEO_ID,
+        start_s=10.0,
+        end_s=70.0,
+        clip_path_vertical=None,
+        clip_path_horizontal=str(horiz),
+    )
+    mock_service.get_clip.return_value = clip
+
+    r = client.get(f"/clips/{_CLIP_ID}/source-video", headers=auth_headers)
+    assert r.status_code == 200
+
+
+def test_source_video_fallback_source(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    mock_service: MagicMock,
+    tmp_path: "Path",  # type: ignore[name-defined]
+) -> None:
+    from pathlib import Path
+
+    from canal_soberania.models import Video, VideoStatus
+
+    src = tmp_path / "source.mp4"
+    src.write_bytes(b"fake")
+
+    clip = Clip(
+        clip_id=_CLIP_ID,
+        video_id=_VIDEO_ID,
+        start_s=10.0,
+        end_s=70.0,
+        clip_path_vertical=None,
+        clip_path_horizontal=None,
+    )
+    mock_service.get_clip.return_value = clip
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path=str(src),
+    )
+
+    r = client.get(f"/clips/{_CLIP_ID}/source-video", headers=auth_headers)
+    assert r.status_code == 200
+
+
+def test_source_video_all_missing(
+    client: TestClient, auth_headers: dict[str, str], mock_service: MagicMock
+) -> None:
+    from canal_soberania.models import Video, VideoStatus
+
+    clip = Clip(
+        clip_id=_CLIP_ID,
+        video_id=_VIDEO_ID,
+        start_s=10.0,
+        end_s=70.0,
+        clip_path_vertical=None,
+        clip_path_horizontal=None,
+    )
+    mock_service.get_clip.return_value = clip
+    mock_service.get_video.return_value = Video(
+        video_id=_VIDEO_ID,
+        canal_id="ch",
+        title="T",
+        published_at="2024-01-01T00:00:00Z",
+        status=VideoStatus.TRANSCRIBED,
+        video_path="/nonexistent/video.mp4",
+    )
+
+    r = client.get(f"/clips/{_CLIP_ID}/source-video", headers=auth_headers)
+    assert r.status_code == 404

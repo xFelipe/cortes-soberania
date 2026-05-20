@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from canal_soberania.api.auth import verify_token
@@ -16,16 +16,15 @@ router = APIRouter(tags=["events"])
 
 @router.get("/events")
 async def stream_events(
-    request: Request,
     bridge: SSEBridge = Depends(get_sse_bridge),
     _: None = Depends(verify_token),
 ) -> StreamingResponse:
     """Conecta ao stream de eventos do pipeline (Server-Sent Events)."""
 
     async def generator() -> AsyncGenerator[str, None]:
+        # Client disconnect is detected by the yield raising BrokenResourceError;
+        # the SSEBridge.stream() finally-block cleans up the client registration.
         async for data in bridge.stream():
-            if await request.is_disconnected():
-                break
             yield data
 
     return StreamingResponse(
