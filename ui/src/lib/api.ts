@@ -3,12 +3,10 @@ const XDG_TOKEN_PATH = `${import.meta.env.HOME ?? ""}/config/canal-soberania/.ap
 
 async function getToken(): Promise<string> {
   try {
-    // Tauri environment: read from XDG config path
     const { readTextFile } = await import("@tauri-apps/plugin-fs");
     const raw = await readTextFile(XDG_TOKEN_PATH);
     return raw.trim();
   } catch {
-    // Browser / dev fallback: token in localStorage (set manually for testing)
     return localStorage.getItem("api_token") ?? "";
   }
 }
@@ -27,7 +25,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// ── Types (minimal subset used in Onda 3) ────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface StatsSummary {
   [status: string]: number;
@@ -35,6 +33,47 @@ export interface StatsSummary {
 
 export interface StatsCosts {
   total_usd: number;
+}
+
+export interface Video {
+  video_id: string;
+  canal_id: string;
+  title: string;
+  description: string | null;
+  tags: string[];
+  published_at: string;
+  duration_s: number | null;
+  view_count: number | null;
+  like_count: number | null;
+  comment_count: number | null;
+  status: string;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  score_triage: number | null;
+}
+
+export interface Clip {
+  clip_id: string;
+  video_id: string;
+  start_s: number;
+  end_s: number;
+  hook: string | null;
+  payoff: string | null;
+  tema_soberania: string | null;
+  score_viral: number | null;
+  score_relevancia: number | null;
+  title: string | null;
+  description: string | null;
+  tags: string[];
+  youtube_id: string | null;
+  thumb_path: string | null;
+  youtube_view_count: number | null;
+  youtube_like_count: number | null;
+  status: string;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface InboxItem {
@@ -45,6 +84,10 @@ export interface InboxItem {
   hook?: string;
   title?: string;
   status?: string;
+  canal_id?: string;
+  score_viral?: number;
+  start_s?: number;
+  end_s?: number;
 }
 
 export interface InboxResponse {
@@ -64,12 +107,11 @@ export const api = {
   },
   stages: {
     run: (name: string) =>
-      request<{ status: string; stage: string }>(`/stages/${name}/run`, {
-        method: "POST",
-      }),
+      request<{ status: string; stage: string }>(`/stages/${name}/run`, { method: "POST" }),
     cancel: () =>
       request<{ status: string }>("/pipeline/cancel", { method: "POST" }),
-    reset: () => request<{ reset_videos: number; reset_clips: number }>("/pipeline/reset", { method: "POST" }),
+    reset: () =>
+      request<{ reset_videos: number; reset_clips: number }>("/pipeline/reset", { method: "POST" }),
   },
   videos: {
     list: (params?: { status?: string; limit?: number }) => {
@@ -77,8 +119,12 @@ export const api = {
       if (params?.status) qs.set("status", params.status);
       if (params?.limit) qs.set("limit", String(params.limit));
       const q = qs.toString();
-      return request<unknown[]>(`/videos${q ? `?${q}` : ""}`);
+      return request<Video[]>(`/videos${q ? `?${q}` : ""}`);
     },
+    approve: (video_id: string) =>
+      request<{ status: string; video_id: string }>(`/videos/${video_id}/approve`, { method: "POST" }),
+    reject: (video_id: string) =>
+      request<{ status: string; video_id: string }>(`/videos/${video_id}/reject`, { method: "POST" }),
   },
   clips: {
     list: (params?: { status?: string; video_id?: string; limit?: number }) => {
@@ -87,8 +133,14 @@ export const api = {
       if (params?.video_id) qs.set("video_id", params.video_id);
       if (params?.limit) qs.set("limit", String(params.limit));
       const q = qs.toString();
-      return request<unknown[]>(`/clips${q ? `?${q}` : ""}`);
+      return request<Clip[]>(`/clips${q ? `?${q}` : ""}`);
     },
+    approve: (clip_id: string) =>
+      request<{ status: string; clip_id: string }>(`/clips/${clip_id}/approve`, { method: "POST" }),
+    reject: (clip_id: string) =>
+      request<{ status: string; clip_id: string }>(`/clips/${clip_id}/reject`, { method: "POST" }),
+    discard: (clip_id: string) =>
+      request<{ status: string; clip_id: string }>(`/clips/${clip_id}`, { method: "DELETE" }),
   },
 };
 

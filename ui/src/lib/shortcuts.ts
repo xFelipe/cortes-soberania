@@ -31,3 +31,52 @@ export function useGlobalShortcuts(onCommandPalette: () => void) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCommandPalette]);
 }
+
+export interface InboxShortcutHandlers {
+  onNext: () => void;
+  onPrev: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  enabled: boolean;
+}
+
+export function useInboxShortcuts({
+  onNext,
+  onPrev,
+  onApprove,
+  onReject,
+  enabled,
+}: InboxShortcutHandlers) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    function handleKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      switch (e.key) {
+        case "j":
+        case "J":
+          e.preventDefault();
+          onNext();
+          break;
+        case "k":
+        case "K":
+          e.preventDefault();
+          onPrev();
+          break;
+        case "a":
+        case "A":
+          onApprove();
+          break;
+        case "r":
+        case "R":
+          onReject();
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [enabled, onNext, onPrev, onApprove, onReject]);
+}
