@@ -12,7 +12,7 @@
 
 | Fase | Ondas | Status |
 |---|---|---|
-| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–2 ✅) |
+| **A — MVP completo e bonito** | 0–5 | 🟡 Em andamento (Ondas 0–3 ✅) |
 | **B — Robustez + features power** | 6–9 | ⬜ Aguardando Fase A |
 | **C — Extras** | 10–12 | ⬜ Aguardando Fase B |
 
@@ -87,74 +87,87 @@
 
 ---
 
-### ⬜ Onda 3 — Tauri + React fundação (5 dias)
+### ✅ Onda 3 — Tauri + React fundação (`git tag onda-3-done`)
 
-> Objetivo: shell desktop funcionando com layout completo e remove PySide6. A API (Onda 2) já está pronta — esta onda só consome endpoints existentes.
+> Objetivo: shell desktop funcionando com layout completo e remoção do PySide6. API (Onda 2) já estava pronta — esta onda só consome endpoints existentes.
 
-#### Pré-requisitos de sistema
-```bash
-# Node / pnpm
-curl -fsSL https://get.pnpm.io/install.sh | sh
-pnpm --version  # esperado ≥ 9
+#### Toolchain instalado (user-level)
+- [x] Rust 1.95 via rustup (`~/.cargo/bin/`) — `source ~/.cargo/env` antes de usar
+- [x] Node 22.16.0 manual em `~/.local/node22/` (pnpm env use falhou por timeout; tarball direto)
+- [x] pnpm 11.1.3 em `~/.local/share/pnpm/bin/pnpm`
+- [x] `ui/pnpm-workspace.yaml` com `allowBuilds` (pnpm 11 obriga; package.json `pnpm` field ignorado)
+- **PATH necessário:** `export PATH="$HOME/.local/node22/bin:$HOME/.local/share/pnpm/bin:$HOME/.cargo/bin:$PATH"`
+- **Pendente (sudo no terminal do usuário):** `sudo apt install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev`
 
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#### Scaffold `ui/`
+- [x] Tauri 2 + React 19 + Vite 7 em `ui/` via `pnpm create tauri-app`
+- [x] `ui/src-tauri/tauri.conf.json` — productName "Canal Soberania", 1400×900, devUrl localhost:5173
+- [x] Tailwind v4 via `@tailwindcss/vite` (sem `tailwind.config.js`)
+- [x] shadcn/ui v4.7 com preset Radix/Nova — `pnpm dlx shadcn@latest init -t vite -b radix -p nova`
+- [x] TanStack Router + TanStack Query + cmdk + sonner + lucide-react
+- [x] `@tauri-apps/plugin-fs` para leitura do token XDG
 
-# Dependências de sistema (Linux)
-sudo apt install libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-```
+#### Biblioteca `ui/src/lib/`
+- [x] `api.ts` — cliente HTTP typed; `getToken()` tenta Tauri plugin-fs, fallback localStorage; namespaces: stats, inbox, stages, videos, clips
+- [x] `sse.ts` — `useSSE()` com EventSource + `?token=` query param, retry 3s, invalida TanStack Query keys
+- [x] `theme.tsx` — `ThemeProvider` OS-follow + override localStorage `canal-soberania-theme`, `useTheme()`
+- [x] `query.ts` — QueryClient (staleTime 5000, refetchOnWindowFocus false, retry 1)
+- [x] `router.tsx` — TanStack Router com 5 rotas + redirect `/` → `/inbox`
+- [x] `shortcuts.ts` — `useGlobalShortcuts(onCommandPalette)`: Ctrl+1..5 navegação, Ctrl+K palette
+- [x] `status-labels.ts` — `VideoStatus` (18 values) + `ClipStatus` (14 values) + `VIDEO_STATUS_META` + `CLIP_STATUS_META` Records PT-BR + `ACTIVE_VIDEO_STATUSES`
 
-#### Scaffold
-- [ ] `pnpm create tauri-app ui --template react-ts` na raiz do repo
-- [ ] `cd ui && pnpm add -D tailwindcss @tailwindcss/vite`
-- [ ] `pnpm dlx shadcn@latest init` (style: Default, color: Slate, CSS vars: yes)
-- [ ] `pnpm add @tanstack/react-query @tanstack/router zod cmdk sonner`
-- [ ] `src-tauri/`: comandos Tauri mínimos (open external URL, file dialog, system tray)
-- [ ] `src-tauri/tauri.conf.json`: `devUrl = "http://localhost:5173"`, `beforeDevCommand = "pnpm dev"`
+#### Layout `ui/src/components/layout/`
+- [x] `RootLayout.tsx` — grid `3.75rem + 1fr` × `1fr + 1.75rem`; monta Sidebar, main Outlet, StatusFooter
+- [x] `Sidebar.tsx` — 5 nav items, Tooltip, Badge via `useQuery(['stats','summary'])`, `border-l-2 border-primary` ativo
+- [x] `StatusFooter.tsx` — SSEDot (verde/amarelo/vermelho), custo via `useQuery(['stats','costs'])`, link Settings
+- [x] `CommandPalette.tsx` — cmdk Dialog, placeholder "Implementado na Onda 4"
 
-#### Integração com FastAPI
-- [ ] `lib/api.ts` — gerado via `pnpm dlx openapi-typescript http://localhost:8000/openapi.json -o src/lib/api.d.ts`
-- [ ] Token lido de `~/.config/canal-soberania/.api_token` via Tauri `readTextFile`; injetado em todo fetch
-- [ ] `lib/sse.ts` — hook `useSSE()`:
-  ```ts
-  // Conecta ao GET /events, parseia "data: {...}\n\n"
-  // Chama queryClient.invalidateQueries() nos tipos relevantes
-  // Reconecta automaticamente após 3s de desconexão
-  ```
-- [ ] `lib/status-labels.ts` — `STATUS_META` mapeando cada status → `{ label_pt, color, icon }`
-- [ ] `lib/theme.ts` — auto OS (prefers-color-scheme) + override salvo em Tauri Store
-- [ ] `lib/shortcuts.ts` — registro global de hotkeys (Ctrl+1..6, J/K, A/R, `[`, `]`)
+#### Rotas `ui/src/routes/`
+- [x] `index.tsx` — redirect → `/inbox`
+- [x] `inbox.tsx` — placeholder card "Onda 4"
+- [x] `biblioteca.tsx` — placeholder card "Onda 4"
+- [x] `operacao.tsx` — placeholder card "Onda 6"
+- [x] `stats.tsx` — placeholder card "Onda 6"
+- [x] `settings.tsx` — tema toggle funcional (Light/Dark/System) com `useTheme()`
 
-#### Layout base
-- [ ] `components/layout/Sidebar.tsx` — 60px com ícones Lucide + tooltip + badge de contagem (busca de `GET /stats/summary`)
-- [ ] `components/layout/StatusFooter.tsx` — 28px: stage atual via SSE · cancel inline · custo do mês de `GET /stats/costs`
-- [ ] `App.tsx` com `<RouterProvider>` + `<QueryClientProvider>` + `<ThemeProvider>` + `<Toaster>`
+#### Integração backend
+- [x] `src/canal_soberania/api/auth.py` — dual-write token: XDG `~/.config/canal-soberania/.api_token` + `DATA_DIR/.api_token`; XDG tem prioridade
+- [x] `src/canal_soberania/cli.py` — `cs serve` imprime caminho XDG do token no stdout
+- [x] `tests/api/test_auth.py` — 6 testes cobrindo geração, dual-write, chmod 600, prioridade XDG, cópia data→XDG
 
 #### Remoção PySide6
-- [ ] `git rm -r src/canal_soberania/gui/`
-- [ ] Remover `pyside6>=6.11.1` e `"gui"` extra do `pyproject.toml`
-- [ ] `uv sync` — verificar que nada quebra nos 500 testes
+- [x] `git rm -r src/canal_soberania/gui/` (14 arquivos, 2538 linhas)
+- [x] `git rm run_gui.sh`
+- [x] `pyproject.toml`: removido `pyside6`, script `cs-gui`, extra `gui`, exclusão de cobertura `gui/*`
+- [x] 506 testes passando; `mypy --strict` zero erros em 76 arquivos; `pnpm tsc --noEmit` zero erros TS
 
-- **Smoke:** `cs serve &` em terminal 1; `pnpm tauri dev` em terminal 2; janela abre; sidebar exibe contagens reais da API; StatusFooter mostra custo do mês; Ctrl+K abre placeholder; tema dark/light segue OS
+- **Smoke pendente (requer sudo):** `sudo apt install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev` → `cs serve &` → `cd ui && pnpm tauri dev` → janela "Canal Soberania" abre
 
 ---
 
 ### ⬜ Onda 4 — Inbox + Biblioteca (4 dias)
 
-> Objetivo: as duas rotas de uso diário funcionando completamente.
+> Objetivo: as duas rotas de uso diário funcionando completamente.  
+> Base pronta em `ui/src/routes/inbox.tsx` e `ui/src/routes/biblioteca.tsx` (placeholders da Onda 3).  
+> Todos os hooks e status labels já existem — só implementar o JSX.
 
-#### Inbox
-- [ ] `routes/inbox.tsx` — query `GET /inbox`; cards shadcn com STATUS_META; J/K nav; A aprova inline; empty state com mensagem positiva
+#### Inbox (`ui/src/routes/inbox.tsx`)
+- [ ] `useQuery(['inbox'], api.inbox.get)` — consome `GET /inbox` (ver `docs/api.md`)
+- [ ] Cards shadcn com `VIDEO_STATUS_META` / `CLIP_STATUS_META` de `ui/src/lib/status-labels.ts`
+- [ ] Hotkeys J/K nav (adicionar em `ui/src/lib/shortcuts.ts`); A aprova inline via `useMutation`; R rejeita
 - [ ] Cards de vídeo pendente (triagem) e clipe (METADATA_READY) com ações contextuais
-- [ ] Badge de contagem na sidebar atualiza via SSE
+- [ ] Badge na sidebar (`ui/src/components/layout/Sidebar.tsx`) já consome `['stats','summary']` — sem alteração necessária
+- [ ] Empty state com mensagem positiva
 
-#### Biblioteca
-- [ ] `routes/biblioteca.tsx` — `<Tabs>` Vídeos / Clipes
-- [ ] `<DataTable>` (TanStack Table) com: busca global, chips de filtro por status, ordenação por coluna, paginação virtual
+#### Biblioteca (`ui/src/routes/biblioteca.tsx`)
+- [ ] `<Tabs>` Vídeos / Clipes — `useQuery(['videos'], api.videos.list)` e `useQuery(['clips'], api.clips.list)`
+- [ ] Instalar TanStack Table: `pnpm add @tanstack/react-table`
+- [ ] `<DataTable>` com: busca global, chips de filtro por status, ordenação por coluna, paginação virtual
 - [ ] `<Toggle>` tabela ↔ grid; grid de clipes com thumbnail + status badge
 - [ ] Bulk select via checkbox na coluna 0; sticky toolbar quando ≥ 1 selecionado (approve, reject, discard)
 - [ ] `<ContextMenu>` rico em cada linha (approve, reject, review, open YouTube, copy ID)
 
+- **Referências de API:** `GET /inbox`, `GET /videos`, `GET /clips`, `POST /clips/{id}/approve`, `POST /clips/{id}/reject` — todos documentados em `docs/api.md`
 - **Smoke:** Inbox lista corretamente priorizado; J/K navega; A aprova sem recarregar; Biblioteca filtra por status; selecionar 3 → bulk toolbar aparece; grid mostra thumbnails
 
 ---
@@ -265,7 +278,7 @@ sudo apt install libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev libayatana-appind
 
 ```bash
 .venv/bin/pytest --tb=no -q        # todos passando
-.venv/bin/mypy src/ --strict       # zero erros (exceto gui/ pré-existente até Onda 3)
+.venv/bin/mypy src/ --strict       # zero erros
 cs health-check                    # [OK]
 git tag onda-N-done                # marcar conclusão
 ```
