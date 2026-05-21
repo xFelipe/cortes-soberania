@@ -61,8 +61,10 @@ class PipelineService:
         self._cancel_event = threading.Event()
 
         if "canais_path" in paths:
-            from canal_soberania.db import ensure_canais_seeded
+            from canal_soberania.db import ensure_canais_seeded, ensure_output_canais_seeded
             ensure_canais_seeded(conn, paths["canais_path"])
+            if "output_canais_path" in paths:
+                ensure_output_canais_seeded(conn, paths["output_canais_path"])
 
     @property
     def event_bus(self) -> EventBus:
@@ -176,11 +178,18 @@ class PipelineService:
         canal_ids: list[str] | None = None,
         janela_dias: int | None = None,
         max_videos: int | None = None,
+        output_canal_id: str | None = None,
     ) -> None:
         import functools
 
         from canal_soberania.stages.discover import run
-        fn = functools.partial(run, canal_ids=canal_ids, janela_dias=janela_dias, max_videos=max_videos)
+        fn = functools.partial(
+            run,
+            canal_ids=canal_ids,
+            janela_dias=janela_dias,
+            max_videos=max_videos,
+            output_canal_id=output_canal_id,
+        )
         self._run_stage("discover", fn, dry_run)
 
     def run_triage_metadata(self, dry_run: bool = False) -> None:
@@ -654,6 +663,40 @@ class PipelineService:
         from canal_soberania.repositories.sqlite import SqliteCanaisRepository
         repo = SqliteCanaisRepository(self._conn)
         return repo.get_active() if apenas_ativos else repo.get_all()
+
+    # ------------------------------------------------------------------
+    # Output canais (canais de SAÍDA / YouTube Shorts brands)
+    # ------------------------------------------------------------------
+
+    def get_output_canais(self, apenas_ativos: bool = False) -> list[Any]:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        repo = SqliteOutputCanaisRepository(self._conn)
+        return repo.get_active() if apenas_ativos else repo.get_all()
+
+    def get_output_canal(self, canal_id: str) -> Any | None:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        return SqliteOutputCanaisRepository(self._conn).get(canal_id)
+
+    def upsert_output_canal(self, canal: Any) -> None:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        repo = SqliteOutputCanaisRepository(self._conn)
+        repo.upsert(canal)
+        repo.upsert_fontes(canal.id, canal.fontes)
+        self._bus.publish(PipelineEvent("output_canal_upserted", {"canal_id": canal.id}))
+
+    def delete_output_canal(self, canal_id: str) -> None:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        SqliteOutputCanaisRepository(self._conn).delete(canal_id)
+        self._bus.publish(PipelineEvent("output_canal_deleted", {"canal_id": canal_id}))
+
+    def get_output_canal_fontes(self, canal_id: str) -> list[str]:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        return SqliteOutputCanaisRepository(self._conn).get_fontes(canal_id)
+
+    def set_output_canal_fontes(self, canal_id: str, fontes: list[str]) -> None:
+        from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+        SqliteOutputCanaisRepository(self._conn).upsert_fontes(canal_id, fontes)
+        self._bus.publish(PipelineEvent("output_canal_fontes_updated", {"canal_id": canal_id}))
 
     def upsert_canal(self, canal: Any) -> None:
         from canal_soberania.repositories.sqlite import SqliteCanaisRepository

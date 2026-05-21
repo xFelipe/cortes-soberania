@@ -56,6 +56,26 @@ def ensure_canais_seeded(conn: sqlite3.Connection, canais_path: Path) -> None:
             )
 
 
+def ensure_output_canais_seeded(conn: sqlite3.Connection, output_canais_path: Path) -> None:
+    """Sincroniza output_canais.yaml → tabelas output_canais + output_canal_fontes (idempotente)."""
+    try:
+        conn.execute("SELECT 1 FROM output_canais LIMIT 1")
+    except Exception:  # noqa: BLE001
+        return  # migration 007 ainda não aplicada
+
+    from canal_soberania.config import load_output_canais
+    from canal_soberania.repositories.sqlite import SqliteOutputCanaisRepository
+
+    cfg = load_output_canais(output_canais_path)
+    if not cfg.output_canais:
+        return
+
+    repo = SqliteOutputCanaisRepository(conn)
+    for canal in cfg.output_canais:
+        repo.upsert(canal)
+        repo.upsert_fontes(canal.id, canal.fontes)
+
+
 # ---------------------------------------------------------------------------
 # Videos
 # ---------------------------------------------------------------------------
@@ -67,11 +87,11 @@ def insert_video(conn: sqlite3.Connection, video: Video) -> None:
         INSERT OR IGNORE INTO videos (
             video_id, canal_id, title, description, tags,
             published_at, duration_s, view_count, like_count, comment_count,
-            audio_path, video_path, caption_path, transcript_path, status
+            audio_path, video_path, caption_path, transcript_path, status, target_canal_id
         ) VALUES (
             :video_id, :canal_id, :title, :description, :tags,
             :published_at, :duration_s, :view_count, :like_count, :comment_count,
-            :audio_path, :video_path, :caption_path, :transcript_path, :status
+            :audio_path, :video_path, :caption_path, :transcript_path, :status, :target_canal_id
         )
         """,
         {
@@ -170,12 +190,12 @@ def insert_clip(conn: sqlite3.Connection, clip: Clip) -> None:
             clip_id, video_id, start_s, end_s, hook, payoff,
             tema_soberania, score_viral, score_relevancia, justificativa,
             clip_path_vertical, clip_path_horizontal, thumb_path,
-            title, description, tags, youtube_id, tiktok_id, youtube_publish_at, status
+            title, description, tags, youtube_id, tiktok_id, youtube_publish_at, status, target_canal_id
         ) VALUES (
             :clip_id, :video_id, :start_s, :end_s, :hook, :payoff,
             :tema_soberania, :score_viral, :score_relevancia, :justificativa,
             :clip_path_vertical, :clip_path_horizontal, :thumb_path,
-            :title, :description, :tags, :youtube_id, :tiktok_id, :youtube_publish_at, :status
+            :title, :description, :tags, :youtube_id, :tiktok_id, :youtube_publish_at, :status, :target_canal_id
         )
         """,
         {

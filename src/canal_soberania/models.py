@@ -72,6 +72,7 @@ class Video(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     score_triage: int | None = None  # score da triagem mais avançada disponível (0-10)
+    target_canal_id: str = "soberania"
 
 
 class Clip(BaseModel):
@@ -112,6 +113,7 @@ class Clip(BaseModel):
     youtube_view_count_horizontal: int | None = None
     youtube_like_count_horizontal: int | None = None
     youtube_comment_count_horizontal: int | None = None
+    target_canal_id: str = "soberania"
     status: ClipStatus = ClipStatus.IDENTIFIED
     error_message: str | None = None
     created_at: str | None = None

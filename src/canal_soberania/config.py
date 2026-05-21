@@ -163,6 +163,55 @@ def load_canais(path: Path | None = None) -> CanaisConfig:
 
 
 # ---------------------------------------------------------------------------
+# Output canais config (output_canais.yaml)
+# ---------------------------------------------------------------------------
+
+
+class OutputCanal(BaseModel):
+    id: str
+    nome: str
+    tema: str = ""
+    fontes: list[str] = Field(default_factory=list)
+    criteria_path: str = ""
+    branding_dir: str = ""
+    youtube_channel_id: str = ""
+    youtube_token_path: str = "config/youtube_token.json"
+    ativo: bool = True
+
+
+class OutputCanaisConfig(BaseModel):
+    output_canais: list[OutputCanal]
+
+
+def load_output_canais(path: Path | None = None) -> OutputCanaisConfig:
+    if path is None:
+        path = _repo("config/output_canais.yaml")
+    if not path.exists():
+        return OutputCanaisConfig(output_canais=[])
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return OutputCanaisConfig.model_validate(raw)
+
+
+def resolve_criteria_path(output_canal: OutputCanal) -> Path:
+    if output_canal.criteria_path:
+        p = _REPO_ROOT / output_canal.criteria_path
+        if p.exists():
+            return p
+    slug_path = _REPO_ROOT / "config" / "criterios" / f"{output_canal.id}.md"
+    if slug_path.exists():
+        return slug_path
+    return _REPO_ROOT / "config" / "criterios_relevancia.md"
+
+
+def resolve_prompt_path(output_canal_id: str, prompt_name: str, version: str = "v1") -> Path:
+    suffix = "" if version == "v1" else f"_{version}"
+    canal_specific = _REPO_ROOT / "prompts" / output_canal_id / f"{prompt_name}{suffix}.txt"
+    if canal_specific.exists():
+        return canal_specific
+    return _REPO_ROOT / "prompts" / f"{prompt_name}{suffix}.txt"
+
+
+# ---------------------------------------------------------------------------
 # Caminhos derivados (instanciados a partir das settings globais)
 # ---------------------------------------------------------------------------
 
@@ -193,6 +242,7 @@ def get_paths(settings: Settings) -> dict[str, Path]:
         "db_path": data / "canal.db",
         "schema_path": _repo("schema.sql"),
         "canais_path": _repo("config/canais.yaml"),
+        "output_canais_path": _repo("config/output_canais.yaml"),
         "prompts_dir": _repo("prompts"),
         "audio_dir": data / "audio",
         "video_dir": data / "video",

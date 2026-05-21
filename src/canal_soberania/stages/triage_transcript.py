@@ -7,7 +7,15 @@ import sqlite3
 from pathlib import Path
 from typing import cast
 
-from canal_soberania.config import CanaisConfig, get_paths, load_canais, load_settings
+from canal_soberania.config import (
+    CanaisConfig,
+    OutputCanal,
+    get_paths,
+    load_canais,
+    load_settings,
+    resolve_criteria_path,
+    resolve_prompt_path,
+)
 from canal_soberania.db import (
     connect,
     get_videos_by_status,
@@ -213,14 +221,27 @@ def run(
         logger.error("Prompt não encontrado: {}", prompt_path)
         return
 
-    prompt_template = prompt_path.read_text(encoding="utf-8")
-    criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
+    global_prompt = prompt_path.read_text(encoding="utf-8")
+    global_criterios = criterios_path.read_text(encoding="utf-8") if criterios_path.exists() else ""
+
+    _canal_cache: dict[str, tuple[str, str]] = {}
+
+    def _get_resources(target_canal_id: str) -> tuple[str, str]:
+        if target_canal_id not in _canal_cache:
+            oc = OutputCanal(id=target_canal_id, nome=target_canal_id)
+            pt_path = resolve_prompt_path(target_canal_id, "triagem_transcript")
+            crit_path = resolve_criteria_path(oc)
+            pt = pt_path.read_text(encoding="utf-8") if pt_path.exists() else global_prompt
+            crit = crit_path.read_text(encoding="utf-8") if crit_path.exists() else global_criterios
+            _canal_cache[target_canal_id] = (pt, crit)
+        return _canal_cache[target_canal_id]
 
     videos = get_videos_by_status(conn, VideoStatus.TRANSCRIBED)
     logger.info("triage_transcript: {} vídeos para processar", len(videos))
 
     passed = rejected = errors = 0
     for video in videos:
+        prompt_template, criterios = _get_resources(video.target_canal_id)
         result = triage_video_transcript(
             video=video,
             conn=conn,

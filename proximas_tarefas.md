@@ -284,13 +284,19 @@ Runner cria SQLite `:memory:` para cada entrada, insere o vídeo com status adeq
 
 ## FASE C — Extras (~7 dias)
 
-### ⬜ Onda 10 — Multi-canal genérico (4 dias)
+### ✅ Onda 10 — Multi-canal genérico (4 dias)
 
-- [ ] `config/canais/{slug}.yaml` — migrar de `canais.yaml` flat para um arquivo por canal
-- [ ] Schema migration: `videos.target_canal_id` + `clips.target_canal_id`
-- [ ] Prompts por canal: `prompts/{slug}/...`; critérios: `config/criterios_relevancia/{slug}.md`
-- [ ] Branding por canal: `branding/{slug}/intro.mp4`, `outro.mp4`, `logo.png`, `thumb_template.png`
-- [ ] UI: chip de canal na Biblioteca; filtro persistente
+- [x] `config/output_canais.yaml` + `OutputCanal` model + DB tables (`output_canais`, `output_canal_fontes`)
+- [x] Schema migration 007: `videos.target_canal_id` + `clips.target_canal_id`
+- [x] Prompts por canal: `prompts/{slug}/...` com fallback global; `resolve_prompt_path()`
+- [x] Critérios por canal: `config/criterios/{slug}.md` com fallback; `resolve_criteria_path()`
+- [x] Branding por canal: `branding/{slug}/` (estrutura)
+- [x] `SqliteOutputCanaisRepository` CRUD + fontes
+- [x] `discover.run()` output-canal-aware (multi-canal com `target_canal_id`)
+- [x] Triage stages carregam prompt/critérios por `target_canal_id`
+- [x] API REST `/output-canais` (CRUD + fontes)
+- [x] UI: chip de canal na Biblioteca; filtro por `target_canal_id`
+- [x] 696 testes passando | mypy --strict 0 erros | cobertura ≥82%
 
 ---
 

@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS videos (
     status              TEXT NOT NULL DEFAULT 'discovered',
     error_message       TEXT,                            -- preenche em status *_error
 
+    -- canal de SAÍDA que vai processar este vídeo (migration 007)
+    target_canal_id     TEXT NOT NULL DEFAULT 'soberania',
+
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -36,6 +39,7 @@ CREATE TABLE IF NOT EXISTS videos (
 CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 CREATE INDEX IF NOT EXISTS idx_videos_canal ON videos(canal_id);
 CREATE INDEX IF NOT EXISTS idx_videos_published ON videos(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_videos_target_canal ON videos(target_canal_id);
 
 -- =========================================================================
 -- TRIAGE_RESULTS: resultado de cada uma das 3 triagens (auditoria)
@@ -121,12 +125,16 @@ CREATE TABLE IF NOT EXISTS clips (
     status              TEXT NOT NULL DEFAULT 'identified',
     error_message       TEXT,
 
+    -- canal de SAÍDA que produziu este clipe (migration 007)
+    target_canal_id     TEXT NOT NULL DEFAULT 'soberania',
+
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_clips_status ON clips(status);
 CREATE INDEX IF NOT EXISTS idx_clips_video ON clips(video_id);
+CREATE INDEX IF NOT EXISTS idx_clips_target_canal ON clips(target_canal_id);
 CREATE INDEX IF NOT EXISTS idx_clips_youtube_publish ON clips(youtube_publish_at);
 CREATE INDEX IF NOT EXISTS idx_clips_youtube_last_synced ON clips(youtube_last_synced_at);
 
@@ -154,6 +162,36 @@ CREATE TRIGGER IF NOT EXISTS trg_canais_updated
 AFTER UPDATE ON canais
 BEGIN
     UPDATE canais SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
+-- =========================================================================
+-- OUTPUT_CANAIS: canais de SAÍDA (YouTube Shorts brands) — migration 007
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS output_canais (
+    id                 TEXT PRIMARY KEY,
+    nome               TEXT NOT NULL,
+    tema               TEXT NOT NULL DEFAULT '',
+    criteria_path      TEXT NOT NULL DEFAULT '',
+    branding_dir       TEXT NOT NULL DEFAULT '',
+    youtube_channel_id TEXT NOT NULL DEFAULT '',
+    youtube_token_path TEXT NOT NULL DEFAULT '',
+    ativo              INTEGER NOT NULL DEFAULT 1,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_output_canais_ativo ON output_canais(ativo);
+
+CREATE TABLE IF NOT EXISTS output_canal_fontes (
+    output_canal_id TEXT NOT NULL REFERENCES output_canais(id) ON DELETE CASCADE,
+    fonte_canal_id  TEXT NOT NULL REFERENCES canais(id) ON DELETE CASCADE,
+    PRIMARY KEY (output_canal_id, fonte_canal_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_output_canais_updated
+AFTER UPDATE ON output_canais
+BEGIN
+    UPDATE output_canais SET updated_at = datetime('now') WHERE id = NEW.id;
 END;
 
 -- =========================================================================

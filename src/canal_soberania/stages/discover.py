@@ -122,12 +122,14 @@ def discover_canal(
     params: Parametros,
     conn: sqlite3.Connection,
     dry_run: bool = False,
+    target_canal_id: str = "soberania",
 ) -> tuple[int, int]:
-    """Processa um canal. Retorna (inseridos, já_existentes_ou_erros)."""
+    """Processa um canal-fonte. Retorna (inseridos, já_existentes_ou_erros)."""
     cutoff = _iso_cutoff(params.janela_dias_discover)
     logger.info(
-        "Discover {} | janela={}d | cutoff={}",
+        "Discover {} → {} | janela={}d | cutoff={}",
         canal.id,
+        target_canal_id,
         params.janela_dias_discover,
         cutoff,
     )
@@ -172,6 +174,7 @@ def discover_canal(
             view_count=int(stats["viewCount"]) if "viewCount" in stats else None,
             like_count=int(stats["likeCount"]) if "likeCount" in stats else None,
             comment_count=int(stats["commentCount"]) if "commentCount" in stats else None,
+            target_canal_id=target_canal_id,
         )
 
         if dry_run:
@@ -205,10 +208,12 @@ def run(  # noqa: C901
     canal_ids: list[str] | None = None,
     janela_dias: int | None = None,
     max_videos: int | None = None,
+    output_canal_id: str | None = None,
 ) -> None:
     """Entry point chamado pelo CLI, scripts de cron e GUI.
 
-    canal_ids: subset de canais a processar (None = todos ativos do banco).
+    output_canal_id: processar apenas este canal de saída (None = todos ativos).
+    canal_ids: override de canais-fonte dentro do output canal (None = usa fontes do output canal).
     janela_dias: override de janela_dias_discover do YAML.
     max_videos: override de max_videos_por_canal_por_run do YAML.
     """
@@ -229,7 +234,7 @@ def run(  # noqa: C901
     if youtube is None:
         youtube = build("youtube", "v3", developerKey=settings.youtube_api_key)
 
-    # Parâmetros globais vêm do YAML; canal_ids e janela/max podem ser overridados
+    # Parâmetros globais vêm do YAML
     canais_cfg = load_canais(paths["canais_path"])
     parametros = canais_cfg.parametros
     if janela_dias is not None:
@@ -237,34 +242,64 @@ def run(  # noqa: C901
     if max_videos is not None:
         parametros = parametros.model_copy(update={"max_videos_por_canal_por_run": max_videos})
 
-    # Canais vêm do banco de dados (não do YAML)
-    from canal_soberania.repositories.sqlite import SqliteCanaisRepository
+    from canal_soberania.repositories.sqlite import SqliteCanaisRepository, SqliteOutputCanaisRepository
+
     canal_repo = SqliteCanaisRepository(conn)
-    if canal_ids is not None:
-        canais = [c for cid in canal_ids for c in [canal_repo.get(cid)] if c is not None]
+    output_repo = SqliteOutputCanaisRepository(conn)
+
+    # Determina quais output canais processar
+    try:
+        if output_canal_id is not None:
+            output_canais = [oc for oc in [output_repo.get(output_canal_id)] if oc is not None]
+        else:
+            output_canais = output_repo.get_active()
+    except Exception:  # noqa: BLE001
+        output_canais = []  # tabela output_canais ainda não existe (migration pendente)
+
+    if output_canais:
+        # Modo multi-canal: descobre por output canal
+        total_inserted = 0
+        total_skipped = 0
+        for oc in output_canais:
+            fontes_ids = canal_ids if canal_ids is not None else output_repo.get_fontes(oc.id)
+            if not fontes_ids:
+                logger.warning("Output canal {} não tem fontes configuradas", oc.id)
+                continue
+            fontes = [c for cid in fontes_ids for c in [canal_repo.get(cid)] if c is not None]
+            if not fontes:
+                logger.warning("Nenhum canal-fonte ativo para output canal {}", oc.id)
+                continue
+            logger.info("Discover output canal '{}' com {} fonte(s)", oc.id, len(fontes))
+            for canal in fontes:
+                try:
+                    ins, skip = discover_canal(
+                        youtube, canal, parametros, conn,
+                        dry_run=effective_dry_run, target_canal_id=oc.id,
+                    )
+                    total_inserted += ins
+                    total_skipped += skip
+                except Exception as exc:
+                    logger.error("Erro inesperado no canal {}: {}", canal.id, exc)
     else:
-        canais = canal_repo.get_active()
-
-    if not canais:
-        logger.warning("Nenhum canal ativo encontrado — abortando discover")
-        return
-
-    total_inserted = 0
-    total_skipped = 0
-
-    for canal in canais:
-        try:
-            ins, skip = discover_canal(
-                youtube,
-                canal,
-                parametros,
-                conn,
-                dry_run=effective_dry_run,
-            )
-            total_inserted += ins
-            total_skipped += skip
-        except Exception as exc:
-            logger.error("Erro inesperado no canal {}: {}", canal.id, exc)
+        # Fallback: descobre de todos os canais ativos (retrocompatível)
+        if canal_ids is not None:
+            canais = [c for cid in canal_ids for c in [canal_repo.get(cid)] if c is not None]
+        else:
+            canais = canal_repo.get_active()
+        if not canais:
+            logger.warning("Nenhum canal ativo encontrado — abortando discover")
+            return
+        total_inserted = 0
+        total_skipped = 0
+        for canal in canais:
+            try:
+                ins, skip = discover_canal(
+                    youtube, canal, parametros, conn, dry_run=effective_dry_run,
+                )
+                total_inserted += ins
+                total_skipped += skip
+            except Exception as exc:
+                logger.error("Erro inesperado no canal {}: {}", canal.id, exc)
 
     logger.info(
         "Discover concluído | novos={} | já_existentes/erros={}",

@@ -20,6 +20,7 @@ from canal_soberania.stages.discover import (
     fetch_recent_video_ids,
     fetch_video_details,
     get_uploads_playlist_id,
+    run as discover_run,
 )
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
@@ -248,3 +249,101 @@ def test_discover_canal_no_playlist(
     inserted, skipped = discover_canal(yt, canal, params, db)
     assert inserted == 0
     assert skipped == 0
+
+
+# ---------------------------------------------------------------------------
+# Testes do run() multi-canal
+# ---------------------------------------------------------------------------
+
+
+def _seed_output_canal(
+    conn: sqlite3.Connection,
+    output_canal_id: str = "soberania",
+    fonte_canal_id: str = "flow_podcast",
+) -> None:
+    """Popula output_canais + canais + output_canal_fontes para testes do run()."""
+    conn.execute(
+        "INSERT OR IGNORE INTO canais (id, nome, handle, channel_url, tema_primario) VALUES (?,?,?,?,?)",
+        (fonte_canal_id, "Flow Podcast", "@FlowPodcast", "https://youtube.com/@FlowPodcast", "variado"),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO output_canais (id, nome, tema) VALUES (?,?,?)",
+        (output_canal_id, "Canal Soberania", "Soberania nacional"),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO output_canal_fontes (output_canal_id, fonte_canal_id) VALUES (?,?)",
+        (output_canal_id, fonte_canal_id),
+    )
+    conn.commit()
+
+
+def test_run_multichannel_inserts_with_target_canal_id(db: sqlite3.Connection) -> None:
+    """run() modo multi-canal deve inserir vídeos com target_canal_id correto."""
+    _seed_output_canal(db, output_canal_id="soberania", fonte_canal_id="flow_podcast")
+    yt = _make_youtube_mock(video_ids=["runMCvideo1"])
+
+    discover_run(youtube=yt, conn=db, janela_dias=7)
+
+    row = db.execute(
+        "SELECT target_canal_id FROM videos WHERE video_id = ?", ("runMCvideo1",)
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "soberania"
+
+
+def test_run_multichannel_specific_output_canal(db: sqlite3.Connection) -> None:
+    """run(output_canal_id=...) deve processar apenas o canal de saída especificado."""
+    _seed_output_canal(db, output_canal_id="soberania", fonte_canal_id="flow_podcast")
+    yt = _make_youtube_mock(video_ids=["runSpecVid1"])
+
+    discover_run(youtube=yt, conn=db, output_canal_id="soberania", janela_dias=7)
+
+    row = db.execute(
+        "SELECT target_canal_id FROM videos WHERE video_id = ?", ("runSpecVid1",)
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "soberania"
+
+
+def test_run_multichannel_no_fontes_skips_output_canal(db: sqlite3.Connection) -> None:
+    """Output canal sem fontes não deve causar erro — apenas avisa e continua."""
+    # Insere output canal sem fontes
+    db.execute(
+        "INSERT OR IGNORE INTO output_canais (id, nome, tema) VALUES (?,?,?)",
+        ("vazio", "Canal Vazio", "Sem fontes"),
+    )
+    db.commit()
+    yt = _make_youtube_mock()
+
+    # Não deve levantar exceção
+    discover_run(youtube=yt, conn=db, janela_dias=7)
+
+    count = db.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
+    assert count == 0
+
+
+def test_run_fallback_no_output_canais(db: sqlite3.Connection) -> None:
+    """Quando não há output_canais, run() cai no modo fallback (canais ativos direto)."""
+    db.execute(
+        "INSERT OR IGNORE INTO canais (id, nome, handle, channel_url, tema_primario, ativo) VALUES (?,?,?,?,?,?)",
+        ("fb_canal", "Fallback Canal", "@fbcanal", "https://youtube.com/@fbcanal", "variado", 1),
+    )
+    db.commit()
+
+    yt = _make_youtube_mock(video_ids=["fbFallbk011"])
+
+    discover_run(youtube=yt, conn=db, janela_dias=7)
+
+    row = db.execute(
+        "SELECT target_canal_id FROM videos WHERE video_id = ?", ("fbFallbk011",)
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "soberania"  # valor default
+
+
+def test_run_no_youtube_api_key_aborts(db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    """run() sem chave da API e sem youtube mockado deve retornar sem inserir nada."""
+    monkeypatch.setenv("YOUTUBE_API_KEY", "")
+    discover_run(conn=db, janela_dias=7)  # youtube=None, sem chave
+    count = db.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
+    assert count == 0

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import ValidationError
 
-from canal_soberania.config import Canal
+from canal_soberania.config import Canal, OutputCanal
 from canal_soberania.models import Clip, ClipStatus, Video, VideoStatus
 
 
@@ -357,3 +357,97 @@ class SqliteCanaisRepository:
         d["auto_publish"] = bool(d["auto_publish"])
         d["ativo"] = bool(d["ativo"])
         return Canal.model_validate(d)
+
+
+class SqliteOutputCanaisRepository:
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    # ── leitura ───────────────────────────────────────────────────────────
+
+    def get_all(self) -> list[OutputCanal]:
+        rows = self._conn.execute(
+            "SELECT * FROM output_canais ORDER BY nome ASC"
+        ).fetchall()
+        return [self._hydrate(row) for row in rows]
+
+    def get_active(self) -> list[OutputCanal]:
+        rows = self._conn.execute(
+            "SELECT * FROM output_canais WHERE ativo = 1 ORDER BY nome ASC"
+        ).fetchall()
+        return [self._hydrate(row) for row in rows]
+
+    def get(self, canal_id: str) -> OutputCanal | None:
+        row = self._conn.execute(
+            "SELECT * FROM output_canais WHERE id = ?", (canal_id,)
+        ).fetchone()
+        return self._hydrate(row) if row else None
+
+    def get_fontes(self, output_canal_id: str) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT fonte_canal_id FROM output_canal_fontes WHERE output_canal_id = ?",
+            (output_canal_id,),
+        ).fetchall()
+        return [row["fonte_canal_id"] for row in rows]
+
+    # ── escrita ───────────────────────────────────────────────────────────
+
+    def upsert(self, canal: OutputCanal) -> None:
+        with self._conn:
+            self._conn.execute(
+                """INSERT INTO output_canais
+                       (id, nome, tema, criteria_path, branding_dir,
+                        youtube_channel_id, youtube_token_path, ativo)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       nome=excluded.nome,
+                       tema=excluded.tema,
+                       criteria_path=excluded.criteria_path,
+                       branding_dir=excluded.branding_dir,
+                       youtube_channel_id=excluded.youtube_channel_id,
+                       youtube_token_path=excluded.youtube_token_path,
+                       ativo=excluded.ativo""",
+                (
+                    canal.id, canal.nome, canal.tema,
+                    canal.criteria_path, canal.branding_dir,
+                    canal.youtube_channel_id, canal.youtube_token_path,
+                    1 if canal.ativo else 0,
+                ),
+            )
+
+    def upsert_fontes(self, output_canal_id: str, fontes: list[str]) -> None:
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM output_canal_fontes WHERE output_canal_id = ?",
+                (output_canal_id,),
+            )
+            for fonte in fontes:
+                try:
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO output_canal_fontes (output_canal_id, fonte_canal_id) VALUES (?, ?)",
+                        (output_canal_id, fonte),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass  # fonte_canal_id não existe ainda em canais (FK violation)
+
+    def update(self, canal_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        assignments = ", ".join(f"{k} = ?" for k in fields)
+        self._conn.execute(
+            f"UPDATE output_canais SET {assignments}, updated_at = datetime('now') WHERE id = ?",  # noqa: S608
+            (*fields.values(), canal_id),
+        )
+        self._conn.commit()
+
+    def delete(self, canal_id: str) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM output_canais WHERE id = ?", (canal_id,))
+
+    # ── helpers ───────────────────────────────────────────────────────────
+
+    def _hydrate(self, row: sqlite3.Row) -> OutputCanal:
+        d: dict[str, Any] = dict(row)
+        d["ativo"] = bool(d["ativo"])
+        d["fontes"] = self.get_fontes(d["id"])
+        return OutputCanal.model_validate(d)

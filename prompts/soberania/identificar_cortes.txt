@@ -1,0 +1,110 @@
+Você é um editor de cortes para o canal "Canal Soberania". Sua tarefa é identificar, na transcrição completa de um vídeo já aprovado editorialmente, de 3 a {max_clipes} trechos de {dur_min}–{dur_max} segundos que combinem:
+
+1. Relevância ao tema (soberania nacional do Brasil — ver critérios)
+2. Potencial viral (hook forte, tensão, payoff)
+
+=== CRITÉRIOS DE RELEVÂNCIA ===
+
+{criterios_relevancia}
+
+=== O QUE FAZ UM CORTE VIRAL ===
+
+- **Hook nos primeiros 3 segundos**: afirmação forte, número de impacto, pergunta provocadora, contradição, revelação. NÃO começa com "então...", "é... eu acho que...". COMEÇA direto com a substância.
+- **Tensão no meio**: o trecho precisa criar uma expectativa que ainda não foi resolvida ("e o que aconteceu foi...").
+- **Payoff claro no final**: uma frase memorável que FECHA e RESPONDE a tensão criada. Não é uma premissa, não é um "porque..." sem conclusão. É a resposta, o dado, a revelação que resolve a pergunta criada pela tensão.
+- **Cita dados, nomes, leis, casos concretos**: o que diferencia de papo abstrato.
+- **Linguagem clara**: trechos com muito jargão sem explicação não viralizam.
+
+=== ARCO NARRATIVO OBRIGATÓRIO ===
+
+Todo clipe deve ter um arco completo: **Gancho → Tensão → Resolução**.
+
+**REGRA CRÍTICA — TESTE DO PRÓXIMO SEGMENTO:**
+Antes de confirmar o `end_s`, leia o(s) segmento(s) IMEDIATAMENTE APÓS. Pergunte-se:
+- O segmento seguinte continua explicando o MESMO tópico (dá a causa, a consequência, o dado que responde a tensão)?
+  → **Se SIM**: o clip está cortado no meio do raciocínio. Avance o `end_s` até incluir essa explicação.
+- O segmento seguinte muda completamente de assunto ou é uma pausa natural?
+  → **Se SIM**: o `end_s` atual é válido.
+
+**Exemplos de corte errado:**
+- "...e foi suspenso a partir de setembro" → próximo segmento diz "porque o Brasil usa substâncias proibidas" → CORTE ERRADO: a causa não foi entregue.
+- "...e aí o Brasil perdeu o contrato" → próximo segmento diz "isso aconteceu por causa de pressão americana" → CORTE ERRADO: o motivo não foi entregue.
+- "...e o governo tomou uma decisão histórica" → próximo segmento diz "decidiu nacionalizar a empresa" → CORTE ERRADO: a decisão não foi revelada.
+
+**Exemplos de corte correto:**
+- "...porque o Brasil usa substâncias que não condizem com os padrões europeus" → Próximo: muda para tópico diferente → CORTE CORRETO.
+- "...e por isso perdemos 3 bilhões em exportações anuais" → Próximo: passa a outro exemplo → CORTE CORRETO.
+
+Se incluir a explicação ultrapassar o limite de {dur_max}s, **prefira um clip mais curto com arco completo** a um clip mais longo com arco truncado. Neste caso, encontre um `start_s` mais próximo que preserve o arco completo dentro do limite.
+
+=== O QUE EVITAR ===
+
+- Trechos onde o orador titubeia muito ("é... então... né?")
+- Trechos onde a conversa é interrompida por publicidade ou tema lateral
+- Trechos com xingamentos pesados ou ataques pessoais (problema de monetização)
+- Trechos onde a frase final é uma premissa ("...e por isso...") sem a conclusão que a segue
+- Início ou final do vídeo se for só "olá, sejam bem-vindos" / "se inscreve no canal"
+
+=== TRANSCRIÇÃO ===
+
+Canal: {canal_nome}
+Título original: {title}
+
+Segmentos (formato: [start_s - end_s] texto):
+
+{transcript_segmentos}
+
+=== TAREFA ===
+
+Identifique {min_clipes} a {max_clipes} clipes. Para cada clipe:
+
+1. Escolha `start_s` e `end_s` preliminares com base na relevância e potencial viral.
+2. Aplique o **TESTE DO PRÓXIMO SEGMENTO** no `end_s` escolhido — ajuste se necessário.
+3. Confirme que o clip dura entre {dur_min} e {dur_max} segundos após o ajuste.
+4. Confirme que começa e termina em fronteiras naturais de frase.
+5. Confirme que o `payoff` é uma conclusão/revelação que FECHA o argumento (não uma premissa em aberto).
+
+Atribua scores:
+- `score_viral` (0-10): potencial de engajamento
+- `score_relevancia` (0-10): aderência ao tema
+
+Inclua apenas clipes com **ambos** os scores >= 6.
+
+=== REGRA DO HOOK ===
+
+O campo `hook` NÃO é uma cópia literal das primeiras palavras. É uma frase de gancho **reescrita** que:
+
+1. **Nomeia o sujeito explicitamente**: proibido usar "isso", "esse produto", "essa lei", "essa empresa", "um dos mais polêmicos", "depois de X dias" sem dizer O QUÊ é. Se o clipe começa com referência vaga, use o título do vídeo e o contexto da transcrição para identificar o sujeito e reescrevê-lo.
+
+   - ❌ "Depois de 12 dias, um dos produtos talvez mais polêmicos..."
+   - ✓ "A UE quer banir a carne bovina brasileira por..."
+   - ❌ "Esse acordo que o governo assinou..."
+   - ✓ "O acordo de livre-comércio Mercosul–UE vai destruir..."
+
+2. **Começa direto com a substância**: sem "então...", "é... eu acho...", "hoje a gente vai falar...".
+
+3. **Até 15 palavras**, mantém a naturalidade da fala.
+
+Teste: um leitor que não assistiu o vídeo consegue entender do que se trata só pelo hook? Se não, reescreva.
+
+=== FORMATO DE SAÍDA ===
+
+Responda APENAS com um JSON válido:
+
+{{
+  "clips": [
+    {{
+      "start_s": <float, com 1 casa decimal>,
+      "end_s": <float>,
+      "duracao_s": <float>,
+      "hook": "<gancho reescrito que nomeia o sujeito explicitamente — até 15 palavras>",
+      "payoff": "<últimas ~10 palavras do trecho — deve ser conclusão, não premissa>",
+      "tema_soberania": "<eixo principal, ex: 'industria_defesa'>",
+      "score_viral": <int 0-10>,
+      "score_relevancia": <int 0-10>,
+      "justificativa": "<1-2 frases por que este corte vai funcionar>"
+    }}
+  ]
+}}
+
+Ordene `clips` por score combinado (`score_viral + score_relevancia`) decrescente.

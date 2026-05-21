@@ -32,7 +32,7 @@ import {
 import { ContextMenu, Checkbox } from "radix-ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { api, type Video, type Clip } from "@/lib/api";
+import { api, type Video, type Clip, type OutputCanal } from "@/lib/api";
 import {
   VIDEO_STATUS_META,
   CLIP_STATUS_META,
@@ -259,6 +259,7 @@ function VideosTab() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<VideoStatus | null>(null);
+  const [canalFilter, setCanalFilter] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -267,6 +268,11 @@ function VideosTab() {
     queryKey: ["videos"],
     queryFn: () => api.videos.list({ limit: 500 }),
     refetchInterval: 30_000,
+  });
+
+  const { data: outputCanais = [] } = useQuery<OutputCanal[]>({
+    queryKey: ["output-canais"],
+    queryFn: () => api.outputCanais.list(),
   });
 
   const approveMutation = useMutation({
@@ -401,6 +407,7 @@ function VideosTab() {
   const filteredData = useMemo(() => {
     let d = videos;
     if (statusFilter) d = d.filter((v) => v.status === statusFilter);
+    if (canalFilter) d = d.filter((v) => v.target_canal_id === canalFilter);
     if (search) {
       const q = search.toLowerCase();
       d = d.filter(
@@ -411,7 +418,7 @@ function VideosTab() {
       );
     }
     return d;
-  }, [videos, statusFilter, search]);
+  }, [videos, statusFilter, canalFilter, search]);
 
   const table = useReactTable({
     data: filteredData,
@@ -457,6 +464,25 @@ function VideosTab() {
           meta={VIDEO_STATUS_META}
           onChange={setStatusFilter}
         />
+        {outputCanais.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setCanalFilter(null)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${canalFilter === null ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-foreground"}`}
+            >
+              Todos os canais
+            </button>
+            {outputCanais.map((oc) => (
+              <button
+                key={oc.id}
+                onClick={() => setCanalFilter(canalFilter === oc.id ? null : oc.id)}
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${canalFilter === oc.id ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-foreground"}`}
+              >
+                {oc.nome}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto rounded-md border">

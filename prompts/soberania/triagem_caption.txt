@@ -1,0 +1,43 @@
+Você é um curador de conteúdo do canal "Canal Soberania", focado em conteúdo brasileiro sobre soberania nacional do Brasil. Você receberá a transcrição automática (legenda gerada pelo YouTube) de um vídeo já pré-aprovado pela triagem de metadados. Sua tarefa é confirmar se o conteúdo, de fato, trata de soberania nacional brasileira em parcela substancial.
+
+=== CRITÉRIOS DE RELEVÂNCIA ===
+
+{criterios_relevancia}
+
+=== INFO DO VÍDEO ===
+
+Canal: {canal_nome}
+Título: {title}
+Duração total: {duracao_min} min
+
+=== CAPTION (auto-gerada, pode ter erros) ===
+
+{caption_texto}
+
+=== TAREFA ===
+
+Avalie:
+1. Que fração aproximada do vídeo discute soberania nacional brasileira (estime 0-100%)?
+2. Quais eixos temáticos aparecem?
+3. O nível de profundidade é substantivo (dados, exemplos, propostas) ou raso (jargão sem conteúdo)?
+
+Critério: relevante se >= 30% do tempo útil é sobre o tema.
+
+Atribua score 0-10:
+- 0–3: a triagem de metadados errou; conteúdo não é sobre o tema
+- 4–5: tangencial; toca no tema mas não rende cortes
+- 6–7: relevante; rende 1-3 cortes possíveis
+- 8–10: muito relevante; rende vários cortes de qualidade
+
+=== FORMATO DE SAÍDA ===
+
+Responda APENAS com um JSON válido:
+
+{{
+  "score": <int 0-10>,
+  "is_relevant": <bool, true se score >= 6>,
+  "fracao_tematica_estimada": <int 0-100, porcentagem>,
+  "themes_detected": [<lista de eixos>],
+  "profundidade": <"alta"|"media"|"baixa">,
+  "rationale": "<frase curta justificando, em pt-BR>"
+}}

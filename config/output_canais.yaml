@@ -1,0 +1,29 @@
+# Canais de SAÍDA: cada entrada é um YouTube Shorts brand channel
+# Campos:
+#   id:                 slug único (snake_case), vira target_canal_id nos vídeos
+#   nome:               nome de exibição
+#   tema:               descrição do tema (orienta critérios e prompts)
+#   fontes:             ids de canais-fonte a monitorar (ref canais.yaml)
+#   criteria_path:      caminho do arquivo de critérios (relativo à raiz do repo)
+#                       "" = fallback para config/criterios/{id}.md ou criterios_relevancia.md
+#   branding_dir:       diretório com assets visuais (intro.mp4, outro.mp4, logo.png, thumb_template.png)
+#   youtube_channel_id: ID do canal YouTube de saída (UCxxx...)
+#   youtube_token_path: caminho do OAuth token JSON (relativo à raiz do repo)
+#   ativo:              true = processa; false = ignora no pipeline
+
+output_canais:
+  - id: soberania
+    nome: Canal Soberania nas Redes
+    tema: Soberania nacional, geopolítica e defesa do Brasil
+    fontes:
+      - ricardo_marcilio
+      - arte_da_guerra
+      - jose_kobori
+      - podcast_3_irmaos
+      - flow_podcast
+      - podpah
+    criteria_path: config/criterios/soberania.md
+    branding_dir: branding/soberania
+    youtube_channel_id: ""
+    youtube_token_path: config/youtube_token.json
+    ativo: true

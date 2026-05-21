@@ -76,6 +76,7 @@ export interface Video {
   created_at: string | null;
   updated_at: string | null;
   score_triage: number | null;
+  target_canal_id: string;
 }
 
 export interface Clip {
@@ -99,6 +100,19 @@ export interface Clip {
   error_message: string | null;
   created_at: string | null;
   updated_at: string | null;
+  target_canal_id: string;
+}
+
+export interface OutputCanal {
+  id: string;
+  nome: string;
+  tema: string;
+  fontes: string[];
+  criteria_path: string;
+  branding_dir: string;
+  youtube_channel_id: string;
+  youtube_token_path: string;
+  ativo: boolean;
 }
 
 export interface FaceCropData {
@@ -258,6 +272,19 @@ export const api = {
     pause: () => request<{ paused: true }>("/pipeline/pause", { method: "POST" }),
     resume: () => request<{ paused: false }>("/pipeline/resume", { method: "POST" }),
     loopState: () => request<{ paused: boolean }>("/pipeline/loop-state"),
+  },
+  outputCanais: {
+    list: () => request<OutputCanal[]>("/output-canais"),
+    get: (id: string) => request<OutputCanal>(`/output-canais/${id}`),
+    create: (canal: OutputCanal) =>
+      request<OutputCanal>("/output-canais", { method: "POST", body: JSON.stringify(canal) }),
+    update: (id: string, canal: OutputCanal) =>
+      request<OutputCanal>(`/output-canais/${id}`, { method: "PUT", body: JSON.stringify(canal) }),
+    remove: (id: string) =>
+      request<{ status: string; canal_id: string }>(`/output-canais/${id}`, { method: "DELETE" }),
+    getFontes: (id: string) => request<string[]>(`/output-canais/${id}/fontes`),
+    setFontes: (id: string, fontes: string[]) =>
+      request<string[]>(`/output-canais/${id}/fontes`, { method: "PUT", body: JSON.stringify(fontes) }),
   },
 };
 
