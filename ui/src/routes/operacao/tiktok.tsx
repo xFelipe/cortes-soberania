@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, type Clip } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/use-toast";
 
 // ── instrucoes ────────────────────────────────────────────────────────────────
 
 const STEPS = [
-  "Abra o app TikTok e toque em "+" para novo vídeo.",
-  "Selecione "Carregar" e escolha o arquivo MP4 abaixo.",
+  'Abra o app TikTok e toque em “+” para novo vídeo.',
+  'Selecione “Carregar” e escolha o arquivo MP4 abaixo.',
   "Cole o título e a descrição preparados abaixo.",
   "Adicione as hashtags ao final da legenda.",
   "Publique e volte aqui para marcar como enviado.",
@@ -21,16 +21,15 @@ const STEPS = [
 function TikTokItem({ clip }: { clip: Clip }) {
   const [tiktokId, setTiktokId] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const { toast } = useToast();
   const qc = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: () => api.clips.markTikTokUploaded(clip.clip_id, tiktokId || undefined),
     onSuccess: () => {
-      toast({ title: "Marcado como enviado", description: clip.title ?? clip.clip_id });
+      toast.success("Marcado como enviado", { description: clip.title ?? clip.clip_id });
       qc.invalidateQueries({ queryKey: ["clips", "pending_tiktok_manual"] });
     },
-    onError: () => toast({ title: "Erro ao marcar", variant: "destructive" }),
+    onError: () => toast.error("Erro ao marcar como enviado"),
   });
 
   const title = clip.title ?? clip.hook ?? clip.clip_id;

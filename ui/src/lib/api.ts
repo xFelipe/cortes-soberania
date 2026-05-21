@@ -1,10 +1,11 @@
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://127.0.0.1:8000";
-const XDG_TOKEN_PATH = `${import.meta.env.HOME ?? ""}/config/canal-soberania/.api_token`;
 
 async function getToken(): Promise<string> {
   try {
     const { readTextFile } = await import("@tauri-apps/plugin-fs");
-    const raw = await readTextFile(XDG_TOKEN_PATH);
+    const { homeDir } = await import("@tauri-apps/api/path");
+    const home = await homeDir();
+    const raw = await readTextFile(`${home}/.config/canal-soberania/.api_token`);
     return raw.trim();
   } catch {
     return localStorage.getItem("api_token") ?? "";

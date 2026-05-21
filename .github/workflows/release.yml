@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: '--bundles appimage,deb'
+          - platform: windows-latest
+            args: '--bundles msi,nsis'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ui/src-tauri -> target'
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: pnpm install
+
+      - name: Build Tauri app and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Canal Soberania ${{ github.ref_name }}'
+          releaseBody: |
+            ## Canal Soberania ${{ github.ref_name }}
+
+            ### Instalação
+
+            | Plataforma | Arquivo | Tipo |
+            |---|---|---|
+            | Linux | `.AppImage` | Portable (sem instalação) |
+            | Linux | `.deb` | Pacote APT |
+            | Windows | `.msi` | Windows Installer |
+            | Windows | `.exe` (NSIS) | Instalador NSIS |
+
+            Consulte `docs/install.md` no repositório para instruções detalhadas.
+
+            ### Requisitos
+
+            - **Backend:** `cs serve` precisa estar rodando (`pip install canal-soberania` ou clone local)
+            - **Linux:** WebKit2GTK 4.1 (`sudo apt install libwebkit2gtk-4.1-dev`)
+          releaseDraft: true
+          prerelease: false
+          projectPath: ui
+          args: ${{ matrix.args }}
+          updaterJsonPreferNsis: false

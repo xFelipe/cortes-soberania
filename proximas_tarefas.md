@@ -316,12 +316,20 @@ Runner cria SQLite `:memory:` para cada entrada, insere o vídeo com status adeq
 
 ---
 
-### ⬜ Onda 12 — Empacotamento + auto-update (1–2 dias)
+### ✅ Onda 12 — Empacotamento + auto-update (2026-05-21)
 
-- [ ] `pnpm tauri build` → Linux `.AppImage` + `.deb`; Windows `.msi`
-- [ ] `tauri-plugin-updater` apontando para GitHub Releases
-- [ ] GitHub Actions release workflow (publica binários; não CI/CD de deploy)
-- [ ] `docs/install.md`
+- [x] `tauri-plugin-fs` + `tauri-plugin-updater` em `Cargo.toml` / `lib.rs`
+- [x] `tauri.conf.json`: versão `0.10.0`, `bundle.createUpdaterArtifacts: "v1Compatible"`, endpoint updater
+- [x] `capabilities/default.json`: `fs:allow-read-text-file` (token), `path:default`, `updater:allow-check/install`
+- [x] `getToken()` em `api.ts` usa `homeDir()` Tauri em runtime (não mais `import.meta.env.HOME`)
+- [x] `.github/workflows/release.yml` — matriz Linux (AppImage + deb) + Windows (msi + nsis), `tauri-apps/tauri-action@v0`
+- [x] `docs/install.md` — instruções completas: usuário final + mantenedor (keygen, GitHub Secrets, publicar release)
+
+**Antes da primeira release real:**
+1. `cargo tauri signer generate -w ~/.tauri/canal-soberania.key` → pegar a pubkey
+2. Adicionar `TAURI_SIGNING_PRIVATE_KEY` + password nos GitHub Secrets
+3. Preencher `plugins.updater.pubkey` em `tauri.conf.json` com a pubkey gerada
+4. `git tag v0.10.0 && git push origin v0.10.0` → dispara o workflow
 
 ---
 

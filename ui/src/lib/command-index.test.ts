@@ -47,7 +47,7 @@ describe("applyEvent — synchronous state changes", () => {
     // For direct state inspection, we use a listener pattern
     getState = () => {
       let snap: ReturnType<typeof getState> = { videos: [], clips: [], canais: [] };
-      const unsub = mod.useCommandIndex; // hook — not callable outside React
+      void mod.useCommandIndex; // hook — not callable outside React
       // Instead, test via DOM rendering or just trust the effect functions
       return snap;
     };
