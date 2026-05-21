@@ -6,6 +6,7 @@ import OperacaoLayout from "@/routes/operacao/layout";
 import PipelinePage from "@/routes/operacao/pipeline";
 import DiscoverPage from "@/routes/operacao/discover";
 import CanaisPage from "@/routes/operacao/canais";
+import TikTokPage from "@/routes/operacao/tiktok";
 import StatsPage from "@/routes/stats";
 import SettingsPage from "@/routes/settings";
 import ClipReviewPage from "@/routes/clip-review";
@@ -60,6 +61,12 @@ const canaisRoute = createRoute({
   component: CanaisPage,
 });
 
+const tiktokRoute = createRoute({
+  getParentRoute: () => operacaoRoute,
+  path: "/tiktok",
+  component: TikTokPage,
+});
+
 const statsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/stats",
@@ -82,7 +89,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   inboxRoute,
   bibliotecaRoute,
-  operacaoRoute.addChildren([operacaoIndexRoute, pipelineRoute, discoverRoute, canaisRoute]),
+  operacaoRoute.addChildren([operacaoIndexRoute, pipelineRoute, discoverRoute, canaisRoute, tiktokRoute]),
   statsRoute,
   settingsRoute,
   clipReviewRoute,

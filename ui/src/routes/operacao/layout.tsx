@@ -5,6 +5,7 @@ const TABS = [
   { path: "/operacao/pipeline", label: "Pipeline" },
   { path: "/operacao/discover", label: "Discover" },
   { path: "/operacao/canais", label: "Canais" },
+  { path: "/operacao/tiktok", label: "TikTok" },
 ] as const;
 
 export default function OperacaoLayout() {

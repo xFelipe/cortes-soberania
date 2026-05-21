@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from canal_soberania.api.auth import verify_token
 from canal_soberania.api.deps import get_service
+from canal_soberania.core.events import PipelineEvent
 from canal_soberania.models import Clip, ClipStatus
 from canal_soberania.services.pipeline_service import PipelineService
 
@@ -59,6 +60,39 @@ def get_clip(
     if clip is None:
         raise HTTPException(status_code=404, detail="Clipe não encontrado")
     return clip
+
+
+class TikTokMarkBody(BaseModel):
+    tiktok_id: str | None = None
+
+
+@router.post("/{clip_id}/tiktok/mark-uploaded")
+def tiktok_mark_uploaded(
+    clip_id: str,
+    body: TikTokMarkBody,
+    service: PipelineService = Depends(get_service),
+    _: None = Depends(verify_token),
+) -> dict[str, str | None]:
+    """Marca clipe como enviado manualmente ao TikTok."""
+    clip = service.get_clip(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="Clipe não encontrado")
+    if clip.status != ClipStatus.PENDING_TIKTOK_MANUAL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Clipe não está em PENDING_TIKTOK_MANUAL: {clip.status}",
+        )
+    with service._conn:  # noqa: SLF001
+        service._conn.execute(  # noqa: SLF001
+            "UPDATE clips SET status = ?, tiktok_id = ?, updated_at = datetime('now') WHERE clip_id = ?",
+            (ClipStatus.UPLOADED_TIKTOK, body.tiktok_id, clip_id),
+        )
+        service._conn.execute(  # noqa: SLF001
+            "INSERT INTO uploads_log (clip_id, platform, status, platform_id) VALUES (?, 'tiktok', 'success', ?)",
+            (clip_id, body.tiktok_id),
+        )
+    service.event_bus.publish(PipelineEvent("tiktok_uploaded", {"clip_id": clip_id}))
+    return {"status": "uploaded_tiktok", "clip_id": clip_id, "tiktok_id": body.tiktok_id}
 
 
 @router.post("/{clip_id}/approve")

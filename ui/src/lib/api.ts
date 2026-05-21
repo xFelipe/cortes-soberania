@@ -92,6 +92,8 @@ export interface Clip {
   title: string | null;
   description: string | null;
   tags: string[];
+  clip_path_vertical: string | null;
+  tiktok_id: string | null;
   youtube_id: string | null;
   thumb_path: string | null;
   youtube_view_count: number | null;
@@ -245,6 +247,11 @@ export const api = {
     faceCrop: (clip_id: string) =>
       request<FaceCropData>(`/clips/${clip_id}/face-crop`),
     sourceVideoUrl: (clip_id: string) => `${API_URL}/clips/${clip_id}/source-video`,
+    markTikTokUploaded: (clip_id: string, tiktok_id?: string) =>
+      request<{ status: string; clip_id: string; tiktok_id: string | null }>(
+        `/clips/${clip_id}/tiktok/mark-uploaded`,
+        { method: "POST", body: JSON.stringify({ tiktok_id: tiktok_id ?? null }) }
+      ),
   },
   canais: {
     list: () => request<Canal[]>("/canais"),
