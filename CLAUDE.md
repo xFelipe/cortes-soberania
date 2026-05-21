@@ -207,12 +207,9 @@ Cada output canal tem seu próprio arquivo de critérios. A resolução segue es
 **Não retreine a sensibilidade de relevância sem atualizar o arquivo do canal correto.** Para o canal soberania: `config/criterios/soberania.md`.
 
 ### TikTok
-A Content Posting API oficial exige aprovação. Caminho recomendado (em ordem de preferência):
-1. **Conta TikTok for Business + API oficial** quando aprovado.
-2. **Fila manual:** pipeline gera o `.mp4` em `data/clips/pending_tiktok/`, você sobe pelo app (5min/dia).
-3. **`tiktok-uploader` (não oficial, browser automation):** frágil mas funciona; usar só em VPS dedicada.
+**Estratégia atual: upload manual.** O pipeline gera o `.mp4` em `data/clips/pending_tiktok/` com um `.txt` ao lado (título + descrição prontos). Você sobe pelo app (~5min/dia) e fecha o ciclo com `cs mark-uploaded --platform tiktok --clip-id ...`.
 
-Começar pelo (2). Não vale risco de ban de conta no início.
+Não implementar automação de bot (`tiktok-uploader`) — risco de ban de conta permanente inaceitável. Retomar automação apenas se a Content Posting API oficial for aprovada.
 
 ### Custos esperados (mensal, em produção)
 - VPS Hetzner CX22: ~€5

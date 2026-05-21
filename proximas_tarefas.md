@@ -300,13 +300,19 @@ Runner cria SQLite `:memory:` para cada entrada, insere o vídeo com status adeq
 
 ---
 
-### ⬜ Onda 11 — TikTok Caminho 3 (2 dias) ⚠️ RISCO ALTO
+### ⏸️ Onda 11 — TikTok automático (ADIADO — upload manual em uso)
 
-> Conta dedicada de testes. Rate limit hard: 3 uploads/dia. Opt-in via `TIKTOK_BOT_ENABLED=false`.
+> **Decisão (2026-05-21):** TikTok fica em upload manual indefinidamente.
+> O Caminho 3 (bot `tiktok-uploader`) tem risco de ban de conta inaceitável.
+> Retomar só quando a Content Posting API oficial for aprovada ou o risco valer a pena.
 
-- [ ] `stages/upload_tiktok_bot.py` usando `tiktok-uploader`
-- [ ] `docker/tiktok-bot/Dockerfile` — Chrome headless + xvfb; volume `cookies/` persistente
-- [ ] `docs/operacao/tiktok-bot.md` — recomendações operacionais de risco
+**Estado atual (funciona, não precisa mudar):**
+- Pipeline gera `data/clips/pending_tiktok/{data}_{clip_id}.mp4` + `.txt` com título/desc
+- `cs mark-uploaded --platform tiktok --clip-id ...` fecha o ciclo manualmente
+
+**Quando revisar:**
+- TikTok for Business aprova acesso à Content Posting API → usar Caminho 1 (oficial)
+- Volume de clipes torna o manual inviável (> 10/dia) → avaliar Caminho 3 com conta de testes isolada
 
 ---
 
