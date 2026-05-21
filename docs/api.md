@@ -2,7 +2,7 @@
 
 Referência dos endpoints FastAPI expostos pelo `cs serve`. Consumida pelo frontend Tauri (Onda 3+) e utilizável diretamente via `curl` para debug.
 
-**Atualizado após Onda 6** — canais CRUD, discover adhoc, stats agregado, config R/W.
+**Atualizado após Onda 10** — canais CRUD, discover adhoc, stats, config R/W, output-canais CRUD.
 
 ## Inicialização
 
@@ -195,6 +195,83 @@ Liga/desliga o canal sem editar os demais campos. Retorna `{"canal_id": "...", "
 DELETE /canais/{canal_id}
 ```
 Remove o canal do banco. Retorna `{"status": "deleted", "canal_id": "..."}`.
+
+---
+
+---
+
+### Output Canais (canais de saída — Onda 10)
+
+Gerencia os **canais de saída** (YouTube Shorts brands). Cada output canal tem seu próprio conjunto de canais-fonte, critérios de triagem, prompts e branding.
+
+Fonte de dados: tabela SQLite `output_canais` + `output_canal_fontes`. Seed inicial via `config/output_canais.yaml`.
+
+```
+GET /output-canais
+```
+Retorna todos os output canais (`list[OutputCanal]`).
+
+```
+POST /output-canais
+Content-Type: application/json
+```
+Cria ou atualiza um output canal. Retorna 201.
+
+```json
+{
+  "id": "soberania",
+  "nome": "Canal Soberania nas Redes",
+  "tema": "Soberania nacional, geopolítica e defesa do Brasil",
+  "fontes": ["flow_podcast", "podpah"],
+  "criteria_path": "config/criterios/soberania.md",
+  "branding_dir": "branding/soberania",
+  "youtube_channel_id": "UCxxxxx",
+  "youtube_token_path": "config/youtube_token.json",
+  "ativo": true
+}
+```
+
+```
+GET /output-canais/{canal_id}
+```
+Retorna um output canal pelo id ou 404.
+
+```
+PUT /output-canais/{canal_id}
+Content-Type: application/json
+```
+Atualiza. O `id` no body deve ser igual ao `canal_id` do path (422 se divergir).
+
+```
+DELETE /output-canais/{canal_id}
+```
+Remove do banco. Retorna `{"status": "deleted", "canal_id": "..."}`.
+
+```
+GET /output-canais/{canal_id}/fontes
+```
+Retorna `list[str]` com os ids dos canais-fonte deste output canal.
+
+```
+PUT /output-canais/{canal_id}/fontes
+Content-Type: application/json
+["flow_podcast", "podpah", "arte_da_guerra"]
+```
+Substitui a lista de fontes. Fontes que não existem na tabela `canais` são silenciosamente ignoradas (FK graceful). Retorna a lista recebida.
+
+**Schema `OutputCanal`:**
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | str | Slug único (ex: `soberania`) |
+| `nome` | str | Nome exibido |
+| `tema` | str | Descrição do tema (usada nos prompts) |
+| `fontes` | list[str] | IDs dos canais-fonte monitorados |
+| `criteria_path` | str | Path relativo ao critérios.md; "" = fallback global |
+| `branding_dir` | str | Diretório com assets de branding (ex: `branding/soberania`) |
+| `youtube_channel_id` | str | Channel ID do YouTube para upload |
+| `youtube_token_path` | str | Path do token OAuth (default: `config/youtube_token.json`) |
+| `ativo` | bool | Só canais ativos rodam no pipeline |
 
 ---
 
@@ -454,6 +531,9 @@ O callback recebe **todos** os eventos; a invalidação de queries continua acon
 | `discover_adhoc_done` | `handle`, `inserted`, `persisted` |
 | `canal_upserted` | `canal_id` |
 | `canal_deleted` | `canal_id` |
+| `output_canal_upserted` | `canal_id` |
+| `output_canal_deleted` | `canal_id` |
+| `output_canal_fontes_updated` | `canal_id` |
 
 ---
 

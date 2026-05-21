@@ -8,27 +8,33 @@ Doze etapas. Cada uma tem um estado de entrada e um estado de saída na tabela `
 
 ## Stage 1 — discover
 
-Lista vídeos novos dos canais em `config/canais.yaml`.
+Lista vídeos novos dos canais configurados. Desde a Onda 10, opera em modo **multi-canal**: itera os `output_canais` ativos e, para cada um, descobre vídeos nos seus `canais-fonte`, taggando cada vídeo com `target_canal_id`.
 
 - **Input:** nenhum
-- **Output:** novas linhas em `videos` com `status='discovered'`
-- **Ferramenta:** YouTube Data API v3 (`search.list` + `videos.list`)
+- **Output:** novas linhas em `videos` com `status='discovered'` e `target_canal_id` correto
+- **Ferramenta:** YouTube Data API v3 (`playlistItems.list` + `videos.list`)
 - **Cota:** ~1 unidade por canal por execução para listar, ~3 unidades por novo vídeo
 - **Schedule:** 2x/dia (8h e 20h)
 - **Idempotência:** `INSERT OR IGNORE` por `video_id`
 
-Pseudocódigo:
+Pseudocódigo (modo multi-canal):
 ```python
-for canal in canais:
-    novos = youtube.search().list(
-        channelId=canal.channel_id,
-        publishedAfter=now - 7d,
-        type='video',
-        order='date',
-    )
-    for v in novos:
-        details = youtube.videos().list(id=v.id, part='snippet,contentDetails,statistics')
-        insert_video(details, canal_id=canal.id, status='discovered')
+for output_canal in output_canal_repo.get_active():
+    for fonte_id in output_canal_repo.get_fontes(output_canal.id):
+        canal = canal_repo.get(fonte_id)
+        inserted, skipped = discover_canal(
+            youtube, canal, parametros, conn,
+            target_canal_id=output_canal.id,  # ← tag de destino
+        )
+```
+
+**Fallback:** se a tabela `output_canais` estiver vazia ou não existir (migration pendente), descoberta cai no modo legado — itera todos os `canais` ativos e usa `target_canal_id='soberania'`.
+
+**CLI:**
+```bash
+cs discover                           # todos os output canais ativos
+cs discover --output-canal soberania  # apenas um output canal
+cs discover --canal flow_podcast      # override de canal-fonte
 ```
 
 ---

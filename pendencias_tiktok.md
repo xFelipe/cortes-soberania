@@ -233,3 +233,43 @@ em VPS dedicada — ver `docs/pipeline.md §TikTok`.
 | 2026-05-20T23:13:57Z | TT_002 | unschedule |  |
 | 2026-05-20T23:13:57Z | TT_003 | delete |  |
 | 2026-05-20T23:13:57Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:39:07Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:39:07Z | TT_002 | unschedule |  |
+| 2026-05-21T03:39:07Z | TT_003 | delete |  |
+| 2026-05-21T03:39:07Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:41:17Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:41:17Z | TT_002 | unschedule |  |
+| 2026-05-21T03:41:17Z | TT_003 | delete |  |
+| 2026-05-21T03:41:17Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:42:49Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:42:49Z | TT_002 | unschedule |  |
+| 2026-05-21T03:42:49Z | TT_003 | delete |  |
+| 2026-05-21T03:42:49Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:43:24Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:43:24Z | TT_002 | unschedule |  |
+| 2026-05-21T03:43:24Z | TT_003 | delete |  |
+| 2026-05-21T03:43:24Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:43:57Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:43:57Z | TT_002 | unschedule |  |
+| 2026-05-21T03:43:57Z | TT_003 | delete |  |
+| 2026-05-21T03:43:57Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:47:01Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:47:01Z | TT_002 | unschedule |  |
+| 2026-05-21T03:47:01Z | TT_003 | delete |  |
+| 2026-05-21T03:47:01Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:52:36Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:52:36Z | TT_002 | unschedule |  |
+| 2026-05-21T03:52:36Z | TT_003 | delete |  |
+| 2026-05-21T03:52:36Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:53:33Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:53:33Z | TT_002 | unschedule |  |
+| 2026-05-21T03:53:33Z | TT_003 | delete |  |
+| 2026-05-21T03:53:33Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:54:36Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:54:36Z | TT_002 | unschedule |  |
+| 2026-05-21T03:54:36Z | TT_003 | delete |  |
+| 2026-05-21T03:54:36Z | TT_004 | fetch_status |  |
+| 2026-05-21T03:56:51Z | TT_001 | update_metadata | title='x' description=None tags=None |
+| 2026-05-21T03:56:51Z | TT_002 | unschedule |  |
+| 2026-05-21T03:56:51Z | TT_003 | delete |  |
+| 2026-05-21T03:56:51Z | TT_004 | fetch_status |  |

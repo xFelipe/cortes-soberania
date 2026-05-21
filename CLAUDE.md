@@ -63,26 +63,54 @@ canal-soberania/
 │   └── prompts.md               ← documentação dos prompts usados
 │
 ├── prompts/                     ← prompts versionados (texto puro)
-│   ├── triagem_metadata.txt
+│   ├── triagem_metadata.txt     ← fallback global
+│   ├── triagem_caption.txt
 │   ├── triagem_transcript.txt
 │   ├── identificar_cortes.txt
-│   └── gerar_metadata_clip.txt
+│   ├── gerar_metadata_clip.txt
+│   └── {slug}/                  ← prompts per-canal (sobrescrevem globais)
+│       └── triagem_metadata.txt ← ex: prompts/soberania/triagem_metadata.txt
+│
+├── config/
+│   ├── canais.yaml              ← canais-FONTE monitorados
+│   ├── output_canais.yaml       ← canais de SAÍDA (YouTube Shorts brands)
+│   ├── criterios_relevancia.md  ← critérios globais (fallback)
+│   └── criterios/
+│       └── {slug}.md            ← critérios per-canal (ex: criterios/soberania.md)
+│
+├── branding/
+│   └── {slug}/                  ← assets por output canal
+│       ├── intro.mp4, outro.mp4, logo.png
+│
+├── migrations/
+│   └── 007_output_canais.sql   ← e anteriores
 │
 ├── src/canal_soberania/
 │   ├── __init__.py
 │   ├── cli.py                   ← typer entry point
-│   ├── db.py                    ← conexão SQLite, migrations
-│   ├── models.py                ← pydantic
-│   ├── config.py                ← carrega canais.yaml e .env
+│   ├── db.py                    ← conexão SQLite, migrations, seed
+│   ├── models.py                ← pydantic (Video, Clip com target_canal_id)
+│   ├── config.py                ← canais.yaml, output_canais.yaml, resolve helpers
 │   ├── logger.py                ← setup loguru
 │   ├── llm.py                   ← wrapper Anthropic API
+│   ├── repositories/
+│   │   └── sqlite.py            ← SqliteCanaisRepository, SqliteOutputCanaisRepository, ...
+│   ├── services/
+│   │   └── pipeline_service.py  ← orquestra tudo; instância única por processo
+│   ├── api/
+│   │   ├── app.py               ← create_app(), registra routers
+│   │   ├── auth.py              ← Bearer token
+│   │   ├── deps.py              ← get_service(), get_conn()
+│   │   └── routers/
+│   │       ├── output_canais.py ← GET/POST/PUT/DELETE /output-canais + fontes
+│   │       └── ...              ← videos, clips, canais, stages, stats, config
 │   ├── stages/
-│   │   ├── discover.py          ← lista vídeos novos dos canais
-│   │   ├── triage_metadata.py   ← Stage 1: title+desc+tags+comments
-│   │   ├── triage_caption.py    ← Stage 2: captions YouTube
+│   │   ├── discover.py          ← multi-canal: itera output_canais → fontes → vídeos
+│   │   ├── triage_metadata.py   ← carrega prompt/critérios por target_canal_id
+│   │   ├── triage_caption.py    ← idem
 │   │   ├── download.py          ← baixa áudio (e vídeo se aprovado)
 │   │   ├── transcribe.py        ← Whisper
-│   │   ├── triage_transcript.py ← Stage 3: análise transcript completo
+│   │   ├── triage_transcript.py ← carrega prompt/critérios por target_canal_id
 │   │   ├── find_clips.py        ← Stage 4: identifica cortes 30-90s
 │   │   ├── edit.py              ← ffmpeg: corte, reframe, legenda
 │   │   ├── thumbnail.py         ← Pillow
@@ -170,8 +198,13 @@ Mitigação obrigatória contra "reused content":
 - Título e descrição originais (não copiar do vídeo-fonte)
 - Hook reescrito nos primeiros 3s (cartela ou recorte agressivo)
 
-### Tema: soberania nacional
-A definição operacional vive em `config/criterios_relevancia.md`. **Não retreine a sensibilidade de relevância sem atualizar esse arquivo.** É a single source of truth do que entra no canal.
+### Critérios de relevância por canal (Onda 10+)
+Cada output canal tem seu próprio arquivo de critérios. A resolução segue esta cadeia de fallback:
+1. `output_canal.criteria_path` (se definido e arquivo existe)
+2. `config/criterios/{output_canal.id}.md`
+3. `config/criterios_relevancia.md` (fallback global)
+
+**Não retreine a sensibilidade de relevância sem atualizar o arquivo do canal correto.** Para o canal soberania: `config/criterios/soberania.md`.
 
 ### TikTok
 A Content Posting API oficial exige aprovação. Caminho recomendado (em ordem de preferência):
@@ -192,19 +225,21 @@ Começar pelo (2). Não vale risco de ban de conta no início.
 
 - **Por que esse design?** → `docs/arquitetura.md`
 - **Como roda na prática?** → `docs/pipeline.md`
-- **O que é relevância?** → `config/criterios_relevancia.md`
+- **O que é relevância?** → `config/criterios_relevancia.md` (global) ou `config/criterios/{slug}.md` (por canal)
 - **O que o Claude está sendo perguntado?** → `prompts/` + `docs/prompts.md`
 - **O que falta fazer?** → `proximas_tarefas.md`
 - **Tabelas e estado?** → `schema.sql`
 - **API REST (todos os endpoints)?** → `docs/api.md`
 - **Frontend (rotas, padrões, como estender)?** → `docs/frontend.md`
 - **Eval de prompts (cs eval run/compare)?** → `docs/arquitetura.md` § "Eval de prompts"
+- **Multi-canal / output canais?** → `docs/arquitetura.md` § "Multi-canal genérico" + `config/output_canais.yaml`
 
 ## Trabalhando com Claude Code neste projeto
 
 - **Sempre leia este arquivo e `proximas_tarefas.md` antes de propor mudança.**
 - **Uma etapa por PR mental.** Não tente fazer "tudo de uma vez". Pegue uma tarefa de `proximas_tarefas.md`, implemente, teste, marque concluída.
 - **Não mude o esquema sem migration.** Se for adicionar coluna, crie `migrations/00X_descricao.sql`.
-- **Não mude prompts sem versionar.** Prompts vivem em `prompts/` com nome semântico. Mudança grande → novo arquivo com sufixo `_v2.txt` e alternar via config.
+- **Não mude prompts sem versionar.** Prompts vivem em `prompts/` (globais) ou `prompts/{slug}/` (per-canal). Mudança grande → novo arquivo com sufixo `_v2.txt` e alternar via config.
+- **Prompts per-canal sobrescrevem globais.** `resolve_prompt_path('soberania', 'triagem_metadata')` retorna `prompts/soberania/triagem_metadata.txt` se existir, senão cai para `prompts/triagem_metadata.txt`.
 - **Antes de iterar prompts, rode o eval baseline.** `cs eval run --stage triage-metadata --backend anthropic --version v1` gera métrica de referência. Novas versões devem superar o baseline em F1.
 - **Use os subagents.** `video-editor` para ffmpeg, `prompt-engineer` para iterar prompts. Não polua o contexto principal.

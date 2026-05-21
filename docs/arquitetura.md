@@ -173,9 +173,28 @@ Auth: token em ~/.config/canal-soberania/.api_token (XDG, chmod 600)
 ## Modelo de dados (visão lógica)
 
 ```
+canais                 ← canais-FONTE monitorados (seed: config/canais.yaml)
+├─ id (PK, slug)
+├─ nome, handle, channel_url, tema_primario
+├─ peso, auto_publish, tolerancia_cortes, nota
+└─ ativo
+
+output_canais          ← canais de SAÍDA / YouTube Shorts brands (seed: config/output_canais.yaml)
+├─ id (PK, slug)       ← ex: 'soberania', 'churrasco'
+├─ nome, tema
+├─ criteria_path       ← path relativo; "" = usa config/criterios_relevancia.md como fallback
+├─ branding_dir        ← ex: 'branding/soberania'
+├─ youtube_channel_id, youtube_token_path
+└─ ativo
+
+output_canal_fontes    ← junction: qual output canal monitora quais canais-fonte
+├─ output_canal_id (FK → output_canais)
+└─ fonte_canal_id  (FK → canais)
+
 videos
 ├─ video_id (PK, YouTube ID, 11 chars)
-├─ canal_id (FK → canais.yaml)
+├─ canal_id (FK → canais)           ← canal-FONTE de origem
+├─ target_canal_id (FK → output_canais, default 'soberania')  ← canal de SAÍDA que vai processar
 ├─ title, description, tags, published_at
 ├─ duration_s
 ├─ status: discovered | triage_metadata_passed | ... | uploaded | rejected_*
@@ -196,6 +215,7 @@ triage_results
 clips
 ├─ clip_id (PK = "{video_id}_{start_s}_{end_s}")
 ├─ video_id (FK)
+├─ target_canal_id (FK → output_canais, default 'soberania')  ← canal de SAÍDA deste clipe
 ├─ start_s, end_s
 ├─ hook (texto), payoff (texto), tema_soberania
 ├─ score_viral (0-10)
@@ -263,23 +283,25 @@ Qwen 2.5 14B Q4 na GPU local custa R$0 e tem latência < 3s — adequado para tr
 
 ## Qualidade e testes (Onda 8+)
 
-### Backend — pytest (654 testes, cobertura 93.71% nos pacotes críticos)
+### Backend — pytest (696 testes, cobertura 82% total)
 
 Estrutura de testes em `tests/`:
 
 ```
 tests/
 ├── api/
-│   ├── conftest.py         ← fixtures: client (TestClient), mock_service (MagicMock + EventBus real),
-│   │                          conn (SQLite :memory:), auth_headers
+│   ├── conftest.py              ← fixtures: client (TestClient), mock_service (MagicMock + EventBus real),
+│   │                               conn (SQLite :memory:), auth_headers
 │   ├── test_auth.py, test_canais.py, test_clips.py, test_config.py
-│   ├── test_events.py      ← SSEBridge unit (async pytest.mark.anyio) + endpoint direto
+│   ├── test_events.py           ← SSEBridge unit (async pytest.mark.anyio) + endpoint direto
+│   ├── test_output_canais.py    ← CRUD + fontes via mock_service (Onda 10)
 │   ├── test_stages.py, test_videos.py
 ├── e2e/
-│   └── test_journeys.py    ← 5 cenários httpx + TestClient real (não mock_service)
-├── fakes.py                ← InMemory{Video,Clip,Canal}Repository para testes de serviço
+│   └── test_journeys.py         ← 5 cenários httpx + TestClient real (não mock_service)
+├── fakes.py                     ← InMemory{Video,Clip,Canal}Repository para testes de serviço
+├── test_output_canais.py        ← migration, repo CRUD, resolve helpers, seed (Onda 10)
 ├── test_pipeline_service.py
-├── test_repositories.py    ← fixtures com _apply_migrations() (garante colunas de migrations)
+├── test_repositories.py         ← fixtures com _apply_migrations() (garante colunas de migrations)
 └── ...
 ```
 
@@ -342,6 +364,85 @@ Os specs verificam `execSync("npx playwright install --dry-run chromium")` e faz
 - **`pre-push` stage:** `pytest --cov-fail-under=90` (pacotes críticos), `pnpm test`
 
 Instalar: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+
+---
+
+## Multi-canal genérico (Onda 10+)
+
+O pipeline suporta múltiplos **canais de saída** (YouTube Shorts brands) com temas completamente distintos — cada um com seus próprios critérios de relevância, prompts, branding e conjunto de canais-fonte monitorados.
+
+### Configuração
+
+```yaml
+# config/output_canais.yaml
+output_canais:
+  - id: soberania
+    nome: Canal Soberania nas Redes
+    tema: Soberania nacional, geopolítica e defesa do Brasil
+    fontes: [flow_podcast, podpah, arte_da_guerra, ...]
+    criteria_path: config/criterios/soberania.md
+    branding_dir: branding/soberania
+    youtube_token_path: config/youtube_token.json
+    ativo: true
+```
+
+Para criar um segundo canal (ex: churrasco):
+1. Adicione entrada em `config/output_canais.yaml`
+2. Crie `config/criterios/churrasco.md` com os critérios de relevância
+3. Crie `prompts/churrasco/` (opcional — sem diretório, usa prompts globais como fallback)
+4. Adicione canais-fonte em `config/canais.yaml` (ou via `POST /canais`) e liste-os em `fontes:`
+5. `cs serve` faz seed automático no startup
+
+### Resolução de resources por canal
+
+```
+resolve_criteria_path(output_canal):
+  1. output_canal.criteria_path (se definido e arquivo existe)
+  2. config/criterios/{output_canal.id}.md
+  3. config/criterios_relevancia.md  ← fallback global
+
+resolve_prompt_path(output_canal_id, prompt_name):
+  1. prompts/{output_canal_id}/{prompt_name}.txt
+  2. prompts/{prompt_name}.txt        ← fallback global
+```
+
+### Fluxo discover multi-canal
+
+```
+Para cada output canal ativo:
+  │
+  ├─ busca fontes do canal (output_canal_fontes)
+  ├─ chama discover_canal() para cada fonte
+  └─ insere vídeos com target_canal_id = output_canal.id
+```
+
+Os stages de triagem (`triage_metadata`, `triage_caption`, `triage_transcript`) carregam automaticamente prompt e critérios baseados no `target_canal_id` do vídeo, com cache em memória para evitar releituras.
+
+### Estrutura de arquivos por canal
+
+```
+config/
+├── canais.yaml                   ← canais-FONTE (sem mudança)
+├── output_canais.yaml            ← canais de SAÍDA
+└── criterios/
+    ├── soberania.md              ← critérios para o canal soberania
+    └── {slug}.md                 ← um por output canal
+
+prompts/
+├── soberania/                    ← prompts específicos (sobrescrevem globais)
+│   ├── triagem_metadata.txt
+│   ├── triagem_caption.txt
+│   ├── triagem_transcript.txt
+│   ├── identificar_cortes.txt
+│   └── gerar_metadata_clip.txt
+└── triagem_metadata.txt          ← fallback global
+
+branding/
+└── soberania/                    ← assets de intro/outro/logo por canal
+    ├── intro.mp4
+    ├── outro.mp4
+    └── logo.png
+```
 
 ---
 
